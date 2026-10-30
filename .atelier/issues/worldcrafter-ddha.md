@@ -21,7 +21,7 @@ schema_version: 2
 closed_at: "2026-10-29T22:21:24.493785430+00:00"
 status: "done"
 title: "Story model records: where drives and questions live, beats, and how scenes relate to events"
-updated_at: "2026-10-30T05:26:47.876822805+00:00"
+updated_at: "2026-10-30T22:02:17.842925073+00:00"
 ---
 
 ## Context
@@ -51,6 +51,7 @@ Decided by Sumeet (2026-10-29), on the agent's recommendation:
 ## Notes
 
 - 2026-10-30 [note] 2026-10-30 clarification by Sumeet, after review of the plan: (1) drives and questions are their own typed records in app/src/story/, alongside the world store rather than inside it; (3) 'depicts' is descriptive only. A scene's own event, placed in story time, alone says when the scene happens; narrative order comes from the outline, not the scene event. A flashback scene is placed earlier with placeScene and also depicts the earlier events it shows.
+- 2026-10-30 [note] 2026-10-30 addition by Sumeet, on the replan: drives also link to their origin events, scenes record their actors, and events have summaries. A changed motivation is a second drive for now. The three decisions stand.
 
 ## Close Reason
 

@@ -11,7 +11,7 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
-    id: "worldcrafter-z3w0"
+    id: "worldcrafter-o8b7"
     type: "blocked_by"
   - kind: "issue"
     id: "worldcrafter-z9qs"
@@ -19,8 +19,8 @@ relationships:
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
-title: "Increment 4: threads as lenses"
-updated_at: "2026-10-30T05:26:32.525781051+00:00"
+title: "Name threads and trace arcs"
+updated_at: "2026-10-30T22:02:17.705775755+00:00"
 ---
 
 ## Goal
@@ -29,7 +29,7 @@ The writer can name and curate threads over the primitives, see them as weave-gr
 
 ## Done when
 
-Provisional: delivers `lenses`. Threads appear as weave-grid rows; an arc view traces one actor's drives and fact changes across scenes. AI proposals are inferred data with provenance, and the writer's corrections win, shown by scenario tests against a stub server.
+Provisional: delivers `lenses`. Threads appear as weave-grid rows; an arc view traces one actor's drives and fact changes across scenes. AI proposals are inferred data with provenance, and the writer's corrections win, shown by scenario tests against a stub server. Ends with the writer's keep, change or drop.
 
 ## Unknowns
 

@@ -13,11 +13,14 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-cly1"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-y2y2"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Weave grid: scenes against questions and drives"
-updated_at: "2026-10-30T05:26:32.387331655+00:00"
+updated_at: "2026-10-30T22:02:17.758813285+00:00"
 ---
 
 ## Goal

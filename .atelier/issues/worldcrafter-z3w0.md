@@ -12,25 +12,9 @@ relationships:
   blocks: []
   children:
   - kind: "issue"
-    id: "worldcrafter-3ugg"
-  - kind: "issue"
     id: "worldcrafter-4vxp"
   - kind: "issue"
     id: "worldcrafter-6zlx"
-  - kind: "issue"
-    id: "worldcrafter-8tbh"
-  - kind: "issue"
-    id: "worldcrafter-asip"
-  - kind: "issue"
-    id: "worldcrafter-bftc"
-  - kind: "issue"
-    id: "worldcrafter-cly1"
-  - kind: "issue"
-    id: "worldcrafter-e33n"
-  - kind: "issue"
-    id: "worldcrafter-jd8b"
-  - kind: "issue"
-    id: "worldcrafter-wllv"
   attachments: []
   relates:
   - kind: "issue"
@@ -41,9 +25,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-10-30T22:02:17.891960643+00:00"
+status: "superseded"
 title: "Increment 1: a story you can hold — primitives, outline and weave views, arrangement"
-updated_at: "2026-10-30T06:13:56.560806555+00:00"
+updated_at: "2026-10-30T22:02:17.891960643+00:00"
 ---
 
 ## Goal
@@ -66,3 +51,7 @@ A writer can hold a story at any level of detail without writing prose: a premis
 - Strategy: `docs/strategies/structure-first.md`. Model: `docs/rebuild/story-model.md`. Records: decision worldcrafter-ddha.
 - Already in place and reused: entry documents for actors (`person`, `organization` in `app/src/world/kinds.ts`); the outline with books, chapters and scene moves (`app/src/outline/outline.ts`); story time with events, scene events, reveals and the holds engine (`app/src/time/`).
 - Pattern to follow: pure `apply…Command` functions with typed `neverthrow` errors plus a store that persists through the storage adapter (`outline/store.ts`, `time/store.ts`). Stored JSON is parsed back by the owning module (`time/timeline.ts`, `world/facts.ts`).
+
+## Close Reason
+
+Sliced by technical layer, with nothing usable until the end. Replaced by worldcrafter-o8b7 and later value-based increments at Sumeet's direction, 2026-10-30. Its one finished child, spike worldcrafter-4vxp, lands with this branch.

@@ -18,6 +18,7 @@ So the app keeps the story in its high-dimensional form for as long as possible,
 
 - **Change things at the highest level where they apply**, and let the change flow down. Editing prose to fix structure is the expensive path.
 - **The outline is not a document.** A list or a document is already linear. The structure is a graph, and lists, grids and outlines are views of it.
+- **Rework in the abstract.** The writer can shift when something happened, change why a character acts, or change the events that made them want it, and see what each change touches. They jump between levels and sides in any order. That is what keeps a written-down story fluid.
 - **Prose is anchored, not compiled.** Each passage hangs off the scene or beat it tells. When a beat changes, the passage is flagged as stale, and the writer decides whether to rewrite it by hand, redraft it with the AI, or keep it.
 
 The words still matter a great deal: the same structure told differently is a different story. The difference is reach. A structural choice affects every scene it touches, while a sentence mostly matters inside its own scene. That's why prose can hang off the structure without being an afterthought.
@@ -50,7 +51,7 @@ Catching a character acting on something the reader hasn't learned needs a recor
 
 ## Layers
 
-The story is worked through four layers, each from coarse to fine (snowflake-style: premise, books and chapters, scenes, beats, prose).
+The story has four layers, each running from coarse to fine (snowflake-style: premise, books and chapters, scenes, beats, prose). They aren't stages: the writer moves between them in any order.
 
 | Layer | What it holds | Narratology |
 |---|---|---|
@@ -68,10 +69,10 @@ The unreliable narrator is out of scope. What the telling states is true in the 
 These are what the tools reason about.
 
 - **Actors**: characters and organisations.
-- **Drives**: an actor's want or intention, what's at stake, and what it will do about it. Drives oppose, ally or compete. They are the engine: *why* things happen.
+- **Drives**: an actor's want or intention, what's at stake, and what it will do about it. Drives oppose, ally or compete. They are the engine: *why* things happen. A drive links to the events that created it, so reworking those events reaches it.
 - **Questions**: what the reader is waiting for. A question opens at a scene, makes progress, and is answered (Sanderson's promise, progress and payoff). Every MICE thread reduces to one: will she get out, who did it, will he become whole, will order be restored. Questions are about reader knowledge, so they belong to the telling layer and use the "revealed" model in `story-time.md`.
-- **Events**: what happens, placed in story time.
-- **Scenes**: units of the telling, where drives collide and questions move.
+- **Events**: what happens, with a summary, placed in story time.
+- **Scenes**: units of the telling, where drives collide and questions move. A scene records which actors are in it.
 - **World facts**: as in `story-time.md`, changing at events.
 
 ## Lenses
@@ -83,11 +84,12 @@ These are what the writer thinks in. They are named, writer-owned groupings over
 
 ## Tools this enables
 
+- **What this touches**: from any event, drive, question or scene, everything linked to it. It is the review list after any change. It follows links only, so what free text merely mentions is out of its reach.
 - **Question ledger**: questions open too long without progress, and promises with no planned payoff.
 - **Collision map**: actors with no opposition, drives that never meet on the page, actors who want the same thing and never share a scene.
-- **Scene check**: each scene should move at least one question or put at least one drive under pressure.
+- **Scene check**: lists scenes that move no question and put no drive under pressure. It informs and doesn't judge.
 - **Playing an actor**: "given what X wants and knows at this point, what would X do?", using drives and the story-time knowledge model.
-- **Staleness**: prose anchored to beats that have since changed.
+- **Staleness**: prose anchored to structure that has since changed.
 - **Seam check**: question-order and story-time breaks, and stale transitions, after scenes or passages move.
 - **Weave grid**: threads across scenes, with convergence visible where several questions close together.
 
@@ -99,7 +101,7 @@ Adopted on 2026-10-29 (worldcrafter-uicb). The rebuild mission (`docs/strategies
 
 Decision worldcrafter-ddha settled how the primitives are stored:
 
-- Drives and questions are their own typed records, not entries or facts on entries. Actors stay entry documents.
+- Drives and questions are their own typed records, not entries or facts on entries. Actors stay entry documents. A drive links to its origin events. A changed motivation is a second drive with its own origins, until arcs show whether drives need changes anchored to events.
 - Beats are optional, inside scenes. A passage anchors to a beat if there is one, otherwise to its scene.
 - A scene is a telling unit that depicts one or more events. `depicts` is descriptive: the scene's own event, placed in story time, alone says when the scene happens. A flashback is placed earlier, and also depicts the earlier events it shows.
 

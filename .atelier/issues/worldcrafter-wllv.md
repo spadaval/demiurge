@@ -13,11 +13,14 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-cly1"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-y2y2"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Manuscript view and arrangement checks"
-updated_at: "2026-10-30T05:29:56.230421931+00:00"
+updated_at: "2026-10-30T22:02:17.798117614+00:00"
 ---
 
 ## Goal

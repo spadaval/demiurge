@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-30: criteria renamed to slugs; coarse-to-fine levels and arrangement checks reworded, arcs moved to lenses (Sumeet)"
+last_changed: "2026-10-30: rework added as the first bet; primitives criterion removed; passage reordering moved to anchored-prose; increments judged by trying them (Sumeet)"
 ---
 
 # Why
@@ -24,10 +24,17 @@ corkboard), but their structure is cards and rows the app doesn't understand.
 WorldCrafter's structure is a typed model of actors, drives and questions that
 the app can check, and that prose hangs off.
 
+Holding a story is only half of it. A story stays alive while the writer can
+jump between its levels and sides and rework it in the abstract: shift when
+something happened, change why a character acts, or change the events that
+made them want it. Whether that is worth having is the mission's main unknown,
+and only using it on a real story can answer it.
+
 # Outcome
 
-A writer can hold a story at any level of detail, from a premise to beats, and
-change it at the highest level where a change applies. The structure is a
+A writer can hold a story at any level of detail, from a premise to beats, move
+between its levels and sides in any order, and rework it at the highest level
+where a change applies, seeing what each change touches. The structure is a
 graph of actors, drives, questions, events and scenes, seen through outline
 and weave-grid views, never stored as a linear document. Scenes can be
 rearranged freely, with their prose travelling with them and reveal-order
@@ -35,22 +42,25 @@ problems flagged. Prose is written by hand or drafted from the structure, and
 is marked stale when the structure under it changes. The app points out
 structural problems while they're still cheap to fix.
 
-Worth shipping on its own: `primitives`, `coarse-to-fine` and `arrangement`. Structure and arrangement with no AI at all
-already let a story grow outside the writer's head without being flattened.
+Worth having on its own: `rework`, with no prose and no AI at all. If it isn't,
+the rest of this plan should change.
 
 # Success Criteria
 
-- primitives: Actors, drives (with oppose and ally relations between
-  them), questions (opened, progressed and answered at scenes), events and
-  scenes exist as typed records in the world model, with typed commands to
-  create and change each one. Shown by tests that call the commands directly.
+- rework: From any event, drive or scene, the writer can see everything
+  connected to it and go there. They can shift an event, change a drive, or
+  change an event behind a drive, and see what the change touches before
+  deciding what to change next. Nothing moves or is rewritten silently. Shown by
+  scenario tests over a fixture story, and by the writer trying it on a real
+  story.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
-  books and chapters, scenes and beats. Outline and weave-grid views are
+  books and chapters, scenes and beats, in any order: a scene can have a summary
+  and beats before it has a place in a chapter. Outline and weave-grid views are
   derived from the structure; neither is stored as a document. The weave
   grid's rows are questions and drives, and threads join them with `lenses`.
   Shown by tests over a fixture story at several levels of detail.
 - arrangement: Chapters are packaging over scenes. Moving a scene between
-  chapters, or reordering passages within a scene, carries the prose with it.
+  chapters carries its prose with it.
   The manuscript is a view assembled from the arrangement. After a move, the
   app flags questions progressed or answered before they open, story-time
   constraints the new order breaks (the rebuild's story-time model), and the seams: the
@@ -58,17 +68,18 @@ already let a story grow outside the writer's head without being flattened.
   neighbours. Checking that a scene relies on something the reader hasn't
   learned yet waits until the model records what scenes rely on. Shown by
   scenario tests over a fixture with a flashback.
-- anchored-prose: Each passage is anchored to a scene or beat. It can be
+- anchored-prose: Each passage is anchored to a scene or beat, and reordering
+  passages within a scene carries their prose with them. A passage can be
   hand-written or drafted, and drafting assembles its context from the
   structure: the actors' drives, the open questions, and what the reader knows
-  at that point. When a beat changes, the passages anchored to it are marked
+  at that point. When the structure under a passage changes, it is marked
   stale, and the writer chooses to rewrite, redraft or keep them. Shown by
   scenario tests against a stub OpenAI-compatible server.
 - inspection: A question ledger (questions open too long without
   progress, promises with no planned payoff), a collision map (actors with no
-  opposition, drives that never meet in a scene) and a scene check (each scene
-  moves a question or pressures a drive) are computed from the model without
-  the AI. Shown by tests over fixture stories with planted problems.
+  opposition, drives that never meet in a scene) and a list of scenes that move
+  no question and pressure no drive are computed from the model without the AI.
+  They report when asked and never block anything. Shown by tests over fixture stories with planted problems.
 - lenses: The writer can create, name and curate threads over the
   primitives, and see them as weave-grid rows, and can trace an actor's arc
   (its drives and state across scenes). The AI can propose threads and their
@@ -77,6 +88,10 @@ already let a story grow outside the writer's head without being flattened.
 
 # Shape
 
+- **Value decides.** Each increment leaves the writer something to try on a real
+  story, and tests the biggest open bet first. It ends with the writer's verdict:
+  keep, change or drop. Tests show a thing works; only the writer's use shows it
+  is worth having. Later increments are bets, not commitments.
 - **Builds on the rebuild.** Platform, storage, the LLM client, model
   control, stable IDs and story time are as in `docs/strategies/rebuild.md`.
 - **Structure is a graph, not a document.** Outlines, lists and grids are
@@ -89,9 +104,13 @@ already let a story grow outside the writer's head without being flattened.
   a set of passages anchored to its beats. The manuscript is only ever a view.
 - **The film-editing model.** The structure is the script, prose is footage,
   and the arrangement is the edit. Prose is anchored, not compiled.
+- **Connections carry the leverage.** A change reaches only what is linked to
+  it, so links between events, drives and scenes matter more than fields inside
+  them. The app shows what a change touches; the writer decides what follows. It
+  doesn't rewrite free text.
 - **Inspection before generation.** Deterministic checks over the model come
-  before AI features. The AI proposes and infers; the writer's corrections
-  win.
+  before AI features. They inform and never gate. The AI proposes and infers; the
+  writer's corrections win.
 - **The unreliable narrator is out of scope.** What the telling states is true
   in the world. Characters can still believe false things.
 - **When qualities conflict:**
@@ -105,10 +124,10 @@ already let a story grow outside the writer's head without being flattened.
 In scope:
 
 - the story primitives and their commands
+- seeing what a change touches, and focus and timeline views
 - outline and weave-grid views
-- arrangement: chapters, scene moves, passage reordering, seam,
-  question-order and story-time checks
-- anchored prose and staleness
+- arrangement: chapters, scene moves, seam, question-order and story-time checks
+- anchored prose, passage reordering and staleness
 - deterministic inspection
 - threads as lenses
 
@@ -138,6 +157,7 @@ These must come back to the human:
 - the primitives and lenses, and how scenes relate to documents
 - adding a backend service
 - reopening decisions worldcrafter-ok5a, worldcrafter-gcox or the platform
+- keep, change or drop after trying an increment
 
 # Risks and Unknowns
 
@@ -146,12 +166,17 @@ These must come back to the human:
   typed records, optional beats inside scenes, and scenes that depict events.
   `depicts` is descriptive; story-time placement alone says when a scene
   happens.
-- Drives probably change over story time (that is what an arc is). The first
-  increment stores them without time-indexing; whether they need `Fact`-style
-  changes anchored to events is open until arcs are built.
-- Passages anchored to beats need anchors that survive editing. Stable block
-  IDs (S2 of the rebuild) are the starting point, but a passage may span
-  several blocks, and splitting, pasting, dragging and undo all disturb them.
-  A spike settles the design before passages are built.
+- Seeing what a change touches may not feel like reworking. The app can follow
+  links but can't reach what summaries and prose only mention, such as "three
+  hundred years". The first increment tests this.
+- Drives change over story time. For now a changed motivation is a second drive
+  with its own origin events (worldcrafter-o8b7 walkthrough, on paper only).
+  Whether they need `Fact`-style changes anchored to events is open until arcs
+  are built.
+- Order isn't cause. Events have before and after but not "because", so a chain
+  of events behind a motivation can't be recorded yet. The first trial shows
+  whether that is missed.
+- Passage anchors were designed by spike worldcrafter-4vxp, and some of their
+  failure paths are reasoning only. The passages work has to prove them.
 - Deterministic inspection may be too noisy to trust. Fixture stories with
   planted problems are the check.

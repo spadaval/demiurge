@@ -16,17 +16,11 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-asip"
     type: "blocked_by"
-  - kind: "issue"
-    id: "worldcrafter-jd8b"
-    type: "blocked_by"
-  - kind: "issue"
-    id: "worldcrafter-wllv"
-    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Outline, weave grid and manuscript views in the app"
-updated_at: "2026-10-30T16:23:32.013667567+00:00"
+updated_at: "2026-10-30T22:02:17.822026585+00:00"
 ---
 
 ## Goal
@@ -54,3 +48,4 @@ Derivations: outline view (worldcrafter-asip), weave grid (worldcrafter-3ugg), p
 
 - 2026-10-30 [note] 2026-10-30 from spike worldcrafter-4vxp: editor undo does not revert an anchor command, so the writer re-anchors instead; make that clear in the UI. A block's beat must be visible, so the writer can see the anchors they're setting. See 'Passage anchors' in docs/rebuild/data-model-boundaries.md.
 - 2026-10-30 [note] 2026-10-30 from spike worldcrafter-4vxp: the session now exposes an anchors store, passageProblems() and a passagesChanged counter (see worldcrafter-jd8b). The UI subscribes to passagesChanged, shows the problems, and when a stored anchor record can't be parsed shows that state and offers discardAnchors(), which loses the scene's anchors, so say so before discarding.
+- 2026-10-30 [note] 2026-10-30 replan: moved under worldcrafter-3nnq for the outline and weave grid. The manuscript view goes with worldcrafter-l2e5, and anchoring prose in a scene's document goes with worldcrafter-jd8b (worldcrafter-j8pr). Split it when planned.

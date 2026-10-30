@@ -7,11 +7,13 @@ labels:
 priority: "P2"
 relationships:
   blocks: []
-  children: []
+  children:
+  - kind: "issue"
+    id: "worldcrafter-jd8b"
   attachments: []
   relates:
   - kind: "issue"
-    id: "worldcrafter-z3w0"
+    id: "worldcrafter-o8b7"
     type: "blocked_by"
   - kind: "issue"
     id: "worldcrafter-z9qs"
@@ -19,8 +21,8 @@ relationships:
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
-title: "Increment 2: anchored prose and drafting from the structure"
-updated_at: "2026-10-30T05:26:32.494448753+00:00"
+title: "Attach and draft prose"
+updated_at: "2026-10-30T22:02:17.682991261+00:00"
 ---
 
 ## Goal
@@ -29,7 +31,7 @@ Prose is written by hand or drafted from the structure, and is marked stale when
 
 ## Done when
 
-Provisional: delivers `anchored-prose`. Drafting a beat assembles context from the actors' drives, the open questions and what the reader knows at that point, shown by scenario tests against a stub OpenAI-compatible server. Changing a beat marks its passages stale, and the writer can rewrite, redraft or keep each one.
+Provisional: delivers `anchored-prose`. Drafting a beat assembles context from the actors' drives, the open questions and what the reader knows at that point, shown by scenario tests against a stub OpenAI-compatible server. Changing a beat marks its passages stale, and the writer can rewrite, redraft or keep each one. Includes passages and passage reordering (worldcrafter-jd8b, design from spike worldcrafter-4vxp). Ends with the writer's keep, change or drop.
 
 ## Unknowns
 

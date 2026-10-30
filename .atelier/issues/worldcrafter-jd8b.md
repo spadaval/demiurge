@@ -16,11 +16,14 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-cly1"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-y2y2"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Passages: anchor blocks to beats and reorder passages"
-updated_at: "2026-10-30T16:25:00.093127094+00:00"
+updated_at: "2026-10-30T22:02:17.832873495+00:00"
 ---
 
 ## Goal
@@ -98,3 +101,4 @@ Spike worldcrafter-4vxp; the design and its evidence are in `docs/rebuild/data-m
 
 - 2026-10-30 [note] Deferred from review of spike worldcrafter-4vxp: snapshot restore isn't built, but when it is, a restored document brings back blocks whose anchors were pruned on open. They are then treated as new and fall back by position, so whoever builds restore must restore or rebuild the passage_anchors record with the content.
 - 2026-10-30 [note] 2026-10-30 from review of the anchor design. For the worker: annotations.load fails with not_found when a scene has no record, and openDocument drops the tab on not_found (workspace.ts), so handle 'no record' inside the session. Deferred: the snapshot restore note still says restored blocks fall back by position; if restore reopens the session they become null instead. Correct it when restore is built; restoring the record with the content still stands. Accepted, no action: deleting a block before any record exists, making the first anchor command, then undoing the delete brings the block back unmapped, so it takes the anchor of the block before it. Order stays valid and the writer can re-anchor.
+- 2026-10-30 [note] 2026-10-30 replan: moved to worldcrafter-j8pr, because abstract rework doesn't need passages. Design stands. The orphaned-record note first left on worldcrafter-cly1 also applies here: delete a document's passage_anchors annotation where the scene or document is deleted.

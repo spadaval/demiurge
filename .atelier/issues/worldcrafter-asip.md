@@ -13,11 +13,14 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-8tbh"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-y2y2"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Outline view: premise down to beats"
-updated_at: "2026-10-30T05:26:32.371891246+00:00"
+updated_at: "2026-10-30T22:02:17.744981661+00:00"
 ---
 
 ## Goal

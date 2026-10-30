@@ -11,7 +11,7 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
-    id: "worldcrafter-z3w0"
+    id: "worldcrafter-o8b7"
     type: "blocked_by"
   - kind: "issue"
     id: "worldcrafter-z9qs"
@@ -19,8 +19,8 @@ relationships:
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
-title: "Increment 3: structural inspection"
-updated_at: "2026-10-30T05:26:32.509702764+00:00"
+title: "Point out structural problems"
+updated_at: "2026-10-30T22:02:17.694136607+00:00"
 ---
 
 ## Goal
@@ -29,7 +29,7 @@ The app points out structural problems while they are cheap to fix, without the 
 
 ## Done when
 
-Provisional: delivers `inspection`. A question ledger, a collision map and a scene check are computed from the model and shown in the app, proven by tests over fixture stories with planted problems.
+Provisional: delivers `inspection`. A question ledger, a collision map and a scene check are computed from the model and shown in the app, proven by tests over fixture stories with planted problems. The checks report when asked and never block. Ends with the writer's keep, change or drop.
 
 ## Unknowns
 
