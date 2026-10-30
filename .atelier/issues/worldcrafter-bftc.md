@@ -4,7 +4,7 @@ id: "worldcrafter-bftc"
 issue_type: "task"
 labels:
 - "story-model"
-priority: "P1"
+priority: "P2"
 relationships:
   blocks: []
   children: []
@@ -23,7 +23,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Structure editing UI: premise, scenes, beats, drives and questions"
-updated_at: "2026-10-30T22:02:17.772418197+00:00"
+updated_at: "2026-10-30T22:08:53.315588407+00:00"
 ---
 
 ## Goal
@@ -43,4 +43,4 @@ The writer can build and change the structure in the app, without prose: set the
 
 ## Context
 
-Commands and derivations from worldcrafter-cly1 and worldcrafter-asip. Routes: `app/src/app/router.tsx`.
+Commands and derivations from worldcrafter-cly1, worldcrafter-y2y2 and worldcrafter-asip. Routes: `app/src/app/router.tsx`.

@@ -35,7 +35,7 @@ Store what reworking a motivation needs: drives linked to the events that create
 
 Shapes (names may change if the reason is recorded; meanings may not):
 
-- **Drive**: `id`, `actorId` (an entry document of kind `person` or `organization`), `want`, `stakes`, `method` (strings, may be empty), `origins: EventId[]`, `relations: { to: driveId, type: "opposes" | "allies" | "competes" }[]`, `authority` (`Authority` from `world/facts.ts`), `updatedAt`. A relation is stored on one drive of the pair only.
+- **Drive**: `id`, `actorId` (an entry document of kind `person` or `organization`), `want`, `stakes`, `method` (strings, may be empty), `origins: EventId[]` (non-scene events), `relations: { to: driveId, type: "opposes" | "allies" | "competes" }[]`, `authority` (`Authority` from `world/facts.ts`), `updatedAt`. A relation is stored on one drive of the pair only.
 - **SceneStructure**: `id` (the scene's document ID), `summary`, `actors: documentId[]`, `depicts: EventId[]` (non-scene events; descriptive only, as story-time placement alone says when a scene happens), `pressures: driveId[]`, `updatedAt`.
 
 Storage keeps each record's body as JSON with `id` and `updatedAt`, as `timelines` does; `story/` owns the types and parsing. Questions and beats come later (worldcrafter-y2y2). Passage anchors are not part of this record.

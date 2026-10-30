@@ -19,7 +19,7 @@ updated_at: "2026-10-30T22:02:01.285234289+00:00"
 
 ## Goal
 
-Add the records the outline, weave grid and passages need, split out of worldcrafter-8tbh and worldcrafter-cly1 when those narrowed to what the first bet needs.
+Add the records the outline, weave grid and passages need, split out of worldcrafter-8tbh and worldcrafter-cly1 when those narrowed to what the first bet needs. `worldcrafter-wllv` and `worldcrafter-jd8b` also depend on it, so it survives if this increment is dropped: move it, don't drop it.
 
 ## Done when
 

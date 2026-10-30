@@ -14,6 +14,9 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-eg96"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-iaoc"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
@@ -31,4 +34,4 @@ Sumeet has entered enough of a real story to matter, ideally a half-formed one, 
 
 ## Context
 
-Agents don't start or pass this. They prepare the running app and say how to open it.
+Agents don't start or pass this. They prepare the running app and say how to open it, at one address the writer keeps using: IndexedDB is per origin, so a story entered on `vite preview` won't appear on the deployed app.

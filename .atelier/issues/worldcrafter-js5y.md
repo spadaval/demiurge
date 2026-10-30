@@ -20,17 +20,18 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Shift an event, and see what breaks"
-updated_at: "2026-10-30T22:02:01.234516753+00:00"
+updated_at: "2026-10-30T22:08:53.256657500+00:00"
 ---
 
 ## Goal
 
-The writer can move an event in story time from a timeline view, preview what the move would break, and choose which connected events move with it.
+The writer can place scenes and events in time from a timeline view, move an event, preview what the move would break, and choose which connected events move with it.
 
 ## Done when
 
-Provisional: delivers the rest of `rework`. A timeline view shows events and scenes. A shift previews its conflicts, nothing moves silently, and the writer chooses what follows. Events can be removed (`removeEvent`, refused while anything refers to the event; see worldcrafter-cly1's history). Ends with the writer's keep, change or drop.
+Provisional: delivers the rest of `rework`. A timeline view shows events and scenes, and the writer can add a scene to the outline, set positions and place scenes; scenes from the first trial aren't in the outline, so they have no time yet. A shift previews its conflicts, nothing moves silently, and the writer chooses what follows. `whatThisTouches` also walks placements, timeline constraints, fact changes and reveals. `removeEvent` removes an event and its positions, and is refused while a constraint, scene placement, correspondence, reveal, fact change, drive origin or `depicts` refers to it; scene events can't be removed this way. Ends with the writer's keep, change or drop.
 
 ## Unknowns
 
-- The engine checks gaps against positions and doesn't derive positions, so how a group moves together needs design. `during` may be enough to treat a group as a unit.
+- **For Sumeet:** can a writer keep a shift that conflicts? Today `applyTimelineCommand` refuses any command that adds a problem, which sits badly with "checks report and never block".
+- Moving `seal` and scene 3.2 one at a time fails in either order, so a group shift needs a batch command, and a preview needs `timelineProblems` on a candidate timeline. `during` may be enough to treat a group as a unit.

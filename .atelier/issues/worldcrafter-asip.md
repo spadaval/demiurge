@@ -4,7 +4,7 @@ id: "worldcrafter-asip"
 issue_type: "task"
 labels:
 - "story-model"
-priority: "P1"
+priority: "P2"
 relationships:
   blocks: []
   children: []
@@ -20,7 +20,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Outline view: premise down to beats"
-updated_at: "2026-10-30T22:02:17.744981661+00:00"
+updated_at: "2026-10-30T22:08:53.294259797+00:00"
 ---
 
 ## Goal

@@ -72,8 +72,8 @@ the rest of this plan should change.
   passages within a scene carries their prose with them. A passage can be
   hand-written or drafted, and drafting assembles its context from the
   structure: the actors' drives, the open questions, and what the reader knows
-  at that point. When the structure under a passage changes, it is marked
-  stale, and the writer chooses to rewrite, redraft or keep them. Shown by
+  at that point. When the structure under a passage changes, the passage is
+  marked stale, and the writer chooses to rewrite, redraft or keep it. Shown by
   scenario tests against a stub OpenAI-compatible server.
 - inspection: A question ledger (questions open too long without
   progress, promises with no planned payoff), a collision map (actors with no
@@ -167,8 +167,8 @@ These must come back to the human:
   `depicts` is descriptive; story-time placement alone says when a scene
   happens.
 - Seeing what a change touches may not feel like reworking. The app can follow
-  links but can't reach what summaries and prose only mention, such as "three
-  hundred years". The first increment tests this.
+  links but can't reach what summaries and prose only mention, such as a line of
+  dialogue saying how long ago something happened. The first increment tests this.
 - Drives change over story time. For now a changed motivation is a second drive
   with its own origin events (worldcrafter-o8b7 walkthrough, on paper only).
   Whether they need `Fact`-style changes anchored to events is open until arcs

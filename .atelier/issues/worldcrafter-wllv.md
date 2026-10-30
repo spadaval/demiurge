@@ -4,7 +4,7 @@ id: "worldcrafter-wllv"
 issue_type: "task"
 labels:
 - "story-model"
-priority: "P1"
+priority: "P2"
 relationships:
   blocks: []
   children: []
@@ -20,7 +20,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Manuscript view and arrangement checks"
-updated_at: "2026-10-30T22:02:17.798117614+00:00"
+updated_at: "2026-10-30T22:08:53.336792074+00:00"
 ---
 
 ## Goal

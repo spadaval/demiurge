@@ -27,7 +27,7 @@ updated_at: "2026-10-30T22:02:17.853073491+00:00"
 
 ## Outcome
 
-A writer can hold a story at any level of detail and change it at the highest level where a change applies. The structure is a graph of actors, drives, questions, events and scenes, seen through outline and weave-grid views. Scenes can be rearranged with their prose travelling with them, prose is anchored to the structure and marked stale when it changes, and the app points out structural problems while they're cheap to fix. The strategy (`docs/strategies/structure-first.md`) owns the intent, the success criteria, the shape and the authority.
+A writer can hold a story at any level of detail, move between its levels and sides in any order, and rework it at the highest level where a change applies, seeing what each change touches. The structure is a graph of actors, drives, questions, events and scenes, seen through outline and weave-grid views. Scenes can be rearranged with their prose travelling with them, prose is anchored to the structure and marked stale when it changes, and the app points out structural problems while they're cheap to fix. The strategy (`docs/strategies/structure-first.md`) owns the intent, the success criteria, the shape and the authority.
 
 ## Background
 

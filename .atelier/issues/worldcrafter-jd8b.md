@@ -4,7 +4,7 @@ id: "worldcrafter-jd8b"
 issue_type: "task"
 labels:
 - "story-model"
-priority: "P1"
+priority: "P2"
 relationships:
   blocks: []
   children: []
@@ -23,12 +23,12 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Passages: anchor blocks to beats and reorder passages"
-updated_at: "2026-10-30T22:02:17.832873495+00:00"
+updated_at: "2026-10-30T22:08:53.347217929+00:00"
 ---
 
 ## Goal
 
-Prose hangs off the structure: a passage is the run of blocks anchored to a beat, and passages can be reordered within a scene with their prose moving along (`arrangement`).
+Prose hangs off the structure: a passage is the run of blocks anchored to a beat, and passages can be reordered within a scene with their prose moving along (`anchored-prose`).
 
 ## Done when
 
@@ -95,7 +95,7 @@ Follows "Passage anchors" in `docs/rebuild/data-model-boundaries.md` (spike worl
 
 ## Context
 
-Spike worldcrafter-4vxp; the design and its evidence are in `docs/rebuild/data-model-boundaries.md`, "Passage anchors". Stable block IDs (S2): `app/src/editor/block-id-plugin.ts`. Scene structure: worldcrafter-8tbh, whose shape this doesn't change. Removing a beat (worldcrafter-cly1) leaves anchors alone, so they dangle by design and `passageProblems` reports them. Sidecar writes batched with content: `saveWith` in the document session. Regenerating: `startGeneration` in `app/src/editor/ai-segment.ts`.
+Spike worldcrafter-4vxp; the design and its evidence are in `docs/rebuild/data-model-boundaries.md`, "Passage anchors". Stable block IDs (S2): `app/src/editor/block-id-plugin.ts`. Scene structure: worldcrafter-8tbh, whose shape this doesn't change. Removing a beat (worldcrafter-y2y2) leaves anchors alone, so they dangle by design and `passageProblems` reports them. Sidecar writes batched with content: `saveWith` in the document session. Regenerating: `startGeneration` in `app/src/editor/ai-segment.ts`.
 
 ## Notes
 

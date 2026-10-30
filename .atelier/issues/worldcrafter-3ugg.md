@@ -4,7 +4,7 @@ id: "worldcrafter-3ugg"
 issue_type: "task"
 labels:
 - "story-model"
-priority: "P1"
+priority: "P2"
 relationships:
   blocks: []
   children: []
@@ -20,7 +20,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Weave grid: scenes against questions and drives"
-updated_at: "2026-10-30T22:02:17.758813285+00:00"
+updated_at: "2026-10-30T22:08:53.304917535+00:00"
 ---
 
 ## Goal
@@ -39,4 +39,4 @@ Derivation only, in `app/src/story/`. No UI.
 
 ## Context
 
-Records and commands from worldcrafter-8tbh and worldcrafter-cly1. `readingOrder` in `app/src/outline/outline.ts`.
+Records and commands from worldcrafter-8tbh, worldcrafter-cly1 and worldcrafter-y2y2. `readingOrder` in `app/src/outline/outline.ts`.

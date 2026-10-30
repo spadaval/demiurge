@@ -19,7 +19,7 @@ So the app keeps the story in its high-dimensional form for as long as possible,
 - **Change things at the highest level where they apply**, and let the change flow down. Editing prose to fix structure is the expensive path.
 - **The outline is not a document.** A list or a document is already linear. The structure is a graph, and lists, grids and outlines are views of it.
 - **Rework in the abstract.** The writer can shift when something happened, change why a character acts, or change the events that made them want it, and see what each change touches. They jump between levels and sides in any order. That is what keeps a written-down story fluid.
-- **Prose is anchored, not compiled.** Each passage hangs off the scene or beat it tells. When a beat changes, the passage is flagged as stale, and the writer decides whether to rewrite it by hand, redraft it with the AI, or keep it.
+- **Prose is anchored, not compiled.** Each passage hangs off the scene or beat it tells. When the structure under it changes, the passage is flagged as stale, and the writer decides whether to rewrite it by hand, redraft it with the AI, or keep it.
 
 The words still matter a great deal: the same structure told differently is a different story. The difference is reach. A structural choice affects every scene it touches, while a sentence mostly matters inside its own scene. That's why prose can hang off the structure without being an afterthought.
 

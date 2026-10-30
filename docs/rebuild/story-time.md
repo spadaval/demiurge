@@ -12,7 +12,7 @@ Status: proposal (2026-10-17). Settles the story-position decision (`worldcrafte
 
 ### Events and happens-before
 
-- An **event** is anything that happens: a scene, a battle, a birth, the founding of a city. Every **scene is an event** by default. Backstory events don't need a scene.
+- An **event** is anything that happens: a scene, a battle, a birth, the founding of a city. A non-scene event has a label and a summary. Every **scene is an event** by default. Backstory events don't need a scene.
 - Events are ordered by **happens-before** constraints: `before`, `after`, `during`, `simultaneous`, optionally with a duration ("three days after"). This is a partial order. Two events with no path between them are *unordered*, and the model treats their relative order as unknown.
 - Happens-before is the one ordering that holds whatever the clock: it is the order of cause and effect. It still works when clocks disagree (relativity, dimensions, stasis), which is why it's the core rather than dates.
 
