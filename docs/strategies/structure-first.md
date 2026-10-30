@@ -79,7 +79,8 @@ the rest of this plan should change.
   progress, promises with no planned payoff), a collision map (actors with no
   opposition, drives that never meet in a scene) and a list of scenes that move
   no question and pressure no drive are computed from the model without the AI.
-  They report when asked and never block anything. Shown by tests over fixture stories with planted problems.
+  They report when asked and never block anything. Shown by tests over fixture
+  stories with planted problems.
 - lenses: The writer can create, name and curate threads over the
   primitives, and see them as weave-grid rows, and can trace an actor's arc
   (its drives and state across scenes). The AI can propose threads and their
