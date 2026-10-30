@@ -16,7 +16,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Spike: passage anchoring design"
-updated_at: "2026-10-30T06:13:56.560808048+00:00"
+updated_at: "2026-10-30T06:25:41.706248289+00:00"
 ---
 
 ## Goal
@@ -44,3 +44,7 @@ Experiments in a scratch branch or test file, deleted afterwards. No production 
 - Stable block IDs (S2 of the rebuild): `app/src/editor/block-id-plugin.ts`. A split gives the trailing half a new ID (`docs/rebuild/data-model-boundaries.md`, Boundary 4).
 - Document session: `app/src/workspace/document-session.ts`.
 - Scene structure record: worldcrafter-8tbh. Decision worldcrafter-ddha (optional beats; a passage anchors to a beat or to its scene).
+
+## Notes
+
+- 2026-10-30 [note] Spike experiments (2026-10-30), headless Plate with the real document plugins, in a scratch test since deleted. Scene: beats b1,b2,b3 with passages a,b | c,d | e. 'tree' = a beat property on blocks (schema plugin removed for the test); 'sidecar' = a map from block ID to beat. E0: the document editor strips beat on load; validateDocument rejects it. E1 tree: Enter mid, at the end and at the start of a block copies beat to both halves; Enter at the end of an h2 makes a p with no beat; undo of a split restores it. E1s sidecar: with position alone, Enter at the start of c (first of b2) puts the new empty block in b1; a split_node hook fixes it; mid and end agree. E3 tree: a same-doc paste mid-block carries the source beat on middle blocks; a paste into an empty block replaces it and takes the source beat (b1 in b2); a paste from another scene carries a foreign beat; HTML middle blocks have none. E3/E3h: position alone puts HTML pasted at the start of c into b1; an insertData hook using the cursor block's anchor puts every pasted block in the cursor's passage, in both models, and undo works. E4: a drag keeps ID and anchor; c moved into b1 gives runs b1,b2,b1,b2,b3; a whole-passage move gives contiguous runs out of order. E5: the reorder is one undo step with IDs kept; undo restores the prose but not the beat record (out of order). E5t: Plate's undo pushes a copy of the batch, so identity-keyed tags are lost; a property tag restores beat order on undo, redo and undo. E5m: same-tick ops merge into the reorder batch. E5w: a reorder under withoutSaving, then undo of earlier typing, deleted text from the wrong block silently. E5g: a reorder gathers a split passage; a dangling anchor rides with the block before it. E7: delete and undo restores the tree property; a sidecar pruned on save re-resolves c into b1. E9: accepting an AI segment loses the anchor in both models (sidecar by position goes to b1); E9h: a hook on move_node lifts from [i,k] to [j] keeps the segment's anchor. E10: Backspace at the start of c merges its text into b (b1); undo restores. E12: blocks inside a segment are nested, not top-level. Outcome: discard the code; the learning is in docs/rebuild/data-model-boundaries.md, 'Passage anchors'.
