@@ -48,11 +48,11 @@ the rest of this plan should change.
 # Success Criteria
 
 - rework: From any character, event, drive or scene, the writer can see
-  everything connected to it and go there. They can shift an event, change a drive, or
-  change an event behind a drive, and see what the change touches before
-  deciding what to change next. Nothing moves or is rewritten silently. Shown by
-  scenario tests over a fixture story, and by the writer trying it on a real
-  story.
+  everything connected to it and go there. They can shift an event, change a
+  drive, or change an event behind a drive, and see what the change touches
+  before deciding what to change next. Nothing moves or is rewritten silently.
+  Shown by scenario tests over a fixture story, and by the writer trying it on a
+  real story.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
   books and chapters, scenes and beats, in any order: a scene can have a summary
   and beats before it has a place in a chapter. Outline and weave-grid views are
