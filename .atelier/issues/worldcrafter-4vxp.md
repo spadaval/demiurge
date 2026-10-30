@@ -14,9 +14,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Spike: passage anchoring design"
-updated_at: "2026-10-30T05:29:56.260536139+00:00"
+updated_at: "2026-10-30T06:13:56.560808048+00:00"
 ---
 
 ## Goal

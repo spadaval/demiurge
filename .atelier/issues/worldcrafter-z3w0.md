@@ -4,6 +4,9 @@ id: "worldcrafter-z3w0"
 issue_type: "feature"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-z3w0
 priority: "P1"
 relationships:
   blocks: []
@@ -40,7 +43,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Increment 1: a story you can hold — primitives, outline and weave views, arrangement"
-updated_at: "2026-10-30T05:26:32.479313574+00:00"
+updated_at: "2026-10-30T06:13:56.560806555+00:00"
 ---
 
 ## Goal
