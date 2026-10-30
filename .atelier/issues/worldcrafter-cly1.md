@@ -17,7 +17,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Story commands: create and change drives, questions and scene structure"
-updated_at: "2026-10-30T05:29:56.215224496+00:00"
+updated_at: "2026-10-30T16:14:11.867711389+00:00"
 ---
 
 ## Goal
@@ -40,3 +40,7 @@ Commands: add, update and remove drives; relate and unrelate two drives; add, up
 ## Context
 
 Records from worldcrafter-8tbh. `app/src/outline/store.ts` (`dangling`), `app/src/time/commands.ts` (`TimelineCommand`, `timelineProblems`), `app/src/world/facts.ts` (fact changes anchored to events).
+
+## Notes
+
+- 2026-10-30 [note] Deferred from review of spike worldcrafter-4vxp: removeScene, or deleting a document, orphans the document's passage_anchors annotation (ID passage-anchors:<documentId>, added by worldcrafter-jd8b), because storage requires callers to delete annotations themselves. Delete it where the scene or document is deleted, once jd8b exists.
