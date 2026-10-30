@@ -20,7 +20,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Passages: anchor blocks to beats and reorder passages"
-updated_at: "2026-10-30T16:14:11.857571360+00:00"
+updated_at: "2026-10-30T16:22:34.145678974+00:00"
 ---
 
 ## Goal
@@ -37,11 +37,16 @@ Follows "Passage anchors" in `docs/rebuild/data-model-boundaries.md` (spike worl
 - **Editor plugin.** A plugin in every document editor keeps the live anchor map. It assigns an anchor only to a top-level block whose ID is not in the map:
   - A split's new half takes the other half's anchor, by inspecting both halves after `apply`.
   - Blocks new after `insertData` take the anchor of the block at the start of the selection, read before the paste runs. The other rules stand down during `insertData`.
-  - An `insert_node` at the index of the `remove_node` just before it takes the removed block's anchor (regenerating a segment).
+  - An `insert_node` at the index of the `remove_node` just before it, in the same tick (`editor.operations.length > 0`), takes the removed block's anchor (regenerating a segment).
   - Blocks lifted out of a container take the container's anchor (accepting an AI segment).
   - Any other top-level insert takes the anchor of the block before it (after it, if first).
   - No hook on top-level moves: the reorder's moves leave anchors alone.
-- **Session.** The document session loads the record `passage-anchors:<documentId>` with its document. It prunes anchors of blocks not in the document only on open, and writes the record in the same atomic batch as the content whenever the map has changed. A scene without a record writes none until the first anchor command, which records every current top-level block, `null` unless anchored.
+- **Session.** The document session loads the record `passage-anchors:<documentId>` with its document. On open, and only then, it drops anchors of blocks that aren't top-level blocks of the document and adds missing top-level blocks as `null`. It writes the record in the same atomic batch as the content whenever the map has changed. A scene without a record writes none until the first anchor command, which records every current top-level block, `null` unless anchored.
+- **Load failures.** If the record is malformed, the document still opens and prose saves as usual. The record is left untouched, the plugin assigns nothing, `anchors` is unreadable with the parser's error, and `anchorBlocks`, `reorderBeats` and `passageProblems()` fail with a typed error. `discardAnchors()` deletes the record, leaving the scene with no record; it fails with a typed error in a read-only session or when the record isn't unreadable. A storage failure reading the record fails the open with the storage error, as the snapshot on open does.
+- **Reading.** `DocumentSession` exposes:
+  - `anchors`, a `Store` of the current state (ready with the map, empty if there is no record; or unreadable with the error), set to a new value on every map change.
+  - `passageProblems()`, which loads the current beats through the port and returns them with the problems over the live top-level blocks and the map. It fails with `not_a_scene` for a document that isn't a scene.
+  - `passagesChanged`, a `Store` counter that goes up when the map changes, when the sequence of top-level block IDs changes, and when a beat save by this session finishes (reorder, undo or redo; saved or failed).
 - **Anchor command.** `DocumentSession.anchorBlocks(blockIds, beatId | null)` applies to all the blocks or none. It fails with a typed error, changing nothing, for: a read-only session; a document that isn't a scene in the outline; a beat that isn't in this scene (unknown, or another scene's); a block not in the document; a block not at the top level (inside a segment). Editor undo doesn't revert it.
 - **Reorder command.** `DocumentSession.reorderBeats(order)` is the only way beats are reordered. It runs these steps in order:
   1. It fails with a typed error, changing nothing, in a read-only session, for a document that isn't a scene, or for an order that isn't a permutation of the scene's beats.
@@ -51,7 +56,7 @@ Follows "Passage anchors" in `docs/rebuild/data-model-boundaries.md` (spike worl
   5. It flushes the document.
 
   Undo and redo of a tagged step also save the tagged order, unless beats were added or removed since. The reorder never runs outside history. Running it with the current order repairs an order problem.
-- **Wiring.** `SessionOptions` gains a narrow port (load a scene's beat IDs, or `null` if it isn't a scene; save a beat order), built in `app/src/workspace/workspace.ts`. `saveBeatOrder` lives in `app/src/story/beat-order.ts`, is not in the `StoryCommand` union, runs on the story store's command queue, and is imported only by `workspace.ts`, enforced by a biome `noRestrictedImports` rule with an override for that file. The workspace exposes both commands with a lease, as its other commands do, so they work on a scene that isn't open in a tab. `createDocumentEditor` gains the callback that reports a restored order.
+- **Wiring.** `SessionOptions` gains a narrow port (load a scene's beat IDs, or `null` if it isn't a scene; save a beat order), built in `app/src/workspace/workspace.ts`. `saveBeatOrder` lives in `app/src/story/beat-order.ts`, is not in the `StoryCommand` union, runs on the story store's command queue, and outside `story/` is imported only by `workspace.ts`, enforced by a biome `noRestrictedImports` rule (pattern `**/story/beat-order`) with an override for that file. The rule doesn't see `./beat-order` from inside `story/`. The workspace exposes both commands with a lease, as its other commands do, so they work on a scene that isn't open in a tab. `createDocumentEditor` gains the callback that reports a restored order, and the plugin joins `documentPlugins` (`app/src/editor/document-editor.ts`).
 - **Headless tests**, using the real document plugins, with each step in its own `withNewBatch`:
   - Enter at the start, middle and end of a passage's first and last blocks, and at the end of a heading.
   - Pasting at the start of a passage, mid-block, into an empty block, and over forward and backward selections across two passages, both a Slate fragment copied from another passage and HTML.
@@ -61,23 +66,29 @@ Follows "Passage anchors" in `docs/rebuild/data-model-boundaries.md` (spike worl
   - A paste at the start of a passage, then undo and redo: the pasted blocks keep that passage's beat.
   - A block recorded as `null` (the scene), deleted, then restored by undo after another edit: it stays `null`.
   - Accepting an AI segment that opens a passage.
-  - Regenerating a segment that opens a passage, then undo and redo: it keeps its beat.
+  - Regenerating a segment that opens a passage, with and without a caret inside it, then undo and redo: it keeps its beat.
+  - Deleting a passage's first block, then in a later tick generating a segment at that index: the segment takes the anchor of the block before it, not the deleted block's. Await a tick between the two; in one tick they count as a replacement.
   - Reorder, then undo, redo and undo: prose and `beats` agree at each step.
   - A reorder with nothing to move: no undo step, and the writer's previous step isn't tagged.
   - A reorder during a live generation: text keeps streaming into the moved segment, and undo works.
   - A reorder that moves a leading block without a current beat: it stays at the top.
-  - The anchor command leaving a scene out of order, and delete, anchor, undo: reported, and repaired by reordering with the current order.
+  - The anchor command leaving a scene out of order; delete, anchor, undo; and with `a:b1, c:b2`, delete c, reorder to `[b2, b1]` (nothing moves), undo: each is reported, and repaired by reordering with the current order.
   - Read-only: both commands return the typed error, the editor is unchanged, and nothing is written.
   - A failing `beats` save: the error is returned, the prose is unchanged, and there is no undo step.
   - A failing content save after `beats` saved: retried. A reload before it succeeds reports the order, and reordering repairs it.
   - Each anchor command error.
   - Save and reload, keeping every anchor.
+  - A stored document with a repeated ID and a record: the repaired block is `null` on open and in the map, stays `null` after delete, another edit and undo, and a pruned anchor is gone. The change saves with the repaired content.
+  - A malformed record: the document opens and edits save; the stored record is unchanged; `anchors` is unreadable; both commands and `passageProblems()` fail with the typed error; `discardAnchors()` deletes it and anchoring then works. A storage failure reading the record fails the open.
+  - `anchors`: a new value after an anchor command and after Enter creates a block.
+  - `passageProblems()`: returns the beats and each kind of problem, reflects a beat removed through a story command, and fails for a non-scene.
+  - `passagesChanged`: goes up after an anchor command, a delete and its undo, a reorder, and the beat save of an undo and of a failed undo save; not after typing. Await a tick, since Slate reports changes in a microtask.
   - A seeded random-edit test (pattern: `app/src/editor/ai-segment.random.test.ts`) over Enter, typing, Backspace, range delete, paste, text drag, generating, regenerating, accepting, undo and redo: `passageProblems` stays empty and every top-level block stays in the map.
 - `bun run check` passes.
 
 ## Scope
 
-`app/src/story/`, one plugin in `app/src/editor/`, `app/src/workspace/document-session.ts`, `app/src/workspace/workspace.ts`, and the biome rule. Update the doc comment on `AnnotationRecord` in `app/src/storage/types.ts`, which says `id` is the block ID or AI segment ID, to include this record. Anchors live in one annotation record per scene document, written only by that document's session. They never go on content blocks, and the content schema doesn't change. Each top-level block has exactly one anchor. Prose moved into another passage takes the beat where it lands, through the paste rule; no block drag handle is built here. No UI. Staleness and drafting belong to `anchored-prose`, not here.
+`app/src/story/`, one plugin in `app/src/editor/`, `app/src/editor/document-editor.ts`, `app/src/workspace/document-session.ts`, `app/src/workspace/workspace.ts`, and the biome rule. Update the doc comment on `AnnotationRecord` in `app/src/storage/types.ts`, which says `id` is the block ID or AI segment ID, to include this record. Anchors live in one annotation record per scene document, written only by that document's session. They never go on content blocks, and the content schema doesn't change. Each top-level block has exactly one anchor. Prose moved into another passage takes the beat where it lands, through the paste rule; no block drag handle is built here. No UI. Staleness and drafting belong to `anchored-prose`, not here.
 
 ## Context
 

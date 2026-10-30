@@ -17,7 +17,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Story records and storage: drives, questions, scene structure"
-updated_at: "2026-10-30T05:26:32.340973360+00:00"
+updated_at: "2026-10-30T16:22:34.155878464+00:00"
 ---
 
 ## Goal
@@ -36,7 +36,7 @@ Shapes (field names may change if the reason is recorded in the PR; meanings may
 
 - **Drive**: `id`, `actorId` (an entry document of kind `person` or `organization`), `want`, `stakes`, `method` (strings, may be empty), `relations: { to: driveId, type: "opposes" | "allies" | "competes" }[]`, `authority` (`Authority` from `world/facts.ts`), `updatedAt`. A relation is stored on one drive of the pair only.
 - **Question**: `id`, `text`, `kind: "milieu" | "inquiry" | "character" | "event" | null` (MICE), `plannedPayoff: string | null`, `marks: { sceneId, type: "opens" | "progresses" | "answers", note }[]`, `authority`, `updatedAt`.
-- **SceneStructure**: `id` (the scene's document ID), `summary`, `beats: { id, summary }[]` in order (may be empty), `depicts: EventId[]` (non-scene events from story time; descriptive only, as story-time placement alone says when a scene happens), `pressures: driveId[]`, `updatedAt`. How passages anchor to beats is added later by worldcrafter-jd8b, from spike worldcrafter-4vxp.
+- **SceneStructure**: `id` (the scene's document ID), `summary`, `beats: { id, summary }[]` in order (may be empty), `depicts: EventId[]` (non-scene events from story time; descriptive only, as story-time placement alone says when a scene happens), `pressures: driveId[]`, `updatedAt`. Passage anchors are not part of this record, and no field is reserved for them: they live in a separate annotation record owned by the document session (worldcrafter-jd8b; `docs/rebuild/data-model-boundaries.md`, "Passage anchors").
 
 Storage keeps each record's body as JSON with `id` and `updatedAt`, as `timelines` does; `story/` owns the types and parsing. No commands or UI here.
 
