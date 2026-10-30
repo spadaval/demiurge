@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-30: contradictions are held until the writer resolves them, not refused (Sumeet)"
+last_changed: "2026-10-30: strict continuity checking named as a non-goal (Sumeet)"
 ---
 
 # Why
@@ -146,6 +146,11 @@ Out of scope:
   pages (in the backlog, to be re-planned under the story model)
 - sync, the inference proxy and server-side jobs
 - the unreliable narrator
+- strict continuity checking. A canon database like Lucasfilm's Holocron is
+  useful for keeping a franchise consistent across many authors, but it treats
+  the story as settled and polices it. This app is for a story still in motion:
+  it shows what a change touches and where the story conflicts, and it doesn't
+  keep an official canon, rule on what's correct or hold back a change.
 
 Environment: as in the rebuild. One user (the author), desktop Chromium and a
 phone, local llama.cpp and hosted OpenAI-compatible providers.

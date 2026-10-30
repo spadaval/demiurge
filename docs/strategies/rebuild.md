@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-30: S9 names synced requests and device-local snapshots; stale bookkeeping text removed (Sumeet)"
+last_changed: "2026-10-30: consistency checking against canon dropped as a likely next mission (Sumeet)"
 ---
 
 # Why
@@ -11,7 +11,7 @@ times, and kept losing data at the boundary between Plate's rich tree and the
 plain text LLMs read and write. Its "Generate Next" sends no world context at all,
 and it detected entities with a news-trained NER model that handles invented names
 worst. The field has since settled on alias-matched lore injection and
-reviewable AI edits, which confirms the direction. Consistency checking, AI
+reviewable AI edits, which confirms the direction. AI
 upkeep of the world, a typed world graph, and editable context are still
 underserved, and those are where WorldCrafter can stand out
 (`docs/rebuild/prior-art-2026.md`).
@@ -149,7 +149,8 @@ Out of scope:
 - the sync backend, the inference proxy and server-side jobs (a likely next
   mission; records are sync-ready in this one)
 - an MCP server (the commands make it possible later)
-- consistency checking against canon (a likely next mission)
+- strict continuity checking against a canon (a non-goal; see
+  `docs/strategies/structure-first.md`)
 - tables, media, callouts and other node types beyond the schema list
 - desktop packaging
 
