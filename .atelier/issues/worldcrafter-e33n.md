@@ -26,7 +26,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Outline, weave grid and manuscript views in the app"
-updated_at: "2026-10-30T05:26:32.449315693+00:00"
+updated_at: "2026-10-30T16:14:59.973498175+00:00"
 ---
 
 ## Goal
@@ -49,3 +49,7 @@ The writer can see the story as an outline, as a weave grid and as an assembled 
 ## Context
 
 Derivations: outline view (worldcrafter-asip), weave grid (worldcrafter-3ugg), passages (worldcrafter-jd8b), manuscript and `arrangementProblems` (worldcrafter-wllv).
+
+## Notes
+
+- 2026-10-30 [note] 2026-10-30 from spike worldcrafter-4vxp: editor undo does not revert an anchor command, so the writer re-anchors instead; make that clear in the UI. A block's beat must be visible, so the writer can see the anchors they're setting. See 'Passage anchors' in docs/rebuild/data-model-boundaries.md.
