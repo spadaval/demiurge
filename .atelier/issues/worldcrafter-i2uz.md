@@ -30,7 +30,7 @@ Find out whether reworking in the abstract is worth having, by the writer using 
 
 ## Done when
 
-Sumeet has entered enough of a real story to matter, ideally a half-formed one, changed a motivation and an event behind one, and recorded in a note here: keep, change or drop, where they stalled, and what they missed (a chain of causes, questions, reaching what text only mentions). Any verdict closes this item, and "drop" is a useful result. The next increment is chosen from the verdict.
+Sumeet has entered enough of a real story to matter, ideally a half-formed one, changed a motivation and an event behind one, and recorded in a note here: keep, change or drop, where they stalled, and what they missed (a chain of causes, questions, reaching what text only mentions, a way to see where the story contradicts itself). Any verdict closes this item, and "drop" is a useful result. The next increment is chosen from the verdict.
 
 ## Context
 

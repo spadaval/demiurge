@@ -29,6 +29,7 @@ Every change to these records is a typed command callable without the UI, so the
 - `app/src/story/commands.ts` exports a `StoryCommand` union and a pure `applyStoryCommand(state, context, command)` returning `Result<…, StoryError>`, plus a store that runs commands and persists through the storage adapter (pattern: `outline/store.ts`). `state` is the drives and scene structures. `context` is read-only: the scene documents, whether or not they're in the outline (a scene is any document that isn't an entry of another kind; "New document" attaches no kind); entry kinds by document ID; and the timeline's event IDs. The result names the records to save and to delete.
 - Tests call each command directly and cover each error: unknown or wrong-kind actor, unknown scene document, unknown event, unknown drive, a drive related to itself, a relation that already exists in either direction, and duplicate IDs.
 - A scene that isn't in the outline can have a summary, actors and pressures, shown by a test.
+- Two drives of one actor can oppose or compete, shown by a test: a character pulled two ways is ordinary.
 - Removing a drive removes it from other drives' relations and from every scene's `pressures`.
 - References may dangle, for example after a cascade fails part-way. Derivations skip them, shown by a test. Taking a scene out of the outline keeps its structure.
 - `describeEvent` in `app/src/time/commands.ts` sets an event's label and summary. Scene events can't be described this way.

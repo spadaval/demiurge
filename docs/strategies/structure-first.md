@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-30: rework added as the first bet; primitives criterion removed; passage reordering moved to anchored-prose; increments judged by trying them (Sumeet)"
+last_changed: "2026-10-30: contradictions are held until the writer resolves them, not refused (Sumeet)"
 ---
 
 # Why
@@ -50,7 +50,8 @@ the rest of this plan should change.
 - rework: From any character, event, drive or scene, the writer can see
   everything connected to it and go there. They can shift an event, change a
   drive, or change an event behind a drive, and see what the change touches
-  before deciding what to change next. Nothing moves or is rewritten silently.
+  before deciding what to change next. Nothing moves or is rewritten silently,
+  and a contradiction stays until the writer resolves it.
   Shown by scenario tests over a fixture story, and by the writer trying it on a
   real story.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
@@ -105,6 +106,11 @@ the rest of this plan should change.
   a set of passages anchored to its beats. The manuscript is only ever a view.
 - **The film-editing model.** The structure is the script, prose is footage,
   and the arrangement is the edit. Prose is anchored, not compiled.
+- **Contradiction is material.** Stories run on motivations that pull against
+  each other and events that overlap, and early on they are full of
+  contradictions. Much of the tension comes from resolving them satisfyingly. So
+  the app holds contradictions, shows them and never refuses them; resolving one
+  is the writer's act.
 - **Connections carry the leverage.** A change reaches only what is linked to
   it, so links between events, drives and scenes matter more than fields inside
   them. The app shows what a change touches; the writer decides what follows. It
