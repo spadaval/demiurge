@@ -31,7 +31,7 @@ Prose is written by hand or drafted from the structure, and is marked stale when
 
 ## Done when
 
-Provisional: delivers `anchored-prose`. Drafting a beat assembles context from the actors' drives, the open questions and what the reader knows at that point, shown by scenario tests against a stub OpenAI-compatible server. Changing the structure under a passage marks its stale, and the writer can rewrite, redraft or keep each one. Includes passages and passage reordering (worldcrafter-jd8b, design from spike worldcrafter-4vxp), and anchoring blocks in a scene's document in the app. Re-plan worldcrafter-jd8b before starting, including scenes outside the outline. Ends with the writer's keep, change or drop.
+Provisional: delivers `anchored-prose`. Drafting a beat assembles context from the actors' drives, the open questions and what the reader knows at that point, shown by scenario tests against a stub OpenAI-compatible server. Changing the structure under a passage marks it stale, and the writer can rewrite, redraft or keep each one. Includes passages and passage reordering (worldcrafter-jd8b, design from spike worldcrafter-4vxp), and anchoring blocks in a scene's document in the app. Re-plan worldcrafter-jd8b before starting, including scenes outside the outline. Ends with the writer's keep, change or drop.
 
 ## Unknowns
 

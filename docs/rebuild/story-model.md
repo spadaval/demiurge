@@ -84,7 +84,7 @@ These are what the writer thinks in. They are named, writer-owned groupings over
 
 ## Tools this enables
 
-- **What this touches**: from any event, drive, question or scene, everything linked to it. It is the review list after any change. It follows links only, so what free text merely mentions is out of its reach.
+- **What this touches**: from any character, event, drive, question or scene, everything linked to it. It is the review list after any change. It follows links only, so what free text merely mentions is out of its reach.
 - **Question ledger**: questions open too long without progress, and promises with no planned payoff.
 - **Collision map**: actors with no opposition, drives that never meet on the page, actors who want the same thing and never share a scene.
 - **Scene check**: lists scenes that move no question and put no drive under pressure. It informs and doesn't judge.

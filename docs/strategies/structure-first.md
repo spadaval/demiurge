@@ -47,8 +47,8 @@ the rest of this plan should change.
 
 # Success Criteria
 
-- rework: From any event, drive or scene, the writer can see everything
-  connected to it and go there. They can shift an event, change a drive, or
+- rework: From any character, event, drive or scene, the writer can see
+  everything connected to it and go there. They can shift an event, change a drive, or
   change an event behind a drive, and see what the change touches before
   deciding what to change next. Nothing moves or is rewritten silently. Shown by
   scenario tests over a fixture story, and by the writer trying it on a real

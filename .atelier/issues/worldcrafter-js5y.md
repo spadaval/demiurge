@@ -29,9 +29,9 @@ The writer can place scenes and events in time from a timeline view, move an eve
 
 ## Done when
 
-Provisional: delivers the rest of `rework`. A timeline view shows events and scenes, and the writer can add a scene to the outline, set positions and place scenes; scenes from the first trial aren't in the outline, so they have no time yet. A shift previews its conflicts, nothing moves silently, and the writer chooses what follows. `whatThisTouches` also walks placements, timeline constraints, fact changes and reveals. `removeEvent` removes an event and its positions, and is refused while a constraint, scene placement, correspondence, reveal, fact change, drive origin or `depicts` refers to it; scene events can't be removed this way. Ends with the writer's keep, change or drop.
+Provisional: delivers the rest of `rework`. A timeline view shows events and scenes, and the writer can create a book and chapter, add a scene to the outline, set positions and place scenes; scenes from the first trial aren't in the outline, so they have no time yet. A shift previews its conflicts, nothing moves silently, and the writer chooses what follows. `whatThisTouches` also walks placements, timeline constraints, fact changes and reveals. `removeEvent` removes an event and its positions, and is refused while a constraint, scene placement, correspondence, reveal, fact change, drive origin or `depicts` refers to it; scene events can't be removed this way. Ends with the writer's keep, change or drop.
 
 ## Unknowns
 
 - **For Sumeet:** can a writer keep a shift that conflicts? Today `applyTimelineCommand` refuses any command that adds a problem, which sits badly with "checks report and never block".
-- Moving `seal` and scene 3.2 one at a time fails in either order, so a group shift needs a batch command, and a preview needs `timelineProblems` on a candidate timeline. `during` may be enough to treat a group as a unit.
+- A single move of `seal` or scene 3.2 is refused in either order. Multi-step routes exist, so an atomic group shift is a design choice for preview and undo, not a necessity. A preview needs `timelineProblems` on a candidate timeline. `during` may be enough to treat a group as a unit.

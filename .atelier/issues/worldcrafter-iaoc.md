@@ -27,13 +27,13 @@ A writer can get enough of a real story into the app to try reworking it. Today 
 ## Done when
 
 - In the app, a writer can create a character (a document with a `person` or `organization` entry, through `createDocument` and `attachEntry`, with `worldIndex` refreshed so it shows up) and a scene.
-- They can create and edit drives, a drive's origins and relations, a scene's summary, actors, pressures and depicted events, and events with summaries. All of it goes through the command stores; the UI never writes records directly.
+- They can create, edit and remove drives, a drive's origins and relations, a scene's summary, actors, pressures and depicted events, and events with summaries. All of it goes through the command stores; the UI never writes records directly.
 - Component tests (pattern: `app/src/app/app.test.tsx`) cover creating a character, giving them a drive with an origin event, and putting them in a scene.
 - `bun run check` passes.
 
 ## Scope
 
-Plain forms in the existing shell. No outline, positions, placements, facts, reveals, questions, beats or prose work. An event entered by mistake can't be deleted yet; `removeEvent` comes with worldcrafter-js5y.
+Plain forms in the existing shell. No outline, positions, placements, facts, reveals, questions, beats or prose work. Events, characters and scenes entered by mistake can't be deleted yet; `removeEvent` comes with worldcrafter-js5y, and the app has no document delete.
 
 ## Context
 
