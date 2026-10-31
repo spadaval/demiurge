@@ -8,7 +8,7 @@ WorldCrafter is a tool for building stories from the frame out. The world and th
 
 It is about stories, not manuscripts. A story that never reaches the page is still a story, and work on its structure is still progress.
 
-The goal is to make it easier to tell great stories, by making sure a story has what it needs to be interesting before final drafting begins. The user is a team of a human and an agent, so the model has to make sense to both, and an agent using it to write well counts as success. The human's judgment settles whether the result is any good (decision worldcrafter-2y4g). We want to use AI to write the story, and we take no position on whether AI should write stories in general. Our theory is that the best story comes from AI tenacity and thoroughness combined with human judgment, and the form follows the results (decision worldcrafter-45an).
+The goal is to make it easier to tell great stories, by making sure a story has what it needs to be interesting before final drafting begins. The user is a team of a human and an agent, so the model has to make sense to both, and an agent using it to write well counts as success. The human's judgment settles whether the result is any good (decision worldcrafter-2y4g). We use AI to assist and enhance the creative process, including writing the story, because we think AI tenacity and thoroughness combined with human judgment is the best way to create compelling stories. We aren't taking a position on whether AI should write stories in general, and the form follows the results (decision worldcrafter-45an).
 
 ## Fluidity
 

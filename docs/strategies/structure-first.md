@@ -39,10 +39,11 @@ of a human and an agent, so the model has to make sense to both, and an agent
 using it to write well counts as success. Whether the model makes that team
 better than the same team with plain notes is the mission's main unknown.
 
-We want to use AI to write the story, and we take no position on whether AI should
-write stories in general. We want the best possible story, and our theory is that
-it comes from AI tenacity and thoroughness combined with human judgment. AI can write as much of it as helps. What we don't want is a
-slop cannon: volume that nobody has judged. The form follows the results (decision
+We use AI to assist and enhance the creative process, including writing the story,
+because we think AI tenacity and thoroughness combined with human judgment is the
+best way to create compelling stories. We aren't taking a position on whether AI
+should write stories in general, and we don't want to be a slop cannon, producing
+volume that nobody has judged. The form follows the results (decision
 worldcrafter-45an).
 
 # Outcome

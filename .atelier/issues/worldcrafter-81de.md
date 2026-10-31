@@ -4,6 +4,9 @@ id: "worldcrafter-81de"
 issue_type: "task"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: task/worldcrafter-81de
 priority: "P1"
 relationships:
   blocks: []
@@ -12,9 +15,9 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Say that we use AI because it's the best way to create compelling stories"
-updated_at: "2026-10-31T05:09:50.936118953+00:00"
+updated_at: "2026-10-31T05:09:51.000409336+00:00"
 ---
 
 ## Goal
