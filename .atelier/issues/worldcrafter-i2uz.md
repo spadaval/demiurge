@@ -18,17 +18,17 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Verdict: read the comparison, then keep, change or drop"
-updated_at: "2026-10-31T02:17:09.028284258+00:00"
+updated_at: "2026-10-31T03:23:43.474360786+00:00"
 ---
 
 ## Goal
 
-Find out whether the model makes the team's stories better than plain notes do, by the human reading the results blind. Tests can't answer this.
+Find out whether the model makes the team's stories better than plain notes do, by the human reading the results. Tests can't answer this.
 
 ## Done when
 
-Sumeet has read the packets and recorded in a note here, before opening the key: which they'd rather keep developing and why, and for each premise whether the open questions got satisfying answers. Then, with the key open and having looked over the model-gaps logs: keep, change or drop, and what was missing (a chain of causes, a type the model lacks, reaching what text only mentions, the gap reports themselves). Any verdict closes this item, and "drop" is a useful result. The next increment is chosen from the verdict.
+Sumeet has read the packets and recorded in a note here, before opening the key: for each pair, which they'd rather keep developing and why, whether the open questions got satisfying answers, and which followed its reworks through better. Then, with the key open and having looked over the model-gaps logs: keep, change or drop, and what was missing (a chain of causes, a type the model lacks, reaching what text only mentions, the gap reports themselves). The call is Sumeet's, with no numeric rule, and the held-back premise's pairs count for more because the tool wasn't tuned on them. Any verdict closes this item, and "drop" is a useful result. The next increment is chosen from the verdict.
 
 ## Context
 
-Agents don't start or pass this. They give the path to the packets and say how long they should take to read, about an hour. This verdict doesn't test how a screen feels, which is worldcrafter-frqk.
+Agents don't start or pass this. They give the path to the packets. Eight packets are about 24,000 words, around two hours, and can be read over more than one sitting. Format may give away an arm, and that's accepted. This verdict doesn't test how a screen feels, which is worldcrafter-frqk.

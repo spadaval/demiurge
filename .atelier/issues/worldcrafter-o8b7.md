@@ -44,7 +44,7 @@ An agent in an ordinary session, using a CLI and a skill, can take a one-paragra
 
 ## Done when
 
-- Delivers `sketch` and the change-a-drive, change-its-origin and shift-an-event parts of `rework`, headless. Each child's proof passes, and the increment is independently reviewed.
+- Delivers `sketch` and the change-a-drive, change-its-origin and shift-an-event parts of `rework`, headless. Scenes have no place in story time here, so a shift can conflict with another event but not with a scene. Each child's proof passes, and the increment is independently reviewed.
 - The human has read the blind comparison and recorded keep, change or drop (worldcrafter-i2uz). Agents can't pass that item.
 
 ## Unknowns
@@ -60,6 +60,7 @@ An agent in an ordinary session, using a CLI and a skill, can take a one-paragra
 
 - Strategy: `docs/strategies/structure-first.md`. Model: `docs/rebuild/story-model.md`. Direction: decision worldcrafter-2y4g. This replaces the app-first plan for this increment; `worldcrafter-iaoc` and `worldcrafter-eg96` moved to worldcrafter-frqk.
 - Keep specification light: field names may change as the work teaches something.
+- Sumeet decided after the plan's review (2026-10-30): partial blinding is accepted; both arms get the same craft advice, so only the tool differs; rework is tested by two fresh-session reworks, one of them a timeline shift; and the first model also has facts, reader questions and scene order.
 
 Paper walkthrough, 2026-10-30, on the demo world (`app/src/demo/ninefold.ts`), with hand-invented drives. It's the author's reasoning, not a test with a writer. Ardelia's drive: keep the Salt Gate shut; origin event `seal`; pressures 4.2 and 5.1.
 

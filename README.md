@@ -5,9 +5,9 @@ If that's you, move along. This is for the rest of us.
 
 WorldCrafter is a AI-native tool for creating imaginary worlds, inspired by software engineering tooling. 
 
-Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. WorldCrafter keeps that fluid: you can start anywhere, leave things undecided, hold contradictions, try answers, and rework a motivation or a timeline in the abstract while seeing what it touches.
+Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. WorldCrafter keeps that fluid: you can jump between levels and sides, rework a motivation or a timeline in the abstract while seeing what it touches, try answers, and leave things undecided or contradictory for as long as you need.
 
-It's built for a team of a human and an AI agent, working on the same model of the story, to make sure a story has what it needs to be interesting before final drafting begins. See [the story model](docs/rebuild/story-model.md#fluidity).
+It's built for a team of a human and an AI agent, working on the same model of the story, to make sure a story has what it needs to be interesting before final drafting begins. See [the story model](docs/rebuild/story-model.md#fluidity). The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The product is still a web app.
 
 ## Key Differentiators
 

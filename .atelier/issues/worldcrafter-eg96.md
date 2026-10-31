@@ -20,7 +20,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Focus view: see and follow what a character, drive, event or scene touches"
-updated_at: "2026-10-31T02:17:09.192340424+00:00"
+updated_at: "2026-10-31T03:23:43.519520082+00:00"
 ---
 
 ## Goal
@@ -46,3 +46,4 @@ Show what's connected; don't rewrite anything or score it. There's no change his
 ## Notes
 
 - 2026-10-30 [note] 2026-10-30: moved to worldcrafter-frqk after decision worldcrafter-2y4g. whatThisTouches moved to worldcrafter-33qr. Rewrite this when the screen increment is planned.
+- 2026-10-30 [note] 2026-10-30: its Done when still lists whatThisTouches and app forms. Don't execute this as written.

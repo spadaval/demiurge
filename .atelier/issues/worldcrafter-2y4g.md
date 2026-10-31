@@ -24,7 +24,7 @@ schema_version: 2
 closed_at: "2026-10-31T02:17:08.814723104+00:00"
 status: "done"
 title: "Headless first, for a team of a writer and an agent, with open questions as records"
-updated_at: "2026-10-31T02:17:08.814723104+00:00"
+updated_at: "2026-10-31T03:23:43.486721012+00:00"
 ---
 
 ## Question
@@ -47,6 +47,10 @@ Decided by Sumeet (2026-10-30), from their own proposal.
 - Open questions are their own records, holding candidate answers and what each would connect to. They are distinct from the telling layer's questions, which are what the reader is waiting for.
 
 Consequences: `worldcrafter-4t98`, `worldcrafter-iaoc` and `worldcrafter-eg96` wait for a verdict. Decision worldcrafter-ddha still describes how the app stores things: in the trial's file, actors and scenes are plain records and not documents, and a keep verdict has to map one onto the other. Decision worldcrafter-gcox stands, because this is a way to find out and not how the product ships.
+
+## Notes
+
+- 2026-10-30 [note] 2026-10-30: after the plan's review, Sumeet decided: partial blinding is accepted; both arms get the same craft advice, so only the tool differs; rework is tested by two fresh-session reworks, one of them a timeline shift; the first model also has plain facts, reader questions and scene order. In the headless file a scene has no place in story time; depicts is its only link to events.
 
 ## Close Reason
 

@@ -30,7 +30,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "See the whole story, and work at any level"
-updated_at: "2026-10-30T22:02:01.477267629+00:00"
+updated_at: "2026-10-31T03:23:43.508603536+00:00"
 ---
 
 ## Goal
@@ -44,3 +44,7 @@ Provisional: delivers `coarse-to-fine`. Ends with the writer's keep, change or d
 ## Unknowns
 
 - Which children are still right after the first trial.
+
+## Notes
+
+- 2026-10-30 [note] 2026-10-30: written for the app-first plan and stale until it's re-planned from the verdict in worldcrafter-i2uz (decision worldcrafter-2y4g). It may assume drive editing and a focus view exist in the app; they don't yet.

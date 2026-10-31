@@ -26,17 +26,17 @@ Every change to a story is a typed command that holds what it's told, so an agen
 
 ## Done when
 
-- `app/src/story/commands.ts` exports a `StoryCommand` union and a pure `applyStoryCommand(story, command)` returning `Result<Story, StoryError>`.
-- Tests call each command directly and cover each error: an unknown ID in a command's target, a duplicate ID, a drive related to itself, and a relation that already exists in either direction.
+- `app/src/story/commands.ts` exports a `StoryCommand` union and a pure `applyStoryCommand(story, command)` returning `Result<{ story: Story; problems: TimelineProblem[] }, StoryError>`, where `problems` is what the command added.
+- Tests call each command directly and cover each error: an unknown ID in a command's target or in any link it sets (so `touches`, `about` and the like can't point at something that doesn't exist yet; add it first, unconnected if need be), a duplicate ID, a drive related to itself, and a relation that already exists in either direction.
 - Two drives of one actor can oppose or compete, shown by a test: a character pulled two ways is ordinary.
-- Removing a record removes references to it from every other record, shown by a test for each kind. A candidate's `touches` is treated the same way.
-- Timeline commands go through a new `applyTimelineCommandKeepingProblems` in `app/src/time/commands.ts`, which returns the new timeline and every problem the command added, and refuses only malformed commands. A test moves an event so that it conflicts with a scene and shows that the move is kept and the problem returned. `applyTimelineCommand` and its callers don't change; worldcrafter-js5y moves them over.
+- Removing a record removes references to it from every other record, shown by a test for each kind. A candidate's `touches` is treated the same way. Removing an actor sets their drives' `actorId` to null and keeps the drives. Removing a candidate clears `answer` if it was the chosen one.
+- Timeline commands go through a new `applyTimelineCommandKeepingProblems` in `app/src/time/commands.ts`, which returns the new timeline and every problem the command added, and refuses only malformed commands. A test moves an event so that it conflicts with another event's `before` constraint (an empty scene list means scenes have no time here) and shows that the move is kept and the problem returned. `applyTimelineCommand`, its callers and the `TimelineCommand` union don't change; worldcrafter-js5y moves them over later, and may change how `removeEvent` works in the app.
 - Answering an open question records the chosen candidate and can be undone. Recording it doesn't change any other record: the agent makes those changes as its own commands, and a test shows this.
 - `bun run check` passes.
 
 ## Scope
 
-Commands: set the premise; add, update and remove actors, drives, scenes and open questions; set a drive's origins; relate and unrelate two drives; set a scene's actors, depicted events and pressures; add, update and remove candidates; answer and unanswer an open question; add, describe and remove events; set an event's position; add and remove constraints between events. Removing an event removes its positions and constraints too, since git holds the history. Scene events and the outline aren't used here, so timeline calls pass an empty scene list.
+Commands: set the premise; add, update and remove actors, drives, facts, reader questions, scenes and open questions; move a scene in the telling order; set where a reader question opens and is answered; set a drive's origins; relate and unrelate two drives; set a scene's actors, depicted events and pressures; add, update and remove candidates; answer and unanswer an open question; add, describe and remove events (these three live in `story/commands.ts`, on the `Story`'s timeline); set an event's position; add and remove constraints between events. Removing an event removes its positions and constraints too, since git holds the history. Scene events and the outline aren't used here, so timeline calls pass an empty scene list.
 
 ## Context
 

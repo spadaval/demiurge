@@ -22,7 +22,7 @@ updated_at: "2026-10-31T02:17:08.852873669+00:00"
 
 ## Goal
 
-Make every synced collection ready for a later sync backend (S9, decision worldcrafter-gcox): deleting a record leaves a tombstone instead of removing it, so another device can learn of the delete. New story collections (worldcrafter-z9qs) are built on this, so it comes first.
+Make every synced collection ready for a later sync backend (S9, decision worldcrafter-gcox): deleting a record leaves a tombstone instead of removing it, so another device can learn of the delete. New story collections, when the app stores the story model, are built on this.
 
 ## Done when
 

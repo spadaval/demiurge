@@ -18,7 +18,7 @@ WorldCrafter is for writers and worldbuilders equally. Some users mostly draft p
 
 WorldCrafter makes it easier to tell great stories, by making sure a story has what it needs to be interesting before final drafting begins. It's a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
 
-Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: start anywhere, leave things unconnected or undecided, hold contradictions, try answers, and rework in the abstract (`docs/rebuild/story-model.md`).
+Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: jump between levels and sides, rework in the abstract, try answers against the rest of the story, and leave things undecided or contradictory until a satisfying way through appears (`docs/rebuild/story-model.md`).
 
 Success means a story can grow outside the writer's head without being flattened onto the page too early, that changes made at the structural level reach everything they should, and that the team finds more satisfying answers than it would with plain notes.
 
@@ -46,7 +46,7 @@ Other tools either inject lore into prompts (Novelcrafter, NovelAI, Sudowrite), 
 
 - The content schema is restricted to node types whose AI projections are defined: paragraphs, headings, lists, quotes, rules, basic marks, links, AI segments and placeholders. Tables, media and callouts are excluded for now. The TypeScript model is the source of truth, and a world round-trips exactly through every storage and export adapter. It also exports to readable markdown, one-way.
 - **AI segments** are AI-written content that is visibly marked. You can accept it, which turns it into ordinary text, or regenerate it. Its provenance (the request, model and sampler) is kept alongside it.
-- **AI presence: a quiet colleague.** AI work is always visible and attributed, but it stays in the background: margins, underlines, an inbox, talk-page topics. It never takes the main stage from the writer's own work.
+- **AI presence in the app: a quiet colleague.** AI work is always visible and attributed, but it stays in the background: margins, underlines, an inbox, talk-page topics. It never takes the main stage from the writer's own work.
 - **Power controls on demand:** the assembled request can be viewed and edited, and sampler settings and logprobs are available, but none of these is in the way by default.
 - **Terminology:**
   - *entry*: a world document such as a character, place or faction

@@ -59,20 +59,23 @@ of this plan should change.
 # Success Criteria
 
 - sketch: From a short premise, an agent working alone can build a story in the
-  model: elements that aren't woven in yet, open questions with candidate
-  answers, and contradictions it hasn't resolved. It can see what each candidate
-  would touch and what the story lacks, such as a character with no drive or a
-  drive nothing opposes. Shown by a blind comparison: fresh sessions take the same
-  premise, with the tool and with plain notes, and the human reads the results
-  without knowing which is which and says which they'd rather keep developing. One
-  premise is held back until the tool is frozen.
+  model, working at any level and side in any order: elements that aren't woven in
+  yet, open questions with candidate answers, and contradictions it hasn't
+  resolved. It can see what each candidate declares it would connect to, one step
+  on from there, and what the story lacks, such as a character with no drive or a
+  drive nothing opposes. Shown by a comparison read as blind as is practical: fresh
+  sessions take the same premise and the same craft advice, with the tool and with
+  plain notes, and the human reads the results without being told which is which
+  and says which they'd rather keep developing. Format may give an arm away, which
+  is accepted. One premise is held back until the tool is frozen.
 - rework: From any character, event, drive, scene or open question, the team can
   see everything connected to it and go there. They can shift an event, change a
   drive, or change an event behind a drive, and see what the change touches
   before deciding what to change next. Nothing moves or is rewritten silently,
   and a contradiction stays until the team resolves it.
-  Shown by scenario tests over a fixture story and by the blind comparison, which
-  includes a rework and a draft of a scene it affects.
+  Shown by scenario tests over a fixture story and by the comparison, where fresh
+  sessions see only the saved sketch, change a motivation, shift an event and draft
+  a scene those changes affect, and the human judges how well each followed through.
 - on-screen: A writer can do `sketch` and `rework` on a screen, jumping between
   levels and sides without losing their place. This is the part of fluidity a
   conversation can't test. Shown by component tests and by the writer trying it on
@@ -131,8 +134,8 @@ of this plan should change.
   normal, so a gap report never reads as an error. Each answer constrains the ones
   crossing it, which is why connections are the thing to get right.
 - **Open questions are records.** "Why did he leave?" can stay unanswered, holding
-  candidate answers and what each would connect to, so a candidate can be tried
-  before anyone commits to it. A conflict that's been noticed can be one too. How
+  candidate answers and what each is declared to connect to, so a candidate can be
+  weighed against the story before anyone commits to it. A conflict that's been noticed can be one too. How
   much a candidate touches is a signal, not a score: the most connected answer
   isn't always the most satisfying, and that call is judgment.
 - **Builds on the rebuild.** Platform, storage, the LLM client, model
@@ -173,7 +176,7 @@ of this plan should change.
 In scope:
 
 - the story primitives and their commands
-- a CLI and skill over them, and the blind comparison
+- a CLI and skill over them, and the comparison against plain notes
 - seeing what a change touches, and focus and timeline views
 - outline and weave-grid views
 - arrangement: chapters, scene moves, seam, question-order and story-time checks
@@ -214,21 +217,23 @@ These must come back to the human:
 - adding a backend service
 - reopening decisions worldcrafter-ok5a, worldcrafter-gcox or the platform
 - keep, change or drop after trying an increment
-- the premises and what the blind comparison asks the human to judge
+- the premises and what the comparison asks the human to judge
 
 # Risks and Unknowns
 
 - A capable agent can make a weak model look fine by working around it. The
   plain-notes arm of the comparison and a log of what the model couldn't hold are
   the check.
-- The blind comparison is a few runs on two premises, read by one person. It can
-  show the tool is clearly better or clearly not, but not a small difference. It
-  also can't show how working on a screen feels, which `on-screen` still has to.
+- The comparison is a few runs on two premises, read by one person, and format can
+  give away which is which. It can show the tool is clearly better or clearly not,
+  but not a small difference. It also can't show how working on a screen feels,
+  which `on-screen` still has to.
 - The gap reports are a first guess at what a story needs to be interesting, and
   are the part most likely to be wrong. Runs on the premises should change them.
 - The story file isn't how the app stores things. A keep verdict has to map it onto
   documents and collections (decision worldcrafter-ddha), which `worldcrafter-4t98`
-  and the app's storage work then pick up.
+  and the app's storage work then pick up. In the file a scene also has no place
+  in story time, only links to the events it depicts.
 - The three modelling questions (where drives and questions live, beats,
   scenes and events) are settled by decision worldcrafter-ddha: their own
   typed records, optional beats inside scenes, and scenes that depict events.
