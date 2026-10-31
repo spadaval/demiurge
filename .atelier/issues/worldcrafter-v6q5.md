@@ -4,6 +4,9 @@ id: "worldcrafter-v6q5"
 issue_type: "task"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: task/worldcrafter-v6q5
 priority: "P1"
 relationships:
   blocks: []
@@ -12,9 +15,9 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "State the moral stance and mark co-authoring as a hunch"
-updated_at: "2026-10-31T05:13:40.629485255+00:00"
+updated_at: "2026-10-31T05:13:40.692432705+00:00"
 ---
 
 ## Goal

@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-31: we use AI because we think it's the best way to create compelling stories; no claim about how others should write; the form follows the results (Sumeet)"
+last_changed: "2026-10-31: we use AI because we think it's the best way to create compelling stories; AI-written work isn't inherently good or bad; co-authoring is an unverified hunch; the form follows the results (Sumeet)"
 ---
 
 # Why
@@ -40,10 +40,10 @@ using it to write well counts as success. Whether the model makes that team
 better than the same team with plain notes is the mission's main unknown.
 
 We use AI to assist and enhance the creative process, up to and including writing
-the story, because we think AI tenacity and thoroughness combined with human
-judgment is the best way to create compelling stories. That's our theory for our
-own work, not a claim about how anyone else should write. What we don't want is a
-slop cannon: volume that nobody has judged. The product's form, web app or
+the story, because we think that's the best way to create compelling stories. We
+don't see AI-written work as inherently good or bad. Our hunch is that the best
+stories need both AI tenacity and thoroughness and human judgment, which is a
+reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged. The product's form, web app or
 otherwise, follows the results (decision worldcrafter-45an).
 
 # Outcome
@@ -231,6 +231,9 @@ These must come back to the human:
 
 # Risks and Unknowns
 
+- That the best stories need a human and an agent together is a hunch. The first
+  comparison doesn't test it: an agent writes alone in both arms and the human only
+  judges the results. It tests the model, not co-authoring.
 - A capable agent can make a weak model look fine by working around it. The
   plain-notes arm of the comparison and a log of what the model couldn't hold are
   the check.
