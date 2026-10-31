@@ -12,9 +12,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-10-31T05:32:03.380490439+00:00"
+status: "done"
 title: "Hold a story in one readable file"
-updated_at: "2026-10-31T05:18:53.836243055+00:00"
+updated_at: "2026-10-31T05:32:03.380490439+00:00"
 ---
 
 ## Goal
@@ -46,3 +47,16 @@ No storage adapter, collections, tombstones or database upgrade. Actors and scen
 ## Context
 
 `app/src/time/timeline.ts` (`parseTimeline`, `TimeEvent`, `EventId`) for the stored-JSON pattern.
+
+## Close Reason
+
+A story now lives in one readable file: app/src/story/story.ts has the shapes, parseStory and serializeStory, and timeline events have a summary.
+
+### Decisions
+Unknown keys are refused on story records and on events, because a rewrite would otherwise lose them silently; other timeline records parse as the app parses them. Timeline repeats are refused in the story parser, not in parseTimeline, so the app's loading doesn't change. A hand-written file must list every collection; newStory gives the empty ones.
+
+### Surprises
+The first test suite left most sorts unproven; independent review's mutations showed it.
+
+### Open items
+None for this issue. Typos in timeline records other than events are still dropped on rewrite.
