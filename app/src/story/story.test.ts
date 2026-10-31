@@ -35,6 +35,7 @@ const fullStory: Story = {
       origins: ["exile", "adoption"],
       relations: [
         { to: "stay", type: "opposes" },
+        { to: "leave", type: "competes" },
         { to: "leave", type: "allies" },
       ],
     },
@@ -55,8 +56,13 @@ const fullStory: Story = {
       about: [
         { kind: "scene", id: "found" },
         { kind: "actor", id: "jovians" },
+        { kind: "fact", id: "x" },
+        { kind: "actor", id: "x" },
+        { kind: "candidate", questionId: "q2", id: "x" },
+        { kind: "candidate", questionId: "q1", id: "x" },
       ],
     },
+    { id: "ansible", text: "Ansibles exist.", about: [] },
   ],
   readerQuestions: [
     {
@@ -86,6 +92,13 @@ const fullStory: Story = {
     },
   ],
   openQuestions: [
+    {
+      id: "zulu",
+      question: "Who's next?",
+      about: [],
+      candidates: [],
+      conflict: true,
+    },
     {
       id: "why-left",
       question: "Why did he leave?",
@@ -141,6 +154,11 @@ const fullStory: Story = {
       {
         scene: "found",
         constraints: [
+          {
+            relation: "after",
+            event: "exile",
+            duration: { amount: 2, frame: "world" },
+          },
           { relation: "after", event: "exile", duration: null },
           { relation: "after", event: "adoption", duration: null },
         ],
@@ -216,10 +234,13 @@ describe("parseStory", () => {
     expect(story.drives[0]?.actorId).toBe("orphan");
     expect(story.drives[1]?.actorId).toBeNull();
     expect(story.readerQuestions[0]?.opensAt).toBe("bar");
-    expect(story.openQuestions[0]?.answer).toBe("cargo");
     expect(
-      story.openQuestions[0]?.candidates.find(({ id }) => id === "cargo")
-        ?.touches,
+      story.openQuestions.find(({ id }) => id === "why-left")?.answer,
+    ).toBe("cargo");
+    expect(
+      story.openQuestions
+        .find(({ id }) => id === "why-left")
+        ?.candidates.find(({ id }) => id === "cargo")?.touches,
     ).toContainEqual({
       kind: "candidate",
       questionId: "who-did-it",
@@ -367,7 +388,7 @@ describe("parseStory", () => {
     ],
     [
       "an unknown ref kind",
-      ["facts", 0, "about", 0, "kind"],
+      ["facts", 1, "about", 0, "kind"],
       "vibe",
       "about[0].kind",
     ],
@@ -409,6 +430,36 @@ describe("parseStory", () => {
     ],
     ["an unknown top-level key", ["extra"], 1, "story.extra is not a known"],
     [
+      "an unknown key on an actor",
+      ["actors", 0, "extra"],
+      1,
+      "actors[0].extra is not a known",
+    ],
+    [
+      "an unknown key on a drive relation",
+      ["drives", 0, "relations", 0, "extra"],
+      1,
+      "relations[0].extra is not a known",
+    ],
+    [
+      "an unknown key on a fact",
+      ["facts", 0, "extra"],
+      1,
+      "facts[0].extra is not a known",
+    ],
+    [
+      "an unknown key on a scene",
+      ["scenes", 0, "extra"],
+      1,
+      "scenes[0].extra is not a known",
+    ],
+    [
+      "a misspelled key on an event",
+      ["timeline", "events", 0, "summry"],
+      "lost",
+      "timeline.events[0].summry is not a known",
+    ],
+    [
       "a misspelled optional key",
       ["readerQuestions", 0, "opensat"],
       "bar",
@@ -434,7 +485,7 @@ describe("parseStory", () => {
     ],
     [
       "an unknown key on a ref",
-      ["facts", 0, "about", 0, "extra"],
+      ["facts", 1, "about", 0, "extra"],
       1,
       "about[0].extra is not a known",
     ],

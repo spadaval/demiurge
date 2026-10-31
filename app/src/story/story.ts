@@ -214,7 +214,8 @@ function checkIdentified<T extends { id: string }>(
 /**
  * Refuses a key this file format doesn't have. Writing a story back drops what
  * the parser doesn't keep, so a misspelled optional key would silently lose
- * data. The timeline's own records are parsed as the app parses them.
+ * data. Apart from event keys, the timeline's records are parsed as the app
+ * parses them.
  */
 function checkKeys(
   v: JsonRecord,
@@ -405,6 +406,21 @@ const FOLLOWING_KEY = ({ entity }: Following) => [entity];
  * The app's parser allows repeats. A story file is edited by hand and merged,
  * and a repeat would make its order, and so its text, depend on the edit.
  */
+/** An event's summary is written by hand, so a misspelled key would lose it. */
+function checkEventKeys(timeline: JsonValue | undefined): Check<null> {
+  if (!isRecord(timeline) || !Array.isArray(timeline.events)) return ok(null);
+  for (const [i, event] of timeline.events.entries()) {
+    if (!isRecord(event)) continue;
+    const known = checkKeys(event, `timeline.events[${i}]`, [
+      "id",
+      "label",
+      "summary",
+    ]);
+    if (known.isErr()) return err(known.error);
+  }
+  return ok(null);
+}
+
 function checkTimelineKeys(timeline: Timeline): Check<Timeline> {
   const id = ({ id }: { id: string }) => [id];
   const problem =
@@ -461,6 +477,8 @@ function checkStory(value: JsonValue): Check<Story> {
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
+  const eventKeys = checkEventKeys(value.timeline);
+  if (eventKeys.isErr()) return err(eventKeys.error);
   if (value.version !== STORY_VERSION) {
     return err(`unsupported story version ${JSON.stringify(value.version)}`);
   }
