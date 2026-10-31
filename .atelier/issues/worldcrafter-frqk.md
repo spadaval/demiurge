@@ -24,7 +24,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Sketch and rework on a screen"
-updated_at: "2026-10-31T04:44:50.208253440+00:00"
+updated_at: "2026-10-31T04:47:22.517117848+00:00"
 ---
 
 ## Goal
@@ -43,3 +43,4 @@ Provisional: delivers `on-screen`. Ends with the writer's keep, change or drop a
 ## Notes
 
 - 2026-10-31 [note] 2026-10-31: a bet like any other (decision worldcrafter-45an). Drop it if the verdicts show the best stories don't need a screen.
+- 2026-10-31 [note] 2026-10-31: correction to the note above: it comes out if the human decides, from the verdicts, that the best stories don't need a screen. The comparison can't show that by itself.

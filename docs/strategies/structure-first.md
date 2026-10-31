@@ -40,8 +40,8 @@ using it to write well counts as success. Whether the model makes that team
 better than the same team with plain notes is the mission's main unknown.
 
 We want to use AI to write the story, and we take no position on whether AI should
-write stories in general. We want the best possible story, and our theory is that it comes from AI tenacity and thoroughness combined
-with human judgment. AI can write as much of it as helps. What we don't want is a
+write stories in general. We want the best possible story, and our theory is that
+it comes from AI tenacity and thoroughness combined with human judgment. AI can write as much of it as helps. What we don't want is a
 slop cannon: volume that nobody has judged. The form follows the results (decision
 worldcrafter-45an).
 
@@ -84,8 +84,8 @@ of this plan should change.
   a scene those changes affect, and the human judges how well each followed through.
 - on-screen: A writer can do `sketch` and `rework` on a screen, jumping between
   levels and sides without losing their place. This is the part of fluidity a
-  conversation can't test, and a bet like any other: it comes out if the human decides,
-  from the verdicts, that the best stories don't need a screen. Shown by component tests and by the writer trying it on
+  conversation can't test, and a bet like any other: it comes out if the human
+  decides, from the verdicts, that the best stories don't need a screen. Shown by component tests and by the writer trying it on
   a real story.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
   books and chapters, scenes and beats, in any order: a scene can have a summary

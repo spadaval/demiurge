@@ -24,7 +24,7 @@ schema_version: 2
 closed_at: "2026-10-31T04:44:50.173775401+00:00"
 status: "done"
 title: "No stance on AI writing: the best story decides, and the form follows"
-updated_at: "2026-10-31T04:46:50.284425421+00:00"
+updated_at: "2026-10-31T04:47:22.528910316+00:00"
 ---
 
 ## Question
@@ -45,6 +45,7 @@ Consequences: the web app (decision worldcrafter-gcox) is the current plan and n
 ## Notes
 
 - 2026-10-31 [note] 2026-10-31: the strategy's quality ranking now starts with the quality of the story, as the human judges it, above visibility and control. The agent proposed this from Sumeet's direction, and they can reverse it. The writer's corrections still win, and nothing is rewritten silently.
+- 2026-10-31 [note] 2026-10-31: in Sumeet's words: 'We want to use AI to write the story.' The no-position stance is about AI writing stories in general.
 
 ## Close Reason
 
