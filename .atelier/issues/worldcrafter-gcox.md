@@ -21,7 +21,7 @@ schema_version: 2
 closed_at: "2026-10-29T18:43:34.750069793+00:00"
 status: "done"
 title: "Platform and model framing: web-first with sync, a typed model, and model control as a goal"
-updated_at: "2026-10-29T18:43:34.750069793+00:00"
+updated_at: "2026-10-31T04:44:50.196447387+00:00"
 ---
 
 ## Context
@@ -52,6 +52,10 @@ Reframe. Decided by Sumeet (2026-10-29). Changes to `docs/strategies/rebuild.md`
 - Quality ranking: no data loss is removed. Visibility and control, then AI capability, then feature speed.
 - Scope: the sync backend, the inference proxy and server jobs are out of this mission. A phone joins the environment.
 - Risk: hosted providers may not pass through the samplers we want.
+
+## Notes
+
+- 2026-10-31 [note] 2026-10-31: decision worldcrafter-45an makes the web app the current plan and not a commitment. The form follows the results.
 
 ## Close Reason
 

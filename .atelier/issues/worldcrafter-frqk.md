@@ -24,7 +24,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Sketch and rework on a screen"
-updated_at: "2026-10-31T02:17:09.165746629+00:00"
+updated_at: "2026-10-31T04:44:50.208253440+00:00"
 ---
 
 ## Goal
@@ -39,3 +39,7 @@ Provisional: delivers `on-screen`. Ends with the writer's keep, change or drop a
 
 - How the story file maps onto documents and storage collections (decision worldcrafter-ddha), which is when worldcrafter-4t98 comes back.
 - How much of worldcrafter-iaoc and worldcrafter-eg96 still applies after the verdict. They were written for the app-first plan, and `whatThisTouches` has moved to the headless increment.
+
+## Notes
+
+- 2026-10-31 [note] 2026-10-31: a bet like any other (decision worldcrafter-45an). Drop it if the verdicts show the best stories don't need a screen.

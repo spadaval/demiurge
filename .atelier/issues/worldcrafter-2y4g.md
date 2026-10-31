@@ -24,7 +24,7 @@ schema_version: 2
 closed_at: "2026-10-31T02:17:08.814723104+00:00"
 status: "done"
 title: "Headless first, for a team of a writer and an agent, with open questions as records"
-updated_at: "2026-10-31T03:23:43.486721012+00:00"
+updated_at: "2026-10-31T04:44:50.185242112+00:00"
 ---
 
 ## Question
@@ -51,6 +51,7 @@ Consequences: `worldcrafter-4t98`, `worldcrafter-iaoc` and `worldcrafter-eg96` w
 ## Notes
 
 - 2026-10-30 [note] 2026-10-30: after the plan's review, Sumeet decided: partial blinding is accepted; both arms get the same craft advice, so only the tool differs; rework is tested by two fresh-session reworks, one of them a timeline shift; the first model also has plain facts, reader questions and scene order. In the headless file a scene has no place in story time; depicts is its only link to events.
+- 2026-10-31 [note] 2026-10-31: decision worldcrafter-45an corrects this record's line that decision worldcrafter-gcox stands because this isn't how the product ships. The web app is now the current plan and not a commitment.
 
 ## Close Reason
 
