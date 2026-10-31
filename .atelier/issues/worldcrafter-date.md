@@ -18,9 +18,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-10-31T03:28:48.379872879+00:00"
+status: "done"
 title: "Say what fluidity means and who WorldCrafter is for"
-updated_at: "2026-10-31T02:17:22.306532787+00:00"
+updated_at: "2026-10-31T03:28:48.379872879+00:00"
 ---
 
 ## Goal
@@ -37,3 +38,16 @@ Someone reading this repository's docs learns what we mean by fluidity and what 
 ## Scope
 
 Docs only. Leave `docs/rebuild/prior-art-2026.md` and `docs/strategies/rebuild.md` alone. The strategy and decision hold the reasons; link rather than repeat them.
+
+## Close Reason
+
+Docs say what fluidity means, the goal and the team, the headless first version, and the current mission. The branch also carried plan fixes from review.
+
+### Decisions
+Sumeet's four comparison decisions are noted on worldcrafter-2y4g. PRODUCT.md dropped "deliberately not a chatbot" and softened the quiet-colleague principle to apply to the app, following decision worldcrafter-2y4g.
+
+### Surprises
+Review found the comparison couldn't run as first written, and that several citations didn't support the text; both fixed.
+
+### Open items
+Quotations from Le Guin and Gabaldon rest on secondary sources, and Johnstone on memory, and the docs say so. DESIGN.md still says "the prose is the stage": it's the visual description of the editor, left alone. Later increments are marked stale until the verdict in worldcrafter-i2uz.
