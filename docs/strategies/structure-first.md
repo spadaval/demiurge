@@ -234,8 +234,9 @@ These must come back to the human:
 
 - That a story needs to be co-authored by a human and an agent to be good is a
   hunch. The first comparison doesn't test it: an agent writes alone in both arms
-  and the human only judges the results. It tests the model, not co-authoring, and
-  nothing else in the current plan tests it either.
+  and the human only judges the results. It tests the model, not co-authoring. We
+  won't test the hunch directly: if the Claude-first headless approach works fine,
+  that's the answer (Sumeet).
 - A capable agent can make a weak model look fine by working around it. The
   plain-notes arm of the comparison and a log of what the model couldn't hold are
   the check.
