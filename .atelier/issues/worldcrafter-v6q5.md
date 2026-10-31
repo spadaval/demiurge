@@ -15,9 +15,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-10-31T05:15:12.030071972+00:00"
+status: "done"
 title: "State the moral stance and mark co-authoring as a hunch"
-updated_at: "2026-10-31T05:13:40.692432705+00:00"
+updated_at: "2026-10-31T05:15:12.030071972+00:00"
 ---
 
 ## Goal
@@ -33,3 +34,16 @@ The docs say what Sumeet means: AI-written work isn't inherently good or bad, an
 ## Scope
 
 Docs only.
+
+## Close Reason
+
+The docs say AI-written work isn't inherently good or bad, and state co-authoring as an unverified hunch. The strategy's Risks say nothing in the current plan tests the hunch.
+
+### Decisions
+Notes on worldcrafter-45an.
+
+### Surprises
+The first comparison doesn't test co-authoring, because an agent writes alone in both arms.
+
+### Open items
+Sumeet hasn't confirmed the story-first ranking, and no planned work tests the hunch.
