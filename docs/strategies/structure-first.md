@@ -41,10 +41,11 @@ better than the same team with plain notes is the mission's main unknown.
 
 We use AI to assist and enhance the creative process, up to and including writing
 the story, because we think that's the best way to create compelling stories. We
-don't see AI-written work as inherently good or bad. Our hunch is that the best
-stories need both AI tenacity and thoroughness and human judgment, which is a
-reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged. The product's form, web app or
-otherwise, follows the results (decision worldcrafter-45an).
+don't see AI-written work as inherently good or bad. Our hunch is that a story
+needs to be co-authored by a human and an AI to be good, which is a reasonable
+belief but an unverified one. What we don't want is a slop cannon: volume that
+nobody has judged. The product's form, web app or otherwise, follows the results
+(decision worldcrafter-45an).
 
 # Outcome
 
@@ -231,9 +232,10 @@ These must come back to the human:
 
 # Risks and Unknowns
 
-- That the best stories need a human and an agent together is a hunch. The first
-  comparison doesn't test it: an agent writes alone in both arms and the human only
-  judges the results. It tests the model, not co-authoring.
+- That a story needs to be co-authored by a human and an agent to be good is a
+  hunch. The first comparison doesn't test it: an agent writes alone in both arms
+  and the human only judges the results. It tests the model, not co-authoring, and
+  nothing else in the current plan tests it either.
 - A capable agent can make a weak model look fine by working around it. The
   plain-notes arm of the comparison and a log of what the model couldn't hold are
   the check.
