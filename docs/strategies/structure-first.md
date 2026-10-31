@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-31: no stance on AI writing; the best story decides and the form follows the results (Sumeet)"
+last_changed: "2026-10-31: we use AI because we think it's the best way to create compelling stories; no claim about how others should write; the form follows the results (Sumeet)"
 ---
 
 # Why
@@ -39,12 +39,12 @@ of a human and an agent, so the model has to make sense to both, and an agent
 using it to write well counts as success. Whether the model makes that team
 better than the same team with plain notes is the mission's main unknown.
 
-We use AI to assist and enhance the creative process, including writing the story,
-because we think AI tenacity and thoroughness combined with human judgment is the
-best way to create compelling stories. We aren't taking a position on whether AI
-should write stories in general, and we don't want to be a slop cannon, producing
-volume that nobody has judged. The form follows the results (decision
-worldcrafter-45an).
+We use AI to assist and enhance the creative process, up to and including writing
+the story, because we think AI tenacity and thoroughness combined with human
+judgment is the best way to create compelling stories. That's our theory for our
+own work, not a claim about how anyone else should write. What we don't want is a
+slop cannon: volume that nobody has judged. The product's form, web app or
+otherwise, follows the results (decision worldcrafter-45an).
 
 # Outcome
 
