@@ -26,14 +26,14 @@ Produce what the human needs to judge, as blind as is practical, whether the mod
 
 ## Done when
 
-- The tool, skill, `craft.md` and prompts are frozen at a recorded commit before the held-back premise is run.
+- The CLI, skill, `craft.md`, prompts and packet script are frozen at a recorded commit before the held-back premise is run. Freezing copies `craft.md` and the skill, and builds the CLI into a single file (for example with `bun build --target=bun`), into a directory outside this repository, and sets `STORY_CLI` to it. It also records the exact `claude -p` flags or settings that keep user-level skills, memory and hooks out of the runs, and how the runs authenticate.
 - For each of the two premises, two runs use the tool and two use plain markdown notes, all on the same model: eight runs. Each run has four steps, each a fresh `claude -p` session (or the equivalent) that sees only the prompt, `craft.md`, for tool runs the skill and CLI path, and what the run has saved so far:
-  1. Sketch the story from the premise, make sure it has what it needs to be interesting before drafting, and settle open questions where a satisfying answer has emerged. Keep the readable form to about 1,500 words.
+  1. Sketch the story from the premise, make sure it has what it needs to be interesting before drafting, and settle open questions where a satisfying answer has emerged. Keep the readable form to about 1,500 words (tool runs check this with `render`).
   2. Change a core motivation of the main character or an event behind it, and follow it through.
   3. Shift a significant event earlier or later in the story's timeline, and follow it through.
   4. Draft one scene these changes affect, about 800 words. The draft is scratch and isn't stored in the model.
-- Each run works in its own new temporary git repository outside this one, and no session can read this repository. The run's transcript is checked for reads outside its directory, and any are reported.
-- A script writes each run up as a packet in the same order: the sketch as readable text (tool runs are rendered from the file with no IDs or commands; notes runs are shown as written), what each rework changed in a sentence or two written by the session that did it, and the scene. Blinding is partial and that's accepted (Sumeet, 2026-10-30): a reader may be able to tell the arms apart by format. Each premise's packets are randomly paired, one from each arm, and numbered.
+- Each run works in its own new temporary git repository outside this one, and no session reads this repository. The run's transcript is checked for reads outside its own directory and the frozen directory, and any are reported. Sessions are told not to name tools or commands in anything they write for the reader.
+- A script snapshots the saved work after every step and writes each run up as a packet in the same order: the step 1 sketch as readable text (tool runs through `render`; notes runs as written); for each rework, a line diff of the readable text before and after, shown the same way for both arms, with a sentence or two from the session that did it; and the scene. Anything over length is shown in full and not truncated. Blinding is partial and that's accepted (Sumeet, 2026-10-30): a reader may be able to tell the arms apart by format. Each premise's packets are randomly paired, one from each arm, and numbered.
 - The key and the raw output are written to a separate directory. The handoff gives the paths, each run's model and the frozen commit, and says how many runs failed. Failed runs aren't quietly rerun. Model-gaps logs and notes on what went wrong go behind the key, so nothing ties a packet to its arm before it's opened.
 
 ## Scope

@@ -31,4 +31,4 @@ Sumeet has read the packets and recorded in a note here, before opening the key:
 
 ## Context
 
-Agents don't start or pass this. They give the path to the packets. Eight packets are about 24,000 words, around two hours, and can be read over more than one sitting. Format may give away an arm, and that's accepted. This verdict doesn't test how a screen feels, which is worldcrafter-frqk.
+Agents don't start or pass this. They give the path to the packets. Eight packets should be about 25,000 words, around two hours, and can be read over more than one sitting. The handoff from worldcrafter-04z5 gives the real count. Format may give away an arm, and that's accepted. This verdict doesn't test how a screen feels, which is worldcrafter-frqk.
