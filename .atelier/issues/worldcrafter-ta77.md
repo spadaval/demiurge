@@ -14,9 +14,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-10-31T08:01:03.414664089+00:00"
+status: "done"
 title: "Bump @tanstack/react-start past the blocked 1.163.2 (CVE-2026-102989)"
-updated_at: "2026-10-31T08:00:55.596078781+00:00"
+updated_at: "2026-10-31T08:01:03.414664089+00:00"
 ---
 
 ## Goal
@@ -28,3 +29,7 @@ Vercel refuses production deploys while @tanstack/react-start 1.163.2 is install
 - react-start is 1.168.60 or later, with its companion packages compatible.
 - A production deploy on Vercel succeeds.
 - Independently reviewed.
+
+## Close Reason
+
+Fixed versions shipped; a Vercel production deploy succeeded
