@@ -1,10 +1,23 @@
 import { describe, expect, test } from "bun:test";
 import type { JsonValue } from "../storage/types";
 import { applyTimelineCommand } from "../time/commands";
-import { emptyTimeline, parseTimeline } from "../time/timeline";
-import { newStory, parseStory, type Story, serializeStory } from "./story";
+import { emptyTimeline, parseTimeline, type Timeline } from "../time/timeline";
+import {
+  newStory,
+  parseStory,
+  type Ref,
+  type Story,
+  serializeStory,
+} from "./story";
 
 const parsed = (story: Story) => parseStory(serializeStory(story));
+
+const asserted = (start: number, end: number) => ({
+  start,
+  end,
+  precision: null,
+  authority: { level: "asserted" } as const,
+});
 
 const fullStory: Story = {
   ...newStory("An orphan leaves the tribe."),
@@ -59,9 +72,9 @@ const fullStory: Story = {
       id: "found",
       title: "Found",
       summary: "They find the Titan.",
-      actors: ["orphan"],
-      depicts: ["discovery"],
-      pressures: ["belong"],
+      actors: ["orphan", "jovians"],
+      depicts: ["exile", "adoption"],
+      pressures: ["leave", "belong"],
     },
     {
       id: "bar",
@@ -76,9 +89,11 @@ const fullStory: Story = {
     {
       id: "why-left",
       question: "Why did he leave?",
-      about: [{ kind: "actor", id: "orphan" }],
+      about: [
+        { kind: "scene", id: "found" },
+        { kind: "actor", id: "orphan" },
+      ],
       candidates: [
-        { id: "adventure", answer: "He wanted adventure", touches: [] },
         {
           id: "cargo",
           answer: "The caravans carried something",
@@ -87,6 +102,7 @@ const fullStory: Story = {
             { kind: "fact", id: "fusion" },
           ],
         },
+        { id: "adventure", answer: "He wanted adventure", touches: [] },
       ],
       answer: "cargo",
       conflict: false,
@@ -99,12 +115,92 @@ const fullStory: Story = {
       { id: "adoption", label: "Adoption", summary: "" },
     ],
     positions: [
+      { event: "exile", frame: "world", ...asserted(10, 11) },
+      { event: "adoption", frame: "world", ...asserted(1, 2) },
+      { event: "adoption", frame: "dream", ...asserted(5, 6) },
+    ],
+    constraints: [
       {
-        event: "exile",
-        frame: "world",
-        start: 10,
-        end: 11,
-        precision: null,
+        id: "c2",
+        a: "exile",
+        relation: "after",
+        b: "adoption",
+        duration: null,
+        authority: { level: "asserted" },
+      },
+      {
+        id: "c1",
+        a: "adoption",
+        relation: "before",
+        b: "exile",
+        duration: { tolerance: 1, amount: 10, frame: "world" },
+        authority: { level: "asserted" },
+      },
+    ],
+    placements: [
+      {
+        scene: "found",
+        constraints: [
+          { relation: "after", event: "exile", duration: null },
+          { relation: "after", event: "adoption", duration: null },
+        ],
+        continues: true,
+        authority: { level: "asserted" },
+      },
+      {
+        scene: "bar",
+        constraints: [],
+        continues: false,
+        authority: { level: "asserted" },
+      },
+    ],
+    frames: [
+      { id: "z", label: "Z", unit: "day", reference: "world", rate: 1 },
+      {
+        id: "dream",
+        label: "Dream",
+        unit: "day",
+        reference: "world",
+        rate: null,
+      },
+    ],
+    correspondences: [
+      {
+        id: "k2",
+        frame: "z",
+        from: "exile",
+        to: "adoption",
+        rate: 0,
+        authority: { level: "asserted" },
+      },
+      {
+        id: "k1",
+        frame: "dream",
+        from: "adoption",
+        to: "exile",
+        rate: 2,
+        authority: { level: "asserted" },
+      },
+    ],
+    follows: [
+      { entity: "orphan", frame: "z" },
+      { entity: "jovians", frame: "dream" },
+    ],
+    reveals: [
+      {
+        id: "r2",
+        scene: "found",
+        entry: "orphan",
+        fact: { kind: "field", name: "x" },
+        since: null,
+        authority: { level: "asserted" },
+      },
+      {
+        id: "r1",
+        scene: "bar",
+        entry: "orphan",
+        fact: { kind: "field", name: "y" },
+        since: "exile",
         authority: { level: "asserted" },
       },
     ],
@@ -121,7 +217,10 @@ describe("parseStory", () => {
     expect(story.drives[1]?.actorId).toBeNull();
     expect(story.readerQuestions[0]?.opensAt).toBe("bar");
     expect(story.openQuestions[0]?.answer).toBe("cargo");
-    expect(story.openQuestions[0]?.candidates[1]?.touches).toContainEqual({
+    expect(
+      story.openQuestions[0]?.candidates.find(({ id }) => id === "cargo")
+        ?.touches,
+    ).toContainEqual({
       kind: "candidate",
       questionId: "who-did-it",
       id: "jovians",
@@ -308,6 +407,85 @@ describe("parseStory", () => {
       "found",
       "scenes has duplicate id",
     ],
+    ["an unknown top-level key", ["extra"], 1, "story.extra is not a known"],
+    [
+      "a misspelled optional key",
+      ["readerQuestions", 0, "opensat"],
+      "bar",
+      "readerQuestions[0].opensat is not a known",
+    ],
+    [
+      "an unknown key on a drive",
+      ["drives", 0, "extra"],
+      1,
+      "drives[0].extra is not a known",
+    ],
+    [
+      "an unknown key on an open question",
+      ["openQuestions", 0, "extra"],
+      1,
+      "openQuestions[0].extra is not a known",
+    ],
+    [
+      "an unknown key on a candidate",
+      ["openQuestions", 0, "candidates", 0, "extra"],
+      1,
+      "candidates[0].extra is not a known",
+    ],
+    [
+      "an unknown key on a ref",
+      ["facts", 0, "about", 0, "extra"],
+      1,
+      "about[0].extra is not a known",
+    ],
+    [
+      "duplicate timeline event IDs",
+      ["timeline", "events", 1, "id"],
+      "adoption",
+      "timeline.events has duplicate",
+    ],
+    [
+      "duplicate positions for an event and frame",
+      ["timeline", "positions", 1, "frame"],
+      "dream",
+      "timeline.positions has duplicate",
+    ],
+    [
+      "duplicate constraint IDs",
+      ["timeline", "constraints", 1, "id"],
+      "c1",
+      "timeline.constraints has duplicate",
+    ],
+    [
+      "duplicate placements of a scene",
+      ["timeline", "placements", 1, "scene"],
+      "bar",
+      "timeline.placements has duplicate",
+    ],
+    [
+      "duplicate frame IDs",
+      ["timeline", "frames", 1, "id"],
+      "dream",
+      "timeline.frames has duplicate",
+    ],
+    [
+      "duplicate correspondence IDs",
+      ["timeline", "correspondences", 1, "id"],
+      "k1",
+      "timeline.correspondences has duplicate",
+    ],
+    [
+      "duplicate followings of an entity",
+      ["timeline", "follows", 1, "entity"],
+      "jovians",
+      "timeline.follows has duplicate",
+    ],
+    [
+      "duplicate reveal IDs",
+      ["timeline", "reveals", 1, "id"],
+      "r1",
+      "timeline.reveals has duplicate",
+    ],
     [
       "duplicate candidate IDs",
       ["openQuestions", 0, "candidates", 1, "id"],
@@ -368,22 +546,41 @@ describe("serializeStory", () => {
     expect(value.drives[0].origins).toEqual(["adoption", "exile"]);
   });
 
+  /** Reverses every list but the telling order, and every object's keys. */
+  function reversed(value: JsonValue, key?: string): JsonValue {
+    if (Array.isArray(value)) {
+      const items = value.map((item) => reversed(item));
+      return key === "scenes" ? items : items.reverse();
+    }
+    if (typeof value !== "object" || value === null) return value;
+    return Object.fromEntries(
+      Object.entries(value)
+        .reverse()
+        .map(([k, v]) => [k, reversed(v, k)]),
+    );
+  }
+
   test("the order things were added and the order of keys don't matter", () => {
-    const shuffled: Story = {
-      timeline: {
-        ...fullStory.timeline,
-        events: [...fullStory.timeline.events].reverse(),
-      },
-      openQuestions: fullStory.openQuestions,
-      scenes: fullStory.scenes,
-      readerQuestions: [...fullStory.readerQuestions].reverse(),
-      facts: fullStory.facts,
-      drives: [...fullStory.drives].reverse(),
-      actors: [...fullStory.actors].reverse(),
-      premise: fullStory.premise,
-      version: fullStory.version,
-    };
-    expect(serializeStory(shuffled)).toBe(serializeStory(fullStory));
+    const text = serializeStory(fullStory);
+    const shuffled = JSON.stringify(reversed(JSON.parse(text)));
+    expect(shuffled).not.toBe(JSON.stringify(JSON.parse(text)));
+    expect(serializeStory(parseStory(shuffled)._unsafeUnwrap())).toBe(text);
+  });
+
+  test("sort keys don't collide across fields", () => {
+    const touches = (questionId: string, id: string): Ref => ({
+      kind: "candidate",
+      questionId,
+      id,
+    });
+    const refs = [touches("a\0b", "c"), touches("a", "b\0c")];
+    const withTouches = (about: Ref[]): Story => ({
+      ...newStory("P"),
+      facts: [{ id: "f", text: "", about }],
+    });
+    expect(serializeStory(withTouches(refs))).toBe(
+      serializeStory(withTouches([...refs].reverse())),
+    );
   });
 
   test("the keys of a record read in a sensible order", () => {
@@ -410,14 +607,23 @@ describe("serializeStory", () => {
     ]);
   });
 
-  /** The lines of `after` that aren't in `before`, and the reverse. */
+  /** The lines between what two texts share at their start and end. */
   function changedLines(before: string, after: string) {
     const a = before.split("\n");
     const b = after.split("\n");
+    let start = 0;
+    while (start < a.length && a[start] === b[start]) start++;
+    let end = 0;
+    while (
+      end < a.length - start &&
+      end < b.length - start &&
+      a[a.length - 1 - end] === b[b.length - 1 - end]
+    ) {
+      end++;
+    }
     return {
-      added: b.filter((line) => !a.includes(line)),
-      removed: a.filter((line) => !b.includes(line)),
-      lengthChange: b.length - a.length,
+      removed: a.slice(start, a.length - end).map((line) => line.trim()),
+      added: b.slice(start, b.length - end).map((line) => line.trim()),
     };
   }
 
@@ -431,55 +637,56 @@ describe("serializeStory", () => {
     expect(
       changedLines(serializeStory(fullStory), serializeStory(changed)),
     ).toEqual({
-      added: ['      "want": "get away",'],
-      removed: ['      "want": "get out",'],
-      lengthChange: 0,
+      removed: ['"want": "get out",'],
+      added: ['"want": "get away",'],
     });
   });
 
-  test("a timeline edit that reorders records changes only that record's lines", () => {
-    const first = applyTimelineCommand(
-      fullStory.timeline,
-      {
-        type: "setPosition",
-        event: "adoption",
-        frame: "world",
-        position: { start: 1, end: 2 },
-      },
-      [],
-    )._unsafeUnwrap();
-    // setPosition moves the record it touches to the end of the list.
-    const second = applyTimelineCommand(
-      first,
-      {
-        type: "setPosition",
-        event: "adoption",
-        frame: "world",
-        position: { start: 3, end: 4 },
-      },
-      [],
-    )._unsafeUnwrap();
-    const exile = first.positions.find(({ event }) => event === "exile");
-    const adoption = first.positions.find(({ event }) => event === "adoption");
-    const reordered = {
-      ...first,
-      positions: [exile, adoption].filter((p) => p !== undefined),
+  test("a timeline edit that moves a record changes only that record's lines", () => {
+    const before: Timeline = {
+      ...emptyTimeline,
+      events: fullStory.timeline.events,
+      positions: [
+        { event: "exile", frame: "world", ...asserted(10, 11) },
+        { event: "adoption", frame: "world", ...asserted(1, 2) },
+      ],
     };
-    expect(serializeStory({ ...fullStory, timeline: reordered })).toBe(
-      serializeStory({ ...fullStory, timeline: first }),
+    const story = { ...fullStory, timeline: before };
+    const after = applyTimelineCommand(
+      before,
+      {
+        type: "setPosition",
+        event: "exile",
+        frame: "world",
+        position: { start: 20, end: 21 },
+      },
+      [],
+    )._unsafeUnwrap();
+    // setPosition moves the record it touches, so this edit reorders the list.
+    expect(after.positions.map(({ event }) => event)).not.toEqual(
+      before.positions.map(({ event }) => event),
     );
-    const { added, removed } = changedLines(
-      serializeStory({ ...fullStory, timeline: first }),
-      serializeStory({ ...fullStory, timeline: second }),
-    );
-    expect(added.map((line) => line.trim())).toEqual([
-      '"end": 4,',
-      '"start": 3',
-    ]);
-    expect(removed.map((line) => line.trim())).toEqual([
-      '"end": 2,',
-      '"start": 1',
-    ]);
+    expect(
+      changedLines(
+        serializeStory(story),
+        serializeStory({ ...story, timeline: after }),
+      ),
+    ).toEqual({
+      removed: [
+        '"end": 11,',
+        '"event": "exile",',
+        '"frame": "world",',
+        '"precision": null,',
+        '"start": 10',
+      ],
+      added: [
+        '"end": 21,',
+        '"event": "exile",',
+        '"frame": "world",',
+        '"precision": null,',
+        '"start": 20',
+      ],
+    });
   });
 
   test("adding a record adds only that record's lines", () => {
@@ -487,12 +694,13 @@ describe("serializeStory", () => {
       ...fullStory,
       facts: [...fullStory.facts, { id: "zeta", text: "New.", about: [] }],
     };
-    const { removed, lengthChange } = changedLines(
+    const { removed, added } = changedLines(
       serializeStory(fullStory),
       serializeStory(changed),
     );
-    expect(lengthChange).toBeGreaterThan(0);
     expect(removed).toEqual([]);
+    expect(added.some((line) => line.includes("zeta"))).toBe(true);
+    expect(added).toHaveLength(5);
   });
 });
 

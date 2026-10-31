@@ -17,7 +17,10 @@ import type { JsonValue } from "../storage/types";
 import {
   type EventId,
   emptyTimeline,
+  type Following,
+  type Position,
   parseTimeline,
+  type ScenePlacement,
   type Timeline,
 } from "../time/timeline";
 
@@ -208,7 +211,29 @@ function checkIdentified<T extends { id: string }>(
   });
 }
 
+/**
+ * Refuses a key this file format doesn't have. Writing a story back drops what
+ * the parser doesn't keep, so a misspelled optional key would silently lose
+ * data. The timeline's own records are parsed as the app parses them.
+ */
+function checkKeys(
+  v: JsonRecord,
+  at: string,
+  keys: readonly string[],
+): Check<JsonRecord> {
+  const unknown = Object.keys(v).find((key) => !keys.includes(key));
+  return unknown === undefined
+    ? ok(v)
+    : err(`${at}.${unknown} is not a known field`);
+}
+
 function checkRef(v: JsonRecord, at: string): Check<Ref> {
+  const keys =
+    v.kind === "candidate" ? ["kind", "questionId", "id"] : ["kind", "id"];
+  return checkKeys(v, at, keys).andThen(() => checkRefFields(v, at));
+}
+
+function checkRefFields(v: JsonRecord, at: string): Check<Ref> {
   return checkString(v.id, `${at}.id`).andThen((id): Check<Ref> => {
     if (v.kind === "candidate") {
       return checkString(v.questionId, `${at}.questionId`).map(
@@ -223,6 +248,8 @@ function checkRef(v: JsonRecord, at: string): Check<Ref> {
 }
 
 function checkActor(v: JsonRecord, at: string): Check<Actor> {
+  const known = checkKeys(v, at, ["id", "name", "kind", "notes"]);
+  if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.id, `${at}.id`),
     checkString(v.name, `${at}.name`),
@@ -232,6 +259,8 @@ function checkActor(v: JsonRecord, at: string): Check<Actor> {
 }
 
 function checkDriveRelation(v: JsonRecord, at: string): Check<DriveRelation> {
+  const known = checkKeys(v, at, ["to", "type"]);
+  if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.to, `${at}.to`),
     checkOneOf(
@@ -243,6 +272,16 @@ function checkDriveRelation(v: JsonRecord, at: string): Check<DriveRelation> {
 }
 
 function checkDrive(v: JsonRecord, at: string): Check<Drive> {
+  const known = checkKeys(v, at, [
+    "id",
+    "actorId",
+    "want",
+    "stakes",
+    "method",
+    "origins",
+    "relations",
+  ]);
+  if (known.isErr()) return err(known.error);
   const actorId: Check<string | null> =
     v.actorId === null ? ok(null) : checkString(v.actorId, `${at}.actorId`);
   return Result.combine([
@@ -265,6 +304,8 @@ function checkDrive(v: JsonRecord, at: string): Check<Drive> {
 }
 
 function checkFact(v: JsonRecord, at: string): Check<Fact> {
+  const known = checkKeys(v, at, ["id", "text", "about"]);
+  if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.id, `${at}.id`),
     checkString(v.text, `${at}.text`),
@@ -273,6 +314,8 @@ function checkFact(v: JsonRecord, at: string): Check<Fact> {
 }
 
 function checkReaderQuestion(v: JsonRecord, at: string): Check<ReaderQuestion> {
+  const known = checkKeys(v, at, ["id", "question", "opensAt", "answeredAt"]);
+  if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.id, `${at}.id`),
     checkString(v.question, `${at}.question`),
@@ -287,6 +330,15 @@ function checkReaderQuestion(v: JsonRecord, at: string): Check<ReaderQuestion> {
 }
 
 function checkScene(v: JsonRecord, at: string): Check<Scene> {
+  const known = checkKeys(v, at, [
+    "id",
+    "title",
+    "summary",
+    "actors",
+    "depicts",
+    "pressures",
+  ]);
+  if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.id, `${at}.id`),
     checkString(v.title, `${at}.title`),
@@ -305,6 +357,8 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
 }
 
 function checkCandidate(v: JsonRecord, at: string): Check<Candidate> {
+  const known = checkKeys(v, at, ["id", "answer", "touches"]);
+  if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.id, `${at}.id`),
     checkString(v.answer, `${at}.answer`),
@@ -313,6 +367,15 @@ function checkCandidate(v: JsonRecord, at: string): Check<Candidate> {
 }
 
 function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
+  const known = checkKeys(v, at, [
+    "id",
+    "question",
+    "about",
+    "candidates",
+    "answer",
+    "conflict",
+  ]);
+  if (known.isErr()) return err(known.error);
   const conflict: Check<boolean> =
     typeof v.conflict === "boolean"
       ? ok(v.conflict)
@@ -334,6 +397,42 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
   }));
 }
 
+const POSITION_KEY = ({ event, frame }: Position) => [event, frame];
+const PLACEMENT_KEY = ({ scene }: ScenePlacement) => [scene];
+const FOLLOWING_KEY = ({ entity }: Following) => [entity];
+
+/**
+ * The app's parser allows repeats. A story file is edited by hand and merged,
+ * and a repeat would make its order, and so its text, depend on the edit.
+ */
+function checkTimelineKeys(timeline: Timeline): Check<Timeline> {
+  const id = ({ id }: { id: string }) => [id];
+  const problem =
+    repeatedKey("events", timeline.events, id) ??
+    repeatedKey("positions", timeline.positions, POSITION_KEY) ??
+    repeatedKey("constraints", timeline.constraints, id) ??
+    repeatedKey("placements", timeline.placements, PLACEMENT_KEY) ??
+    repeatedKey("frames", timeline.frames, id) ??
+    repeatedKey("correspondences", timeline.correspondences, id) ??
+    repeatedKey("follows", timeline.follows, FOLLOWING_KEY) ??
+    repeatedKey("reveals", timeline.reveals, id);
+  return problem === undefined ? ok(timeline) : err(problem);
+}
+
+function repeatedKey<T>(
+  at: string,
+  items: readonly T[],
+  key: (item: T) => string[],
+): string | undefined {
+  const seen = new Set<string>();
+  for (const item of items) {
+    const value = JSON.stringify(key(item));
+    if (seen.has(value)) return `timeline.${at} has duplicate ${value}`;
+    seen.add(value);
+  }
+  return undefined;
+}
+
 /** Checks a story file's text. The error names the part that is wrong. */
 export function parseStory(text: string): Result<Story, StoryError> {
   let value: JsonValue;
@@ -350,6 +449,18 @@ export function parseStory(text: string): Result<Story, StoryError> {
 
 function checkStory(value: JsonValue): Check<Story> {
   if (!isRecord(value)) return err("story must be an object");
+  const known = checkKeys(value, "story", [
+    "version",
+    "premise",
+    "actors",
+    "drives",
+    "facts",
+    "readerQuestions",
+    "scenes",
+    "openQuestions",
+    "timeline",
+  ]);
+  if (known.isErr()) return err(known.error);
   if (value.version !== STORY_VERSION) {
     return err(`unsupported story version ${JSON.stringify(value.version)}`);
   }
@@ -365,9 +476,9 @@ function checkStory(value: JsonValue): Check<Story> {
     ),
     checkIdentified(value.scenes, "scenes", checkScene),
     checkIdentified(value.openQuestions, "openQuestions", checkOpenQuestion),
-    parseTimeline(value.timeline ?? null).mapErr(
-      (message) => `timeline: ${message}`,
-    ),
+    parseTimeline(value.timeline ?? null)
+      .mapErr((message) => `timeline: ${message}`)
+      .andThen(checkTimelineKeys),
   ]).map(
     ([
       premise,
@@ -394,25 +505,32 @@ function checkStory(value: JsonValue): Check<Story> {
 
 const compareStrings = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-function sortedBy<T>(items: readonly T[], key: (item: T) => string): T[] {
-  return [...items].sort((a, b) => compareStrings(key(a), key(b)));
+function compareKeys(a: readonly string[], b: readonly string[]): number {
+  for (const [i, part] of a.entries()) {
+    const order = compareStrings(part, b[i] ?? "");
+    if (order !== 0) return order;
+  }
+  return 0;
+}
+
+function sortedBy<T>(items: readonly T[], key: (item: T) => string[]): T[] {
+  return [...items].sort((a, b) => compareKeys(key(a), key(b)));
 }
 
 const byId = <T extends { id: string }>(items: readonly T[]) =>
-  sortedBy(items, ({ id }) => id);
+  sortedBy(items, ({ id }) => [id]);
 const sortedStrings = (items: readonly string[]) =>
-  sortedBy(items, (item) => item);
+  sortedBy(items, (item) => [item]);
 const sortedRefs = (refs: readonly Ref[]) =>
-  sortedBy(refs, (ref) =>
-    [ref.kind, ref.kind === "candidate" ? ref.questionId : "", ref.id].join(
-      "\0",
-    ),
-  );
+  sortedBy(refs, (ref) => [
+    ref.kind,
+    ref.kind === "candidate" ? ref.questionId : "",
+    ref.id,
+  ]);
 
 /**
  * Sorts every list whose order means nothing, because edits reorder them.
- * Scenes keep their order, which is the telling order, as do a placement's
- * constraints, which aren't records of their own.
+ * Scenes keep their order, which is the telling order.
  */
 function normalized(story: Story): Story {
   const { timeline } = story;
@@ -423,9 +541,7 @@ function normalized(story: Story): Story {
       story.drives.map((drive) => ({
         ...drive,
         origins: sortedStrings(drive.origins),
-        relations: sortedBy(drive.relations, ({ to, type }) =>
-          [to, type].join("\0"),
-        ),
+        relations: sortedBy(drive.relations, ({ to, type }) => [to, type]),
       })),
     ),
     facts: byId(
@@ -453,14 +569,25 @@ function normalized(story: Story): Story {
     timeline: {
       ...timeline,
       events: byId(timeline.events),
-      positions: sortedBy(timeline.positions, ({ event, frame }) =>
-        [event, frame].join("\0"),
-      ),
+      positions: sortedBy(timeline.positions, POSITION_KEY),
       constraints: byId(timeline.constraints),
-      placements: sortedBy(timeline.placements, ({ scene }) => scene),
+      placements: sortedBy(
+        timeline.placements.map((placement) => ({
+          ...placement,
+          constraints: sortedBy(
+            placement.constraints,
+            ({ event, relation, duration }) => [
+              event,
+              relation,
+              JSON.stringify(withOrderedKeys(duration)),
+            ],
+          ),
+        })),
+        PLACEMENT_KEY,
+      ),
       frames: byId(timeline.frames),
       correspondences: byId(timeline.correspondences),
-      follows: sortedBy(timeline.follows, ({ entity }) => entity),
+      follows: sortedBy(timeline.follows, FOLLOWING_KEY),
       reveals: byId(timeline.reveals),
     },
   };
