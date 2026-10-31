@@ -4,6 +4,9 @@ id: "worldcrafter-date"
 issue_type: "task"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: task/worldcrafter-date
 priority: "P1"
 relationships:
   blocks: []
@@ -15,9 +18,9 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Say what fluidity means and who WorldCrafter is for"
-updated_at: "2026-10-31T02:17:22.244395537+00:00"
+updated_at: "2026-10-31T02:17:22.306532787+00:00"
 ---
 
 ## Goal

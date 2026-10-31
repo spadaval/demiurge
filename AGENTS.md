@@ -8,7 +8,7 @@ This repository uses [Atelier](https://github.com/spadaval/atelier) for missions
 - Orient with `atelier status`; find work with `atelier work ready`; run `atelier land` before handoff.
 - Start work with `atelier start <id>` and integrate with `atelier merge <id>`. Only tracker records and mission strategies may be committed directly to `master`.
 - The rebuilt app lives in `app/` (its own package: run `bun install` and `bun run check` there). The root `src/` is the old app, kept for reference until it is retired.
-- Mission strategies live in `docs/strategies/`. The current mission is the rebuild (`docs/strategies/rebuild.md`); its design proposals are in `docs/rebuild/`. Where those docs conflict with the rest of this file, they describe the target and this file describes the old code.
+- Mission strategies live in `docs/strategies/`. The current mission is Structure first (`docs/strategies/structure-first.md`), which builds on the rebuild (`docs/strategies/rebuild.md`); design proposals are in `docs/rebuild/`. Read the Fluidity section of `docs/rebuild/story-model.md` before changing the story model: it says what the model is for and how to judge changes to it. Where those docs conflict with the rest of this file, they describe the target and this file describes the old code.
 
 ## Commands
 Use bun for all commands.

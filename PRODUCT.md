@@ -12,13 +12,17 @@ The app is being rebuilt from a fresh skeleton (decision worldcrafter-zyc2). It 
 
 ## Users
 
-WorldCrafter is for writers and worldbuilders equally. Some users mostly draft prose, some mostly build the world, and many do both. It was built first for its author, a long-form speculative-fiction writer, and is meant for others later.
+WorldCrafter is for writers and worldbuilders equally. Some users mostly draft prose, some mostly build the world, and many do both. It was built first for its author, a long-form speculative-fiction writer, and is meant for others later. The user is a team of a human and an agent, so the story model has to make sense to both (decision worldcrafter-2y4g).
 
 ## Product Purpose
 
-WorldCrafter is a tool for building stories from the frame out, and it is deliberately not a chatbot. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
+WorldCrafter makes it easier to tell great stories, by making sure a story has what it needs to be interesting before final drafting begins. It's a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
 
-Success means a story can grow outside the writer's head without being flattened onto the page too early, and that changes made at the structural level reach everything they should.
+Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: start anywhere, leave things unconnected or undecided, hold contradictions, try answers, and rework in the abstract (`docs/rebuild/story-model.md`).
+
+Success means a story can grow outside the writer's head without being flattened onto the page too early, that changes made at the structural level reach everything they should, and that the team finds more satisfying answers than it would with plain notes.
+
+The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The product is still a web app.
 
 ## Positioning
 
@@ -59,12 +63,13 @@ The name is WorldCrafter. There are no other binding visual or voice commitments
 
 ## Evidence on Hand
 
-There are no users, testimonials, metrics or sample worlds yet. Don't invent any. Design docs are in `docs/rebuild/` and `docs/strategies/rebuild.md`.
+There are no users, testimonials, metrics or sample worlds yet. Don't invent any. Design docs are in `docs/rebuild/`, and the current strategy is `docs/strategies/structure-first.md`.
 
 ## Product Principles
 
-1. **The structure is the stage.** Work happens at the highest level where a change applies. Prose is the finish: crafted, and anchored to the structure rather than compiled from it.
-2. **The AI is a quiet, accountable colleague.** It does the bookkeeping, proposes changes to canon, and signs its work. It never competes for attention.
-3. **The writer stays in control.** Context is visible and editable, AI changes are reversible, and the writer's corrections always win.
-4. **The story model is the truth.** The manuscript is one view of it, assembled from the arrangement in its own narrative order. World and story shape each other both ways.
-5. **Don't lose the writer's work.** Losing data is a bug, but this is a personal project: a schema version and a backup export are enough, and breaking changes are fine when they make the model better.
+1. **Stories stay fluid.** Anything can be reworked at any time, in any order, and unfinished or contradictory is a normal state for a story to be in.
+2. **The structure is the stage.** Work happens at the highest level where a change applies. Prose is the finish: crafted, and anchored to the structure rather than compiled from it.
+3. **The AI is an accountable teammate.** It can do the bookkeeping or drive a whole sketch, and it signs its work. In the app it stays quiet and doesn't compete for attention.
+4. **The writer stays in control.** Context is visible and editable, AI changes are reversible, and the writer's corrections always win.
+5. **The story model is the truth.** The manuscript is one view of it, assembled from the arrangement in its own narrative order. World and story shape each other both ways.
+6. **Don't lose the writer's work.** Losing data is a bug, but this is a personal project: a schema version and a backup export are enough, and breaking changes are fine when they make the model better.
