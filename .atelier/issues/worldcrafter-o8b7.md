@@ -9,15 +9,17 @@ relationships:
   blocks: []
   children:
   - kind: "issue"
+    id: "worldcrafter-04z5"
+  - kind: "issue"
+    id: "worldcrafter-33qr"
+  - kind: "issue"
     id: "worldcrafter-8tbh"
   - kind: "issue"
     id: "worldcrafter-cly1"
   - kind: "issue"
-    id: "worldcrafter-eg96"
-  - kind: "issue"
     id: "worldcrafter-i2uz"
   - kind: "issue"
-    id: "worldcrafter-iaoc"
+    id: "worldcrafter-p4zf"
   attachments: []
   relates:
   - kind: "issue"
@@ -32,34 +34,35 @@ relationships:
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
-title: "Change why a character acts, and see what it touches"
-updated_at: "2026-10-30T22:08:53.175484861+00:00"
+title: "Sketch a story from a premise and rework it, headless"
+updated_at: "2026-10-31T02:17:09.165393070+00:00"
 ---
 
 ## Goal
 
-On a real story, with no prose and no AI, a writer can change a character's motivation, or an event behind it, and see the scenes and drives connected to the change. They can jump from any of those to the next and keep working. Levels come later; this tests moving between sides of the story. This is the mission's biggest bet: that reworking in the abstract is worth having.
+An agent in an ordinary session, using a CLI and a skill, can take a one-paragraph premise to a sketch of a story: elements that aren't woven in yet, open questions with candidate answers, and contradictions it hasn't resolved. It can try a candidate, see what it touches and what the story lacks, and rework a motivation or an event behind one. This is the mission's biggest bet: that the model makes a team better at finding a great story than the same team with plain notes.
 
 ## Done when
 
-- Delivers the change-a-drive and change-its-origin parts of `rework`; shifting an event is a later bet. Each child's proof passes, and the increment is independently reviewed.
-- The writer has tried it on a real story and recorded keep, change or drop (the trial child). Agents can't pass that item.
+- Delivers `sketch` and the change-a-drive, change-its-origin and shift-an-event parts of `rework`, headless. Each child's proof passes, and the increment is independently reviewed.
+- The human has read the blind comparison and recorded keep, change or drop (worldcrafter-i2uz). Agents can't pass that item.
 
 ## Unknowns
 
-- Whether seeing what a change touches feels like reworking, given that it can't reach what free text only mentions.
+- Whether the model beats plain notes at all. An agent can list open questions in markdown too.
+- Whether seeing what a candidate or a change touches helps, given that it can't reach what free text only mentions.
+- Whether the first gap reports are what a story needs to be interesting.
 - Whether a chain of events ("because") is missed. Events have only before and after.
 - Whether a second drive is an acceptable way to record a changed motivation.
-- How the focus view should look. Build it functional and consistent with the existing shell.
+- Whether actors, drives, events, scenes and open questions can hold what a sketch throws up, or something needs its own type. The agent's log of what the model couldn't hold answers this.
 
 ## Background
 
-- Strategy: `docs/strategies/structure-first.md`. Model: `docs/rebuild/story-model.md`. Records: decision worldcrafter-ddha. Replaces worldcrafter-z3w0, which was sliced by technical layer.
-- Pattern to follow: pure `apply…Command` functions with typed `neverthrow` errors plus a store that persists through the storage adapter (`outline/store.ts`, `time/store.ts`). Stored JSON is parsed back by the owning module.
-- Keep specification light: field names and view layout may change as the slice teaches something.
+- Strategy: `docs/strategies/structure-first.md`. Model: `docs/rebuild/story-model.md`. Direction: decision worldcrafter-2y4g. This replaces the app-first plan for this increment; `worldcrafter-iaoc` and `worldcrafter-eg96` moved to worldcrafter-frqk.
+- Keep specification light: field names may change as the work teaches something.
 
 Paper walkthrough, 2026-10-30, on the demo world (`app/src/demo/ninefold.ts`), with hand-invented drives. It's the author's reasoning, not a test with a writer. Ardelia's drive: keep the Salt Gate shut; origin event `seal`; pressures 4.2 and 5.1.
 
 - **Change the motivation (shut to open).** Links reach 4.2 and 5.1 and related drives. They miss scene 2.1, "Ardelia", which shows her without any drive under pressure. So a scene needs to record its actors. "She wanted it shut in 902 and wants it open in 1203" works as two drives with different origins, so time-indexed drives aren't needed yet.
-- **Change the event behind it (she sealed it on Aldric's order).** Needs an event summary, because an event is only a label today, and a link from a drive to its origin events. From `seal` the links then reach the drive and its scenes, and 3.2 through `depicts`; the demo also places 3.2 `during seal`, so a later walk should follow placements. The seeded demo has no fact changes or reveals, so those links went unexercised. Before and after can't say that one event caused another: the sealing can precede the coronation, but not lead to it.
-- **Shift the event (902 to 1100).** The same links reach the drive and 3.2. The app refuses the shift (`contradiction`), because 3.2 has its own position; this was run, and moving them one at a time fails in either order. Nothing connects `seal` to the coronation, even though the prose ties them together. The Salt Gate entry's "sealed in 902" and Kesh's "three hundred years" are out of reach as free text. That is the limit of this approach.
+- **Change the event behind it (she sealed it on Aldric's order).** Needs an event summary and a link from a drive to its origin events. From `seal` the links then reach the drive and its scenes, and 3.2 through `depicts`. Before and after can't say that one event caused another.
+- **Shift the event (902 to 1100).** The same links reach the drive and 3.2. The engine refuses the shift (`contradiction`), because 3.2 has its own position; this was run. The Salt Gate entry's "sealed in 902" and Kesh's "three hundred years" are out of reach as free text. That is the limit of this approach.

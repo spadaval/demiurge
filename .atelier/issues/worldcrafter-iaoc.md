@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Enter a story: characters, scenes, drives, events and their links"
-updated_at: "2026-10-30T22:08:53.174842213+00:00"
+updated_at: "2026-10-31T02:17:09.203856959+00:00"
 ---
 
 ## Goal
@@ -38,3 +38,7 @@ Plain forms in the existing shell. No outline, positions, placements, facts, rev
 ## Context
 
 Commands from worldcrafter-cly1. `app/src/world/store.ts` (`attachEntry`), `app/src/app/world.ts`, `app/src/app/router.tsx`.
+
+## Notes
+
+- 2026-10-30 [note] 2026-10-30: moved to worldcrafter-frqk after decision worldcrafter-2y4g. Rewrite this when the screen increment is planned.

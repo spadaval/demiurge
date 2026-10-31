@@ -15,9 +15,9 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Sync-ready storage: tombstones for deletes"
-updated_at: "2026-10-30T05:29:56.199473769+00:00"
+updated_at: "2026-10-31T02:17:08.852873669+00:00"
 ---
 
 ## Goal
@@ -46,3 +46,7 @@ Make every synced collection ready for a later sync backend (S9, decision worldc
 
 - `StorageAdapter`, `Collection<T>`, `BatchWrite` and the record types: `app/src/storage/types.ts`. `listForDocument` reads the `byDocument` index in `app/src/storage/indexeddb.ts`.
 - S9 in `docs/strategies/rebuild.md`. It was proven before the sync-ready wording was added, so it needs fresh evidence.
+
+## Notes
+
+- 2026-10-30 [note] 2026-10-30: deferred at Sumeet's direction (decision worldcrafter-2y4g). It prepares deletes for a later sync, and the headless first version has neither. Plan it again when the app's story storage is built or sync comes closer.

@@ -9,37 +9,38 @@ relationships:
   blocks: []
   children: []
   attachments: []
-  relates:
-  - kind: "issue"
-    id: "worldcrafter-4t98"
-    type: "blocked_by"
+  relates: []
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
-title: "Store drives with their origins, and scene links"
-updated_at: "2026-10-30T22:02:01.373924291+00:00"
+title: "Hold a story in one readable file"
+updated_at: "2026-10-31T02:17:08.888953534+00:00"
 ---
 
 ## Goal
 
-Store what reworking a motivation needs: drives linked to the events that created them, what connects a scene to actors and drives, and event summaries (decision worldcrafter-ddha).
+One file holds a whole story sketch in a form a person can read and git can diff, with anything in it allowed to be unconnected, unanswered or contradictory.
 
 ## Done when
 
-- A new module `app/src/story/` defines the shapes below and parsers that check stored JSON back into them, rejecting malformed records with typed errors. Unit tests cover valid and invalid records.
-- Two new keyed collections, `drives` and `sceneStructures`, pass the storage contract test (including tombstones) on the memory and IndexedDB adapters and through `app/src/workspace/connected-storage.ts`, and the IndexedDB upgrade keeps existing data.
-- A stored event gains `summary`. A timeline saved before this loads with an empty summary, shown by a test.
-- `bun run check` passes.
+- A new module `app/src/story/` defines the shapes below, and `parseStory` checks a file back into them, rejecting malformed files with typed `neverthrow` errors. Unit tests cover valid and invalid files.
+- A story with a premise and nothing else is valid, and so is an actor with no drive, an event no drive or scene refers to, a scene with no actors and an open question with no candidates. Each is shown by a test.
+- `serializeStory` writes pretty-printed JSON with a stable key and record order. A test shows that parsing and writing a file leaves it byte for byte the same, and that changing one record changes only that record's lines.
+- A timeline event can have a summary. A timeline saved before this parses with an empty summary, shown by a test, and the app's existing timeline behaviour doesn't change.
+- `bun run check` passes in `app/`.
 
 ## Scope
 
 Shapes (names may change if the reason is recorded; meanings may not):
 
-- **Drive**: `id`, `actorId` (an entry document of kind `person` or `organization`), `want`, `stakes`, `method` (strings, may be empty), `origins: EventId[]` (non-scene events), `relations: { to: driveId, type: "opposes" | "allies" | "competes" }[]`, `authority` (`Authority` from `world/facts.ts`), `updatedAt`. A relation is stored on one drive of the pair only.
-- **SceneStructure**: `id` (the scene's document ID), `summary`, `actors: documentId[]`, `depicts: EventId[]` (non-scene events; descriptive only, as story-time placement alone says when a scene happens), `pressures: driveId[]`, `updatedAt`.
+- **Story**: `version`, `premise`, `actors`, `drives`, `scenes`, `openQuestions`, `timeline` (the existing `Timeline`, from `app/src/time/timeline.ts`).
+- **Actor**: `id`, `name`, `kind` (`person` or `organization`), `notes`.
+- **Drive**: `id`, `actorId`, `want`, `stakes`, `method` (strings, may be empty), `origins: EventId[]`, `relations: { to: driveId, type: "opposes" | "allies" | "competes" }[]`. A relation is stored on one drive of the pair only.
+- **Scene**: `id`, `title`, `summary`, `actors`, `depicts: EventId[]`, `pressures: driveId[]`. No outline, chapters or beats.
+- **OpenQuestion**: `id`, `question`, `about: Ref[]`, `candidates: { id, answer, touches: Ref[] }[]`, `answer?: candidateId`, `conflict: boolean` (true when it records a contradiction someone noticed, such as two things that can't both be true). A `Ref` is a kind and an ID, for an actor, drive, event, scene or open question. This is not the telling layer's reader question, which isn't part of this increment.
 
-Storage keeps each record's body as JSON with `id` and `updatedAt`, as `timelines` does; `story/` owns the types and parsing. Questions and beats come later (worldcrafter-y2y2). Passage anchors are not part of this record.
+No storage adapter, collections, tombstones or database upgrade. Actors and scenes are plain records here and not documents (decision worldcrafter-2y4g).
 
 ## Context
 
-`app/src/storage/types.ts`, `app/src/time/timeline.ts` (stored-JSON pattern, `EventId`, `sceneEventId`), `app/src/world/facts.ts` (`Authority`).
+`app/src/time/timeline.ts` (`parseTimeline`, `TimeEvent`, `EventId`) for the stored-JSON pattern.

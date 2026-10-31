@@ -18,9 +18,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "backlog"
 title: "Focus view: see and follow what a character, drive, event or scene touches"
-updated_at: "2026-10-30T22:08:53.223551636+00:00"
+updated_at: "2026-10-31T02:17:09.192340424+00:00"
 ---
 
 ## Goal
@@ -42,3 +42,7 @@ Show what's connected; don't rewrite anything or score it. There's no change his
 ## Context
 
 `app/src/app/router.tsx`, `app/src/app/rail.tsx`.
+
+## Notes
+
+- 2026-10-30 [note] 2026-10-30: moved to worldcrafter-frqk after decision worldcrafter-2y4g. whatThisTouches moved to worldcrafter-33qr. Rewrite this when the screen increment is planned.
