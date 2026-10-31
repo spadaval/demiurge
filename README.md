@@ -7,12 +7,14 @@ WorldCrafter is a AI-native tool for creating imaginary worlds, inspired by soft
 
 Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. WorldCrafter keeps that fluid: you can jump between levels and sides, rework a motivation or a timeline in the abstract while seeing what it touches, try answers, and leave things undecided or contradictory for as long as you need.
 
-We want the best possible story, and we take no position on whether AI should write it. Our theory is that the best story comes from AI tenacity and thoroughness combined with human judgment, so this is built for a team of a human and an AI agent, working on the same model of the story, to make sure it has what it needs to be interesting before final drafting begins. What we don't want is a slop cannon: volume that nobody has judged. See [the story model](docs/rebuild/story-model.md#fluidity). The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The web app is the current plan and not a commitment: the form follows the results.
+We want to use AI to write the story, and we take no position on whether AI should write stories in general: we just want the best possible story. Our theory is that it comes from AI tenacity and thoroughness combined with human judgment. What we don't want is a slop cannon: volume that nobody has judged.
+
+So this is built for a team of a human and an AI agent, working on the same model of the story, to make sure the story has what it needs to be interesting before final drafting begins. See [the story model](docs/rebuild/story-model.md#fluidity). The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The web app is the current plan and not a commitment: the form follows the results.
 
 ## Key Differentiators
 
 - **Structured Writing Experience**: Move beyond the blank canvas with a structured approach to writing and worldbuilding.
-- **Deep AI Integration**: AI is integrated into various aspects of the workflow to assist and enhance the creative process.
+- **Deep AI Integration**: AI works across the whole workflow, including writing the story.
 - **Extreme AI Control**: Gain fine-grained control over the input to the AI model, including context, parameters, and samplers. Full support for local models.
 
 

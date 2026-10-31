@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-The app is being rebuilt from a fresh skeleton (decision worldcrafter-zyc2). It is web-first: a web app, to become an installable PWA, built on Vite, TanStack Router, React 19 and Plate (a Slate-based rich-text editor), with local-first storage on IndexedDB behind a storage adapter. A sync backend (a Cloudflare Worker) comes later so one writer can switch between laptop and phone (decision worldcrafter-gcox). Desktop and mobile wrappers may come later. The old app's styling stack (Tailwind with daisyUI and shadcn scaffolds) is evidence only and is not carried forward. The new styling approach is undecided.
+The app is being rebuilt from a fresh skeleton (decision worldcrafter-zyc2). It is web-first: a web app, to become an installable PWA, built on Vite, TanStack Router, React 19 and Plate (a Slate-based rich-text editor), with local-first storage on IndexedDB behind a storage adapter. A sync backend (a Cloudflare Worker) comes later so one writer can switch between laptop and phone (decision worldcrafter-gcox). Desktop and mobile wrappers may come later. The old app's styling stack (Tailwind with daisyUI and shadcn scaffolds) is evidence only and is not carried forward. The new styling approach is undecided. All of this is the current plan and not a commitment (decision worldcrafter-45an).
 
 ## Users
 
@@ -16,7 +16,7 @@ WorldCrafter is for writers and worldbuilders equally. Some users mostly draft p
 
 ## Product Purpose
 
-WorldCrafter exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We take no position on whether AI should write stories, and it can write as much as helps. Our theory is that the best story comes from AI tenacity and thoroughness combined with human judgment. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). It's a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
+WorldCrafter exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We want to use AI to write the story, as much as helps, and we take no position on whether AI should write stories in general. Our theory is that the best story comes from AI tenacity and thoroughness combined with human judgment. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). WorldCrafter is a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
 
 Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: jump between levels and sides, rework in the abstract, try answers against the rest of the story, and leave things undecided or contradictory until a satisfying way through appears (`docs/rebuild/story-model.md`).
 
@@ -37,6 +37,8 @@ Other tools either inject lore into prompts (Novelcrafter, NovelAI, Sudowrite), 
 
 ## Operating Context
 
+As planned for the web app; the headless first version runs in an agent session.
+
 - Sessions mix outlining, building the world, arranging scenes, drafting and reviewing what the AI inferred or proposed. Most of the leverage, and most of the time, is in the structure.
 - Mainly used on desktop Chromium, on a laptop or desktop screen, and also on a phone.
 - Models are local (llama.cpp) or hosted (OpenRouter, featherless), and the user supplies their own keys. The writer controls samplers, system prompts and prompt format, which coding harnesses and chat frontends decide for you.
@@ -46,7 +48,7 @@ Other tools either inject lore into prompts (Novelcrafter, NovelAI, Sudowrite), 
 
 - The content schema is restricted to node types whose AI projections are defined: paragraphs, headings, lists, quotes, rules, basic marks, links, AI segments and placeholders. Tables, media and callouts are excluded for now. The TypeScript model is the source of truth, and a world round-trips exactly through every storage and export adapter. It also exports to readable markdown, one-way.
 - **AI segments** are AI-written content that is visibly marked. You can accept it, which turns it into ordinary text, or regenerate it. Its provenance (the request, model and sampler) is kept alongside it.
-- **AI presence in the app: a quiet colleague.** AI work is always visible and attributed, but it stays in the background: margins, underlines, an inbox, talk-page topics. It never takes the main stage from the writer's own work.
+- **AI presence in the app: a quiet colleague.** AI work is always visible and attributed, and its interface stays in the background: margins, underlines, an inbox, talk-page topics. It never crowds the story being worked on.
 - **Power controls on demand:** the assembled request can be viewed and edited, and sampler settings and logprobs are available, but none of these is in the way by default.
 - **Terminology:**
   - *entry*: a world document such as a character, place or faction
@@ -69,7 +71,7 @@ There are no users, testimonials, metrics or sample worlds yet. Don't invent any
 
 1. **The best story wins.** Whatever gets to the best story is what we build, whether that's a screen, a database or an agent. Human judgment decides what's good.
 2. **Stories stay fluid.** Anything can be reworked at any time, in any order, and unfinished or contradictory is a normal state for a story to be in.
-3. **The structure is the stage.** Work happens at the highest level where a change applies. Prose is the finish: crafted, and anchored to the structure rather than compiled from it.
+3. **The structure is the stage.** Work happens at the highest level where a change applies. Prose is the finish, anchored to the structure rather than compiled from it.
 4. **The AI is an accountable teammate.** It can do the bookkeeping, drive a whole sketch or write the prose, and it signs its work. In the app it stays quiet and doesn't compete for attention.
 5. **The writer stays in control.** Context is visible and editable, AI changes are reversible, and the writer's corrections always win.
 6. **The story model is the truth.** The manuscript is one view of it, assembled from the arrangement in its own narrative order. World and story shape each other both ways.

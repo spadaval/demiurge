@@ -39,8 +39,8 @@ of a human and an agent, so the model has to make sense to both, and an agent
 using it to write well counts as success. Whether the model makes that team
 better than the same team with plain notes is the mission's main unknown.
 
-We take no position on whether AI should write stories. We want the best possible
-story, and our theory is that it comes from AI tenacity and thoroughness combined
+We want to use AI to write the story, and we take no position on whether AI should
+write stories in general. We want the best possible story, and our theory is that it comes from AI tenacity and thoroughness combined
 with human judgment. AI can write as much of it as helps. What we don't want is a
 slop cannon: volume that nobody has judged. The form follows the results (decision
 worldcrafter-45an).
@@ -84,8 +84,8 @@ of this plan should change.
   a scene those changes affect, and the human judges how well each followed through.
 - on-screen: A writer can do `sketch` and `rework` on a screen, jumping between
   levels and sides without losing their place. This is the part of fluidity a
-  conversation can't test, and a bet like any other: it comes out if the verdicts
-  show the best stories don't need a screen. Shown by component tests and by the writer trying it on
+  conversation can't test, and a bet like any other: it comes out if the human decides,
+  from the verdicts, that the best stories don't need a screen. Shown by component tests and by the writer trying it on
   a real story.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
   books and chapters, scenes and beats, in any order: a scene can have a summary
@@ -174,7 +174,7 @@ of this plan should change.
 - **The unreliable narrator is out of scope.** What the telling states is true
   in the world. Characters can still believe false things.
 - **When qualities conflict:**
-  1. The quality of the story.
+  1. The quality of the story, as the human judges it.
   2. The writer's visibility into and control over the AI.
   3. Leverage: structural changes are cheap and propagate.
   4. AI capability.
@@ -236,7 +236,7 @@ These must come back to the human:
 - The comparison is a few runs on two premises, read by one person, and format can
   give away which is which. It can show the tool is clearly better or clearly not,
   but not a small difference. It also can't show how working on a screen feels,
-  which `on-screen` still has to.
+  which `on-screen` would have to, if it stays.
 - The gap reports are a first guess at what a story needs to be interesting, and
   are the part most likely to be wrong. Runs on the premises should change them.
 - The story file isn't how the app stores things. A keep verdict has to map it onto
