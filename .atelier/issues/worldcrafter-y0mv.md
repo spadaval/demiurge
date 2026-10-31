@@ -4,6 +4,9 @@ id: "worldcrafter-y0mv"
 issue_type: "task"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: task/worldcrafter-y0mv
 priority: "P1"
 relationships:
   blocks: []
@@ -12,9 +15,9 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Say plainly where we stand on AI writing, and let the form follow results"
-updated_at: "2026-10-31T04:44:50.226012159+00:00"
+updated_at: "2026-10-31T04:44:50.278853854+00:00"
 ---
 
 ## Goal

@@ -4,11 +4,11 @@ Status: accepted (2026-10-29, decision worldcrafter-ok5a). Strategy: `docs/strat
 
 ## Identity
 
-WorldCrafter is a tool for building stories from the frame out. The world and the plot are the structure, and the AI inspects them while they're still exposed. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the structure rather than compiled from it. This is a tool for crafted stories, not a text generator.
+WorldCrafter is a tool for building stories from the frame out. The world and the plot are the structure, and the AI inspects them while they're still exposed. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the structure rather than compiled from it. AI can write as much of it as helps: what counts is the story, and a slop cannon, volume that nobody has judged, is the thing to avoid.
 
 It is about stories, not manuscripts. A story that never reaches the page is still a story, and work on its structure is still progress.
 
-The goal is to make it easier to tell great stories, by making sure a story has what it needs to be interesting before final drafting begins. The user is a team of a human and an agent, so the model has to make sense to both, and an agent using it to write well counts as success. The human's judgment settles whether the result is any good (decision worldcrafter-2y4g).
+The goal is to make it easier to tell great stories, by making sure a story has what it needs to be interesting before final drafting begins. The user is a team of a human and an agent, so the model has to make sense to both, and an agent using it to write well counts as success. The human's judgment settles whether the result is any good (decision worldcrafter-2y4g). We take no position on whether AI should write stories. Our theory is that the best story comes from AI tenacity and thoroughness combined with human judgment, and the form follows the results (decision worldcrafter-45an).
 
 ## Fluidity
 
@@ -120,7 +120,7 @@ These are what the writer thinks in. They are named, writer-owned groupings over
 
 Adopted on 2026-10-29 (worldcrafter-uicb). The rebuild mission (`docs/strategies/rebuild.md`) was narrowed to the foundation it had mostly built, and the story model continues as its own mission in `docs/strategies/structure-first.md`. Recognition, discovery and bookkeeping, AI edit proposals and talk pages moved to the backlog, to be re-planned under this model. Story time, AI segments, provenance and stable IDs keep their place.
 
-The first version is headless: a CLI and a skill over one readable file per story, tested by a comparison against the same agent with plain notes (decision worldcrafter-2y4g). This is a way to find out and not how the product ships. A screen comes after a verdict supports it, since how jumping around feels is the part of fluidity a conversation can't test.
+The first version is headless: a CLI and a skill over one readable file per story, tested by a comparison against the same agent with plain notes (decision worldcrafter-2y4g). A screen comes after a verdict supports it, since how jumping around feels is the part of fluidity a conversation can't test. If the best stories turn out not to need one, it doesn't get built (decision worldcrafter-45an).
 
 ## Records
 

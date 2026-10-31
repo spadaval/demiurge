@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-30: fluidity stated as how stories get made; the user is a team; headless first; sketch and on-screen criteria (Sumeet)"
+last_changed: "2026-10-31: no stance on AI writing; the best story decides and the form follows the results (Sumeet)"
 ---
 
 # Why
@@ -38,6 +38,12 @@ what it needs to be interesting before final drafting begins. The user is a team
 of a human and an agent, so the model has to make sense to both, and an agent
 using it to write well counts as success. Whether the model makes that team
 better than the same team with plain notes is the mission's main unknown.
+
+We take no position on whether AI should write stories. We want the best possible
+story, and our theory is that it comes from AI tenacity and thoroughness combined
+with human judgment. AI can write as much of it as helps. What we don't want is a
+slop cannon: volume that nobody has judged. The form follows the results (decision
+worldcrafter-45an).
 
 # Outcome
 
@@ -78,7 +84,8 @@ of this plan should change.
   a scene those changes affect, and the human judges how well each followed through.
 - on-screen: A writer can do `sketch` and `rework` on a screen, jumping between
   levels and sides without losing their place. This is the part of fluidity a
-  conversation can't test. Shown by component tests and by the writer trying it on
+  conversation can't test, and a bet like any other: it comes out if the verdicts
+  show the best stories don't need a screen. Shown by component tests and by the writer trying it on
   a real story.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
   books and chapters, scenes and beats, in any order: a scene can have a summary
@@ -127,8 +134,9 @@ of this plan should change.
 - **Headless first.** The first version is a CLI and a skill, used in an ordinary
   agent session, over one readable file per story in git. Screens, the storage
   collections and their upgrades wait for a verdict that supports them. This is a
-  way to find out, not how the product ships: it stays a web app (decision
-  worldcrafter-gcox).
+  way to find out. The web app (decision worldcrafter-gcox) is the current plan
+  and not a commitment: if the best way to get a good story is an agent with an MCP
+  server, a database and a skill, that's what this becomes (decision worldcrafter-45an).
 - **Fluidity is how stories get made.** Start anywhere. An element can sit in the
   model with nothing connected to it, and blank squares in the crossword are
   normal, so a gap report never reads as an error. Each answer constrains the ones
@@ -166,10 +174,11 @@ of this plan should change.
 - **The unreliable narrator is out of scope.** What the telling states is true
   in the world. Characters can still believe false things.
 - **When qualities conflict:**
-  1. The writer's visibility into and control over the AI.
-  2. Leverage: structural changes are cheap and propagate.
-  3. AI capability.
-  4. Feature speed.
+  1. The quality of the story.
+  2. The writer's visibility into and control over the AI.
+  3. Leverage: structural changes are cheap and propagate.
+  4. AI capability.
+  5. Feature speed.
 
 # Scope
 
