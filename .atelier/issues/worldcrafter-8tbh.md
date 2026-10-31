@@ -12,9 +12,9 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Hold a story in one readable file"
-updated_at: "2026-10-31T02:17:08.888953534+00:00"
+updated_at: "2026-10-31T05:18:53.836243055+00:00"
 ---
 
 ## Goal

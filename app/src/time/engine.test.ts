@@ -949,8 +949,8 @@ test("derived intervals far from the sync point allow for rounding", () => {
     const timeline: Timeline = {
       ...emptyTimeline,
       events: [
-        { id: "sync", label: "" },
-        { id: "e", label: "" },
+        { id: "sync", label: "", summary: "" },
+        { id: "e", label: "", summary: "" },
       ],
       positions: [
         ["sync", "world", sync],
@@ -1162,7 +1162,7 @@ describe("frames that pause", () => {
       place(s("s1"), "world", sceneAt);
       const timeline: Timeline = {
         ...emptyTimeline,
-        events: ids.map((id) => ({ id, label: id })),
+        events: ids.map((id) => ({ id, label: id, summary: "" })),
         positions,
         frames: [
           {
@@ -1551,7 +1551,7 @@ test("thousands of events stay fast", () => {
   timeline = {
     ...timeline,
     events: commands.flatMap((c) =>
-      c.type === "addEvent" ? [{ id: c.id, label: c.label }] : [],
+      c.type === "addEvent" ? [{ id: c.id, label: c.label, summary: "" }] : [],
     ),
     positions: commands.flatMap((c) =>
       c.type === "setPosition" && c.position !== null

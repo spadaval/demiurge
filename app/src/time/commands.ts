@@ -195,7 +195,10 @@ function edit(
       }
       return ok({
         ...timeline,
-        events: [...timeline.events, { id: command.id, label: command.label }],
+        events: [
+          ...timeline.events,
+          { id: command.id, label: command.label, summary: "" },
+        ],
       });
     }
 

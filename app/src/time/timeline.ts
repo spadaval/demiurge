@@ -52,7 +52,7 @@ export function sceneOfEvent(event: EventId): string | undefined {
 }
 
 /** An event that isn't a scene: a battle, a birth, a founding. */
-export type TimeEvent = { id: EventId; label: string };
+export type TimeEvent = { id: EventId; label: string; summary: string };
 
 /**
  * Where an event lies on a frame's clock, in the frame's unit. With
@@ -305,7 +305,13 @@ function checkFactRef(value: unknown, at: string): Check<FactRef> {
 }
 
 const checkEvent = (v: JsonRecord, at: string): Check<TimeEvent> =>
-  strings(v, at, ["id", "label"]);
+  strings(v, at, ["id", "label"]).andThen(({ id, label }) => {
+    // Timelines saved before events had summaries have none.
+    const { summary = "" } = v;
+    return isString(summary)
+      ? ok({ id, label, summary })
+      : err(`${at}.summary must be a string`);
+  });
 
 function checkPosition(v: JsonRecord, at: string): Check<Position> {
   return strings(v, at, ["event", "frame"]).andThen(({ event, frame }) => {

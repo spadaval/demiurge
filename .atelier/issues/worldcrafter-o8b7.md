@@ -4,6 +4,9 @@ id: "worldcrafter-o8b7"
 issue_type: "feature"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-o8b7
 priority: "P1"
 relationships:
   blocks: []
@@ -35,7 +38,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Sketch a story from a premise and rework it, headless"
-updated_at: "2026-10-31T02:17:09.165393070+00:00"
+updated_at: "2026-10-31T05:18:53.836240881+00:00"
 ---
 
 ## Goal
