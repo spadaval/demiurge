@@ -15,9 +15,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-02T03:56:08.500177208+00:00"
+status: "done"
 title: "Product name and domain"
-updated_at: "2026-10-29T21:14:44.256603314+00:00"
+updated_at: "2026-11-02T03:56:08.500177208+00:00"
 ---
 
 ## Context
@@ -38,6 +39,20 @@ Renaming is cheap: the repo and the `worldcrafter-` issue IDs can stay.
 
 What should the product be called, and on what domain?
 
+## Decision
+
+Decided by Sumeet (2026-11-01): the product is called **Demiurge**. "Let's just roll with that for now."
+
+- Why: the Demiurge is Plato's craftsman, who shapes a world from material that already exists rather than creating one from nothing. That suits "picking elements and weaving them into place" and "story and world shape each other". It also has a dark side, which Sumeet likes: in the Gnostic version it is a flawed creator of a broken world who believes it is the true god.
+- Runner-up: Workprint.
+- Domain: demiurge.ink is intended but not bought yet. Sumeet will buy it, so don't state it as live.
+
+Consequences: current-facing names change now, along with the GitHub repo. The `worldcrafter-` issue IDs and past records stay. Browser storage names stay, because renaming them would strand existing data. The Cloudflare Worker keeps its name until the domain is settled.
+
 ## Notes
 
 - 2026-10-29 [note] Deferred by Sumeet on 2026-10-29; not blocking any work.
+
+## Close Reason
+
+Demiurge; demiurge.ink pending purchase by Sumeet
