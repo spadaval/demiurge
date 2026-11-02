@@ -43,7 +43,7 @@ So this is built for a team of a human and an AI agent, working on the same mode
 
 1. Clone the repository:
    ```sh
-   git clone <repository-url>
+   git clone <repository-url> demiurge
    cd demiurge
    ```
 
