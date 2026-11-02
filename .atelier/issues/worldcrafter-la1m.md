@@ -17,9 +17,10 @@ relationships:
     type: "implements"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-02T03:57:56.880891672+00:00"
+status: "done"
 title: "Rename the product to Demiurge"
-updated_at: "2026-11-02T03:56:22.077875263+00:00"
+updated_at: "2026-11-02T03:57:56.880891672+00:00"
 ---
 
 ## Goal
@@ -37,3 +38,7 @@ Current-facing names say Demiurge instead of WorldCrafter (decision worldcrafter
 ## Scope
 
 Not in scope: the Cloudflare Worker's name, the domain, and moving the checkout directory.
+
+## Close Reason
+
+Current-facing names say Demiurge; data-bearing storage names, the Worker and Atelier IDs keep worldcrafter on purpose
