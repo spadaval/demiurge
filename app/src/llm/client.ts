@@ -175,7 +175,7 @@ export function send(
 function headers(profile: BackendProfile): Record<string, string> {
   const out: Record<string, string> = { "Content-Type": "application/json" };
   if (profile.apiKey) out.Authorization = `Bearer ${profile.apiKey}`;
-  if (profile.kind === "openrouter") out["X-Title"] = "WorldCrafter";
+  if (profile.kind === "openrouter") out["X-Title"] = "Demiurge";
   return out;
 }
 

@@ -6,7 +6,7 @@ A quick survey made while reviving the project. Many of the sources are vendor b
 
 ### 1. "Lore that's injected into prompts" is now the standard pattern, and it works by **name/alias matching, not NER**
 
-- **Novelcrafter Codex** is the closest competitor to WorldCrafter. Codex entries have aliases. Mentions are detected by matching those names and aliases, and matching entries are injected into prompts automatically. Context order is documented: mentions in the current beat, then manual references, the POV entry, global entries, then child entries. Empty entries are filtered out. **Progressions** are facts that take effect from a point in the story, so the AI doesn't see spoilers when you're working on an earlier scene. A **mentions view** shows every appearance of an entry across the manuscript. AI is bring-your-own-key, local models included.
+- **Novelcrafter Codex** is the closest competitor to Demiurge. Codex entries have aliases. Mentions are detected by matching those names and aliases, and matching entries are injected into prompts automatically. Context order is documented: mentions in the current beat, then manual references, the POV entry, global entries, then child entries. Empty entries are filtered out. **Progressions** are facts that take effect from a point in the story, so the AI doesn't see spoilers when you're working on an earlier scene. A **mentions view** shows every appearance of an entry across the manuscript. AI is bring-your-own-key, local models included.
   - https://www.novelcrafter.com/features/codex
   - https://www.novelcrafter.com/help/faq/ai-and-prompting/codex-context-in-prompting
   - https://docs.novelcrafter.com/en/articles/8675593-progression-additions

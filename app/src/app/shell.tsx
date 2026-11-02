@@ -294,7 +294,7 @@ function useOpenRequest(active: string | null) {
     unavailable: !session
       ? "Open a document to generate in it."
       : session.readOnly
-        ? "This tab is read-only because WorldCrafter is open in another tab."
+        ? "This tab is read-only because Demiurge is open in another tab."
         : running
           ? "A generation is running. Stop it or let it finish first."
           : preparing
@@ -425,14 +425,14 @@ function Notices() {
     <>
       {role === "reader" && (
         <p className="notice">
-          WorldCrafter is open in another tab, so this tab is read-only. Close
-          the other tab and reload to edit here.
+          Demiurge is open in another tab, so this tab is read-only. Close the
+          other tab and reload to edit here.
         </p>
       )}
       {role === "unguarded" && (
         <p className="notice">
-          This browser can't stop two tabs editing at once. Keep WorldCrafter
-          open in one tab only, or one tab's changes will overwrite the other's.
+          This browser can't stop two tabs editing at once. Keep Demiurge open
+          in one tab only, or one tab's changes will overwrite the other's.
         </p>
       )}
       {storage === "indexeddb" && persistence !== "granted" && (
@@ -447,7 +447,7 @@ function Notices() {
         <p className="notice notice-error" role="alert">
           Storage is unavailable ({connection.error.message}). Your changes are
           kept in this tab and retried; don't close it. Reloading may help once
-          other WorldCrafter tabs are closed.
+          other Demiurge tabs are closed.
         </p>
       )}
     </>

@@ -5,7 +5,7 @@ last_changed: "2026-10-30: consistency checking against canon dropped as a likel
 
 # Why
 
-WorldCrafter is meant to be an AI-native writing and worldbuilding tool that is
+Demiurge is meant to be an AI-native writing and worldbuilding tool that is
 not a chatbot. The old codebase came out of a chat app, was redesigned several
 times, and kept losing data at the boundary between Plate's rich tree and the
 plain text LLMs read and write. Its "Generate Next" sends no world context at all,
@@ -13,7 +13,7 @@ and it detected entities with a news-trained NER model that handles invented nam
 worst. The field has since settled on alias-matched lore injection and
 reviewable AI edits, which confirms the direction. AI
 upkeep of the world, a typed world graph, and editable context are still
-underserved, and those are where WorldCrafter can stand out
+underserved, and those are where Demiurge can stand out
 (`docs/rebuild/prior-art-2026.md`).
 
 It is also about control over the model. Coding harnesses and chat frontends

@@ -1,5 +1,5 @@
 ---
-name: WorldCrafter
+name: Demiurge
 description: Night Edition. The manuscript is the page and the world is its apparatus.
 colors:
   ground: "#14120f"
@@ -123,7 +123,7 @@ components:
     padding: "8px 32px"
 ---
 
-# Design System: WorldCrafter
+# Design System: Demiurge
 
 ## Overview
 

@@ -684,6 +684,7 @@ export const migrateDocumentsToContentModelV1 = () => {
 };
 
 const indexedDbPlugin = observablePersistIndexedDB({
+  // Keeps the old product name: renaming it would strand existing data.
   databaseName: "worldcrafter",
   tableNames: ["documents"],
   version: 1,

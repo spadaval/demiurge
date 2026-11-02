@@ -5,7 +5,7 @@ import type { GenerateError, GenerationResult } from "./generator";
 export function describeGenerateError(error: GenerateError): string {
   switch (error.kind) {
     case "read_only":
-      return "This tab is read-only because WorldCrafter is open in another tab.";
+      return "This tab is read-only because Demiurge is open in another tab.";
     case "busy":
       return "A generation is already running in this document. Stop it first.";
     case "unknown_profile":
@@ -19,7 +19,7 @@ export function describeGenerateError(error: GenerateError): string {
     case "segment_generating":
       return "That AI text is still being generated.";
     case "no_provenance":
-      return "WorldCrafter has no record of the request that made this AI text, so it can't regenerate it.";
+      return "Demiurge has no record of the request that made this AI text, so it can't regenerate it.";
     case "invalid_provenance":
       return `The record of this AI text is damaged (${error.reason}).`;
     case "generation_failed":
@@ -34,9 +34,9 @@ export function describeGenerateError(error: GenerateError): string {
     case "invalid_cursor":
       return "The cursor position is no longer in the document.";
     case "invalid_content":
-      return `The document has content WorldCrafter can't read (${error.reason} at ${error.path}).`;
+      return `The document has content Demiurge can't read (${error.reason} at ${error.path}).`;
     case "invalid_markdown":
-      return `The document has content WorldCrafter can't read (${error.reason}).`;
+      return `The document has content Demiurge can't read (${error.reason}).`;
     case "invalid_request_record":
       return `The stored request ${error.id} is damaged (${error.reason}).`;
     case "not_found":

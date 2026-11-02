@@ -1,9 +1,9 @@
 import type { Result } from "neverthrow";
 
 /**
- * Base error class for WorldCrafter application
+ * Base error class for Demiurge application
  */
-export abstract class WorldCrafterError extends Error {
+export abstract class DemiurgeError extends Error {
   abstract readonly type: string;
 
   constructor(
@@ -18,7 +18,7 @@ export abstract class WorldCrafterError extends Error {
 /**
  * Error types for different scenarios
  */
-export class APIError extends WorldCrafterError {
+export class APIError extends DemiurgeError {
   readonly type = "API_ERROR";
 
   constructor(
@@ -31,7 +31,7 @@ export class APIError extends WorldCrafterError {
   }
 }
 
-export class NetworkError extends WorldCrafterError {
+export class NetworkError extends DemiurgeError {
   readonly type = "NETWORK_ERROR";
 
   constructor(
@@ -43,7 +43,7 @@ export class NetworkError extends WorldCrafterError {
   }
 }
 
-export class ParsingError extends WorldCrafterError {
+export class ParsingError extends DemiurgeError {
   readonly type = "PARSING_ERROR";
 
   constructor(
@@ -55,7 +55,7 @@ export class ParsingError extends WorldCrafterError {
   }
 }
 
-export class ValidationError extends WorldCrafterError {
+export class ValidationError extends DemiurgeError {
   readonly type = "VALIDATION_ERROR";
 
   constructor(
@@ -67,7 +67,7 @@ export class ValidationError extends WorldCrafterError {
   }
 }
 
-export class LLMError extends WorldCrafterError {
+export class LLMError extends DemiurgeError {
   readonly type = "LLM_ERROR";
 
   constructor(
@@ -144,7 +144,7 @@ export const createLLMError = (
  * Helper function to convert unknown errors to AppError
  */
 export const toAppError = (error: unknown, context?: string): AppError => {
-  if (error instanceof WorldCrafterError) {
+  if (error instanceof DemiurgeError) {
     return error as AppError;
   }
 

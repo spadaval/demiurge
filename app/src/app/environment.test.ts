@@ -11,12 +11,12 @@ const refusal = {
 test("a read-only refusal has its own message, never 'missing' or a retry", () => {
   const status = describeSaveStatus({ kind: "failed", error: refusal });
   expect(status).toBe(
-    "Not saved: This tab is read-only because WorldCrafter is open in another tab.",
+    "Not saved: This tab is read-only because Demiurge is open in another tab.",
   );
   expect(status).not.toContain("missing");
   expect(status).not.toContain("Retrying");
   expect(describeCommandError(refusal)).toBe(
-    "This tab is read-only because WorldCrafter is open in another tab.",
+    "This tab is read-only because Demiurge is open in another tab.",
   );
 });
 

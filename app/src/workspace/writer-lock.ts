@@ -27,6 +27,7 @@ export function acquireWriterLock(
   return new Promise((resolve) => {
     locks
       .request(
+        // Keeps the old product name, so it still excludes tabs on an older build.
         `worldcrafter:${worldId}:writer`,
         { ifAvailable: true },
         (lock) => {

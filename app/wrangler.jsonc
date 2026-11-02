@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Static assets only: the app is browser-only and routes via the URL hash.
+  // Keeps the old product name: renaming the Worker changes its URL and deploy
+  // wiring, so it waits for the domain (worldcrafter-v61k).
   "name": "worldcrafter",
   "compatibility_date": "2026-10-19",
   "assets": { "directory": "./dist" }

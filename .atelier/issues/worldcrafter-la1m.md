@@ -3,6 +3,9 @@ created_at: "2026-11-02T03:56:08.532951150+00:00"
 id: "worldcrafter-la1m"
 issue_type: "task"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: task/worldcrafter-la1m
 priority: "P2"
 relationships:
   blocks: []
@@ -14,9 +17,9 @@ relationships:
     type: "implements"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Rename the product to Demiurge"
-updated_at: "2026-11-02T03:56:08.532951150+00:00"
+updated_at: "2026-11-02T03:56:22.077875263+00:00"
 ---
 
 ## Goal

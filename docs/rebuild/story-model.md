@@ -4,7 +4,7 @@ Status: accepted (2026-10-29, decision worldcrafter-ok5a). Strategy: `docs/strat
 
 ## Identity
 
-WorldCrafter is a tool for building stories from the frame out. The world and the plot are the structure, and the AI inspects them while they're still exposed. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the structure rather than compiled from it. AI can write as much of the prose as helps. What counts is the story. What we want to avoid is a slop cannon: volume that nobody has judged.
+Demiurge is a tool for building stories from the frame out. The world and the plot are the structure, and the AI inspects them while they're still exposed. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the structure rather than compiled from it. AI can write as much of the prose as helps. What counts is the story. What we want to avoid is a slop cannon: volume that nobody has judged.
 
 It is about stories, not manuscripts. A story that never reaches the page is still a story, and work on its structure is still progress.
 

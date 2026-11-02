@@ -40,7 +40,7 @@ export function describeSaveStatus(status: SaveStatus): string {
     case "read_only":
       return "Read-only";
     case "invalid":
-      return `Not saved: the document has content WorldCrafter can't store (${status.error.reason}${
+      return `Not saved: the document has content Demiurge can't store (${status.error.reason}${
         status.error.kind === "invalid_content"
           ? ` at ${status.error.path}`
           : ""
@@ -65,6 +65,6 @@ export function describeStorageError(
     case "failure":
       return error.message.endsWith(".") ? error.message : `${error.message}.`;
     case "read_only":
-      return "This tab is read-only because WorldCrafter is open in another tab.";
+      return "This tab is read-only because Demiurge is open in another tab.";
   }
 }
