@@ -37,7 +37,7 @@ schema_version: 2
 closed_at: "2026-11-04T23:40:18.167022280+00:00"
 status: "done"
 title: "Sketch a story from a premise and rework it, headless"
-updated_at: "2026-11-04T23:40:18.167022280+00:00"
+updated_at: "2026-11-04T23:43:59.836528346+00:00"
 ---
 
 ## Goal
@@ -74,6 +74,7 @@ Paper walkthrough, 2026-10-30, on the demo world (`app/src/demo/ninefold.ts`), w
 
 - 2026-11-04 [decision] The verdict worldcrafter-i2uz becomes a standalone validation blocked by this increment, and the backlog increments that waited on this increment also wait on the verdict
   Reason: As a child, i2uz (needs-human) kept the reviewed code off master until Sumeet reads the comparison. Reading the packets doesn't need the code unmerged. The verdict still gates what comes next. Reversible; Atelier suggested this shape.
+- 2026-11-04 [note] Correction: disposition record committed in f009f70f for finding worldcrafter-l0q5 was written by the orchestrator under identity code-reviewer, not by the reviewer. The reviewer's own disposition follows in a later commit.
 
 ## Close Reason
 
