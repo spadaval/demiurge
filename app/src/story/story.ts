@@ -125,6 +125,46 @@ export type Story = {
   timeline: Timeline;
 };
 
+const has = (items: readonly { id: string }[], id: string) =>
+  items.some((item) => item.id === id);
+
+/** Whether the record `ref` names is in the story. */
+export function refExists(story: Story, ref: Ref): boolean {
+  switch (ref.kind) {
+    case "actor":
+      return has(story.actors, ref.id);
+    case "drive":
+      return has(story.drives, ref.id);
+    case "fact":
+      return has(story.facts, ref.id);
+    case "readerQuestion":
+      return has(story.readerQuestions, ref.id);
+    case "event":
+      return has(story.timeline.events, ref.id);
+    case "scene":
+      return has(story.scenes, ref.id);
+    case "openQuestion":
+      return has(story.openQuestions, ref.id);
+    case "candidate": {
+      const { questionId, id } = ref;
+      const question = story.openQuestions.find((q) => q.id === questionId);
+      return question !== undefined && has(question.candidates, id);
+    }
+  }
+}
+
+/** Whether the question has a chosen candidate that still exists. */
+export function isAnswered(question: OpenQuestion): boolean {
+  return question.candidates.some(({ id }) => id === question.answer);
+}
+
+/** `drive shut`, or `candidate cargo of open question why`. */
+export function describeRef(ref: Ref): string {
+  return ref.kind === "candidate"
+    ? `candidate ${ref.id} of open question ${ref.questionId}`
+    : `${ref.kind} ${ref.id}`;
+}
+
 export function newStory(premise: string): Story {
   return {
     version: STORY_VERSION,
