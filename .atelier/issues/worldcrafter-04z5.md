@@ -17,7 +17,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Run the blind comparison: tool against plain notes"
-updated_at: "2026-11-04T21:24:17.258220249+00:00"
+updated_at: "2026-11-04T21:55:04.083318263+00:00"
 ---
 
 ## Goal
@@ -49,3 +49,10 @@ Premises, as given by Sumeet on 2026-10-30:
 **Magical girl therapist (held back).** A story about a "magical girl therapist". That phrase is all Sumeet gave, and the premise stays that short, including its ambiguity.
 
 Lore accuracy isn't graded unless it makes the story worse.
+
+## Notes
+
+- 2026-11-04 [decision] Rework diffs are line diffs over the readable text split one sentence per line, the same for both arms
+  Reason: Review finding worldcrafter-vurd: one paragraph per line made each diff repeat nearly the whole story (smoke packets 7.5-8.9k words). Sentence lines keep it a line diff and shown identically for both arms, while showing what changed. Reversible; packet format is for Sumeet to judge at i2uz.
+- 2026-11-04 [decision] Isolation is enforced with bwrap, not only by the prompt; web tools are off for both arms; the frozen tool is read-only and mounted at a neutral path
+  Reason: Review findings worldcrafter-ghcr, 4zks, wrfr, pe4t: under bypassPermissions a prompt alone can't keep the notes arm from the frozen dir or keep sessions out of the repo, the public GitHub repo, or earlier runs' output.
