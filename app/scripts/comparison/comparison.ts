@@ -392,14 +392,14 @@ export function spawnSession(
   prompt: string,
   timeoutSeconds: number,
   io: { cwd: string; stdout: string; stderr: string },
-) {
+): { exited: Promise<number> } {
   const dir = mkdtempSync(join(tmpdir(), "bwrap-args."));
   const file = join(dir, "args");
   writeFileSync(file, `${sandbox.join("\0")}\0`);
   const fd = openSync(file, "r");
   rmSync(dir, { recursive: true });
   try {
-    return Bun.spawn(
+    const proc = Bun.spawn(
       [
         "/usr/bin/timeout",
         "--kill-after=60",
@@ -412,12 +412,20 @@ export function spawnSession(
         prompt,
         ...args,
       ],
-      {
-        cwd: io.cwd,
-        env: {},
-        stdio: ["ignore", Bun.file(io.stdout), Bun.file(io.stderr), fd],
-      },
+      // Output goes through pipes, not straight to the files, so the
+      // session's /proc/<pid>/fd doesn't show where the key lives.
+      { cwd: io.cwd, env: {}, stdio: ["ignore", "pipe", "pipe", fd] },
     );
+    const written = Promise.all([
+      Bun.write(io.stdout, new Response(proc.stdout)),
+      Bun.write(io.stderr, new Response(proc.stderr)),
+    ]);
+    return {
+      exited: proc.exited.then(async (code) => {
+        await written;
+        return code;
+      }),
+    };
   } finally {
     closeSync(fd);
   }
