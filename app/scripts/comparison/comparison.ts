@@ -12,13 +12,16 @@
 
 import { createHash } from "node:crypto";
 import {
+  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -36,7 +39,14 @@ import {
   type Step,
   stepPrompt,
 } from "./prompts";
-import { sandboxArgs, TOOL_MOUNT, tokenExpiresAt } from "./sandbox";
+import {
+  BWRAP,
+  ensureToken,
+  sandboxArgs,
+  TOOL_MOUNT,
+  type TokenSource,
+  tokenExpiresAt,
+} from "./sandbox";
 import { checkTranscript, type TranscriptSummary } from "./transcript";
 
 export const MODEL = "claude-opus-5-5";
@@ -286,46 +296,36 @@ function loadFrozen(frozenDirArg: string): Frozen {
   return frozen;
 }
 
-/**
- * Makes sure the OAuth access token outlives the next step, so a sandboxed
- * session never has to refresh it alongside the host's own sessions. If it
- * doesn't, waits for it to lapse and has the host's claude refresh it.
- */
-function ensureToken(): void {
-  const needed = (STEP_TIMEOUT_SECONDS + 600) * 1000;
-  const fresh = () => tokenExpiresAt() - Date.now() > needed;
-  if (fresh()) return;
-  while (!fresh() && Date.now() < tokenExpiresAt() + 60_000) {
-    console.log("Waiting for the OAuth token to lapse before refreshing it.");
-    Bun.sleepSync(60_000);
-  }
-  if (!fresh()) {
-    const dir = mkdtempSync(join(tmpdir(), "token-refresh."));
-    sh(
-      [
-        "claude",
-        "-p",
-        "Reply with ok.",
-        "--model",
-        MODEL,
-        "--setting-sources",
-        "project,local",
-        "--strict-mcp-config",
-        "--disable-slash-commands",
-        "--tools",
-        "",
-        "--no-session-persistence",
-      ],
-      dir,
-    );
-    must(["rm", "-rf", dir]);
-  }
-  if (!fresh()) {
-    throw new Error(
-      "The OAuth access token would expire during the next step and didn't refresh.",
-    );
-  }
+/** Refreshes the OAuth token with a one-line `claude -p` on the host. */
+function refreshTokenOnHost(): void {
+  const dir = mkdtempSync(join(tmpdir(), "token-refresh."));
+  sh(
+    [
+      "claude",
+      "-p",
+      "Reply with ok.",
+      "--model",
+      MODEL,
+      "--setting-sources",
+      "project,local",
+      "--strict-mcp-config",
+      "--disable-slash-commands",
+      "--tools",
+      "",
+      "--no-session-persistence",
+    ],
+    dir,
+  );
+  must(["rm", "-rf", dir]);
 }
+
+const hostToken: TokenSource = {
+  expiresAt: () => tokenExpiresAt(),
+  now: () => Date.now(),
+  sleep: (ms) => Bun.sleepSync(ms),
+  refresh: refreshTokenOnHost,
+  log: (message) => console.log(message),
+};
 
 // ---------------------------------------------------------------------------
 // One run.
@@ -381,22 +381,46 @@ export function session(arm: Arm, workdir: string, frozenDir: string): Session {
   return { args, sandbox };
 }
 
-/** The whole command line for one session, bounded by `timeout`. */
-export function sessionArgv(
+/**
+ * Starts one session, bounded by `timeout`. bwrap reads its options, which
+ * name host paths, from fd 3 (`--args 3`), so its command line, which a
+ * session could see with `ps`, holds none of them. The options file is
+ * removed as soon as it's open.
+ */
+export function spawnSession(
   { args, sandbox }: Session,
   prompt: string,
   timeoutSeconds: number,
-): string[] {
-  return [
-    "/usr/bin/timeout",
-    "--kill-after=60",
-    String(timeoutSeconds),
-    ...sandbox,
-    "claude",
-    "-p",
-    prompt,
-    ...args,
-  ];
+  io: { cwd: string; stdout: string; stderr: string },
+) {
+  const dir = mkdtempSync(join(tmpdir(), "bwrap-args."));
+  const file = join(dir, "args");
+  writeFileSync(file, `${sandbox.join("\0")}\0`);
+  const fd = openSync(file, "r");
+  rmSync(dir, { recursive: true });
+  try {
+    return Bun.spawn(
+      [
+        "/usr/bin/timeout",
+        "--kill-after=60",
+        String(timeoutSeconds),
+        BWRAP,
+        "--args",
+        "3",
+        "claude",
+        "-p",
+        prompt,
+        ...args,
+      ],
+      {
+        cwd: io.cwd,
+        env: {},
+        stdio: ["ignore", Bun.file(io.stdout), Bun.file(io.stderr), fd],
+      },
+    );
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /** The story as a reader sees it, or why it couldn't be read. */
@@ -478,21 +502,16 @@ export async function runOne(
     });
     writeFileSync(join(stepDir, "prompt.md"), prompt);
     waitForMemory();
-    ensureToken();
+    ensureToken((STEP_TIMEOUT_SECONDS + 600) * 1000, hostToken);
     console.log(
       `[${runId} ${arm} ${premise.id}] step ${step} started ${new Date().toISOString()}`,
     );
     const started = performance.now();
-    const proc = Bun.spawn(
-      sessionArgv({ args, sandbox }, prompt, STEP_TIMEOUT_SECONDS),
-      {
-        cwd: workdir,
-        env: {},
-        stdin: "ignore",
-        stdout: Bun.file(join(stepDir, "transcript.jsonl")),
-        stderr: Bun.file(join(stepDir, "stderr.txt")),
-      },
-    );
+    const proc = spawnSession({ args, sandbox }, prompt, STEP_TIMEOUT_SECONDS, {
+      cwd: workdir,
+      stdout: join(stepDir, "transcript.jsonl"),
+      stderr: join(stepDir, "stderr.txt"),
+    });
     const exitCode = await proc.exited;
     const durationSeconds = Math.round((performance.now() - started) / 1000);
     verifyFrozen(frozenReal, frozen);

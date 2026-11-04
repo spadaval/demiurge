@@ -1,7 +1,8 @@
 /**
  * Runs a session inside bubblewrap, so isolation doesn't rest on the prompt.
  * The session sees system directories read-only, its own run directory
- * read-write, a fresh home holding only the OAuth credentials, and, for tool
+ * read-write, a fresh home holding only the OAuth credentials (read-only:
+ * the host's live sessions depend on that file), and, for tool
  * runs only, the frozen tool read-only at a neutral path. Everything else,
  * this repository, other runs, the key and the rest of /tmp, isn't there.
  */
@@ -46,7 +47,11 @@ export type SandboxInputs = {
   env: Record<string, string>;
 };
 
-/** The argv prefix that runs a command inside the sandbox. */
+/**
+ * bwrap's options for one session. They hold host paths, so they go to
+ * bwrap through `--args <fd>` and never appear on its command line, which a
+ * session could see with `ps`.
+ */
 export function sandboxArgs({
   workdir,
   toolDir,
@@ -58,7 +63,6 @@ export function sandboxArgs({
     ? ["--ro-bind", "/run/systemd/resolve", "/run/systemd/resolve"]
     : [];
   return [
-    BWRAP,
     "--unshare-all",
     "--share-net",
     "--die-with-parent",
@@ -92,8 +96,9 @@ export function sandboxArgs({
     "/home",
     "--dir",
     `${SANDBOX_HOME}/.claude`,
-    // Read-write: a token refresh writes it in place.
-    "--bind",
+    // Read-only: the host's own sessions depend on this file, and
+    // ensureToken refreshes it on the host before each step.
+    "--ro-bind",
     credentialsPath(),
     `${SANDBOX_HOME}/.claude/.credentials.json`,
     "--ro-bind",
@@ -115,4 +120,34 @@ export function sandboxArgs({
       HOME: SANDBOX_HOME,
     }).flatMap(([name, value]) => ["--setenv", name, value]),
   ];
+}
+
+export type TokenSource = {
+  expiresAt: () => number;
+  now: () => number;
+  sleep: (ms: number) => void;
+  /** Refreshes the token on the host, outside any sandbox. */
+  refresh: () => void;
+  log: (message: string) => void;
+};
+
+/**
+ * Makes sure the OAuth access token outlives the next step by `neededMs`, so
+ * a sandboxed session, which can't write the credentials, never needs to
+ * refresh it. If it won't, waits for it to lapse, refreshes it on the host,
+ * and throws if it's still not fresh.
+ */
+export function ensureToken(neededMs: number, token: TokenSource): void {
+  const fresh = () => token.expiresAt() - token.now() > neededMs;
+  if (fresh()) return;
+  while (!fresh() && token.now() < token.expiresAt() + 60_000) {
+    token.log("Waiting for the OAuth token to lapse before refreshing it.");
+    token.sleep(60_000);
+  }
+  if (!fresh()) token.refresh();
+  if (!fresh()) {
+    throw new Error(
+      "The OAuth access token would expire during the next step and didn't refresh.",
+    );
+  }
 }

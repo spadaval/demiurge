@@ -18,6 +18,7 @@ import {
   sentenceLines,
 } from "./packet";
 import { PREMISES, STEPS, stepPrompt } from "./prompts";
+import { ensureToken } from "./sandbox";
 import { checkTranscript } from "./transcript";
 
 const tool = (name: string, input: Record<string, unknown>) =>
@@ -322,5 +323,110 @@ describe("refusals", () => {
       main(["run", out, join(out, "frozen"), "tool", "magical-girl-therapist"]),
     ).rejects.toThrow("only the thukker premise");
     expect(readdirSync(out)).toEqual([]);
+  });
+});
+
+describe("transcript check: network, credentials and processes", () => {
+  const run = "/tmp/story.abc";
+  const allowed = { read: [run], write: [run] };
+  const reported = (command: string) =>
+    checkTranscript(tool("Bash", { command }), run, allowed).outside.map(
+      (f) => f.tool,
+    );
+
+  test.each([
+    "curl -s https://raw.githubusercontent.com/spadaval/demiurge/master/x",
+    "git clone https://github.com/spadaval/demiurge x",
+    "wget -qO- github.com/spadaval/demiurge",
+    "git -C . fetch origin",
+    "ssh host true",
+    "cd x && nc example.com 80",
+    "bun add left-pad",
+    "npm install left-pad",
+    "pip install requests",
+    "npx something",
+    "exec 3<>/dev/tcp/example.com/80",
+    "python3 -c 'import urllib.request'",
+  ])("reports network use: %s", (command) => {
+    expect(reported(command)).toContain("Bash (network)");
+  });
+
+  test.each([
+    "cat ~/.claude/.credentials.json",
+    "find . -name .credentials.json",
+  ])("reports the credentials file: %s", (command) => {
+    expect(reported(command)).toContain("Bash (credentials)");
+  });
+
+  test.each([
+    "ps aux",
+    "pgrep -af bwrap",
+    "cat /proc/*/cmdline",
+    "top -b -n1",
+    "x; ps -ef",
+  ])("reports process listings: %s", (command) => {
+    expect(reported(command)).toContain("Bash (process list)");
+  });
+
+  test("a file tool reading the credentials is reported", () => {
+    const t = checkTranscript(
+      tool("Read", { file_path: "/tmp/story.abc/.credentials.json" }),
+      run,
+      allowed,
+    );
+    expect(t.outside.map((f) => f.detail)).toEqual([
+      "/tmp/story.abc/.credentials.json",
+    ]);
+  });
+
+  test("prose in a heredoc and ordinary tool use aren't reported", () => {
+    for (const command of [
+      "cat >> story.md <<'EOF'\nThey dig into the wreck at the top of the hour.\nEOF",
+      'bun "$STORY_CLI" story.json render',
+      "git add -A && git commit -qm 'She sends a request'",
+    ]) {
+      expect(reported(command)).toEqual([]);
+    }
+  });
+});
+
+describe("ensureToken", () => {
+  const needed = 1000;
+  function fake(expiresAt: number, refreshedTo?: number) {
+    const calls = { refresh: 0, sleeps: 0 };
+    let clock = 0;
+    let expiry = expiresAt;
+    const source = {
+      expiresAt: () => expiry,
+      now: () => clock,
+      sleep: (ms: number) => {
+        calls.sleeps++;
+        clock += ms;
+      },
+      refresh: () => {
+        calls.refresh++;
+        if (refreshedTo !== undefined) expiry = refreshedTo;
+      },
+      log: () => {},
+    };
+    return { source, calls };
+  }
+
+  test("does nothing while the token outlives the step", () => {
+    const { source, calls } = fake(5000);
+    ensureToken(needed, source);
+    expect(calls).toEqual({ refresh: 0, sleeps: 0 });
+  });
+
+  test("waits for a token that's about to expire to lapse, then refreshes it on the host", () => {
+    const { source, calls } = fake(500, 10_000_000);
+    ensureToken(needed, source);
+    expect(calls.refresh).toBe(1);
+    expect(source.now()).toBeGreaterThan(500 + 60_000 - 1);
+  });
+
+  test("throws if the refresh didn't take", () => {
+    const { source } = fake(500);
+    expect(() => ensureToken(needed, source)).toThrow("didn't refresh");
   });
 });

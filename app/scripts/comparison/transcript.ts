@@ -43,6 +43,44 @@ const text = (value: unknown): string | undefined =>
 /** Devices any shell command may name without it being a read elsewhere. */
 const HARMLESS = ["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr"];
 
+const CREDENTIALS = /\.credentials\.json/;
+
+/**
+ * A word in command position: at the start of a line, or after `|`, `;`,
+ * `&`, `(` or a backtick, optionally behind `sudo`, `env` or `exec`. Keeps
+ * prose in heredocs ("dig into", "at the top") from counting.
+ */
+const COMMAND = "(?:^|[|;&(`])\\s*(?:(?:sudo|env|exec|command)\\s+)*";
+
+/**
+ * Shell commands worth reporting whatever paths they name. The sandbox keeps
+ * the network open for the API, so network use is detected, not blocked.
+ */
+const SHELL_PATTERNS: readonly (readonly [string, RegExp])[] = [
+  [
+    "network",
+    new RegExp(
+      [
+        "[a-z][a-z0-9+.-]*://",
+        `${COMMAND}(curl|wget|ssh|scp|sftp|rsync|nc|ncat|netcat|socat|telnet|ftp|dig|nslookup|aria2c|http|https|lynx|w3m|npx|bunx|pipx)\\b`,
+        "\\bgit\\s+(?:-\\S+\\s+(?:[^-\\s]\\S*\\s+)?)*(clone|fetch|pull|push|ls-remote|remote|submodule)\\b",
+        "\\b(pip3?|npm|pnpm|yarn|bun|cargo|gem|apt|apt-get|uv)\\s+(install|add|i|x|download)\\b",
+        "/dev/(tcp|udp)/",
+        "\\b(urllib|http\\.client)\\b|\\bfetch\\(",
+      ].join("|"),
+      "m",
+    ),
+  ],
+  ["credentials", CREDENTIALS],
+  [
+    "process list",
+    new RegExp(
+      `${COMMAND}(ps|pgrep|pkill|pstree|top|htop|pidof)\\b|/proc/`,
+      "m",
+    ),
+  ],
+];
+
 /** Tools that change files; only the run directory may be written. */
 const WRITERS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
@@ -138,7 +176,14 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
       /(^|[\s'"=:(])~(?![\d.,])|\$HOME|\$\{HOME\}|(^|[\s/'"=])\.\.(\/|\s|$)/.test(
         command,
       );
-    return named.length > 0 || vague ? [{ tool: name, detail: command }] : [];
+    const findings: Finding[] =
+      named.length > 0 || vague ? [{ tool: name, detail: command }] : [];
+    for (const [label, pattern] of SHELL_PATTERNS) {
+      if (pattern.test(command)) {
+        findings.push({ tool: `${name} (${label})`, detail: command });
+      }
+    }
+    return findings;
   }
   if (name === "WebFetch" || name === "WebSearch") {
     return [{ tool: name, detail: JSON.stringify(input) }];
@@ -155,7 +200,9 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
   }
   const ok = WRITERS.has(name) ? inside.write : inside.read;
   return paths
-    .filter((path) => path.startsWith("~") || !ok(path))
+    .filter(
+      (path) => path.startsWith("~") || !ok(path) || CREDENTIALS.test(path),
+    )
     .map((path) => ({ tool: name, detail: path }));
 }
 

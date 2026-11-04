@@ -96,8 +96,9 @@ isolation doesn't rest on the prompt. The session sees:
 - an empty tmpfs at `/tmp`, holding only its own run directory, bound
   read-write at the same path;
 - an empty tmpfs at `/home`, with its home at `/home/writer`, holding only
-  `~/.claude/.credentials.json` (bound read-write, so a token refresh is
-  written back). Nothing else from `~/.claude` (memory, `CLAUDE.md`,
+  `~/.claude/.credentials.json`, bound read-only: the T3 server on this host
+  depends on that file, so no session may write it (see Auth below). Nothing
+  else from `~/.claude` (memory, `CLAUDE.md`,
   settings, transcripts) is there, and the host's `~/.claude.json` isn't
   either (claude writes a fresh one into the tmpfs);
 - `claude` and `bun` bound read-only into `/opt/bin`;
@@ -105,17 +106,26 @@ isolation doesn't rest on the prompt. The session sees:
   `FROZEN.json` and the commit are never mounted.
 
 So this repository, `/home/supadava/projects`, the rest of `/tmp`, other
-runs, `key/` and `smoke/` aren't visible. The network is shared (the
-session needs the API); every other namespace is unshared.
+runs, `key/` and `smoke/` aren't visible. Every namespace but the network
+is unshared. The network stays open because the session needs the API, so
+network use from Bash (`curl`, `git clone`, `pip install` and so on) is
+detected by the transcript check, not prevented. bwrap can only share or cut
+the network as a whole; allowing just the API would need a filtering proxy
+or firewall rules in a separate network namespace, which isn't worth
+building here.
+
+bwrap gets its options through `--args 3` from a file that's deleted as soon
+as it's open, so its command line, which a session could see with `ps`,
+names no host paths.
 
 ### Session flags and environment
 
 ```sh
-timeout --kill-after=60 2700 bwrap <the mounts above> --chdir <run dir> --clearenv \
+timeout --kill-after=60 2700 bwrap --args 3 [fd 3: the mounts above, --chdir <run dir>, --clearenv, \
   --setenv PATH /opt/bin:/usr/bin:/bin --setenv HOME /home/writer --setenv USER writer \
   --setenv LANG C.UTF-8 --setenv CLAUDE_CODE_DISABLE_AUTO_MEMORY 1 --setenv DISABLE_AUTOUPDATER 1 \
   --setenv GIT_AUTHOR_NAME Writer --setenv GIT_AUTHOR_EMAIL writer@example.invalid (and committer) \
-  [--setenv STORY_CLI /opt/story-tool/story.js] \
+  [--setenv STORY_CLI /opt/story-tool/story.js]] \
   claude -p "<prompt>" \
   --model claude-opus-5-5 --setting-sources project,local --strict-mcp-config \
   --disable-slash-commands --tools Bash,Read,Edit,Write \
@@ -138,10 +148,10 @@ Each run's exact sandbox and flags are in its `run.json`.
 - Built-in plugins still load. Each step's init event (skills, MCP servers,
   plugins, model) is in its transcript, and `failures.md` lists every
   answering model.
-- Auth: OAuth, through the bound `.credentials.json`. `--bare` would need an
-  API key. So that a sandboxed session never refreshes the token at the same
-  time as the host's own sessions, the harness checks before each step that
-  the access token outlives the step by ten minutes. If it doesn't, the
+- Auth: OAuth, through the read-only `.credentials.json`. `--bare` would
+  need an API key. A session can't write the file, so it must never need to
+  refresh the token: before each step the harness checks that the access
+  token outlives the step by ten minutes. If it doesn't, the
   harness waits for the token to lapse, then runs a one-line `claude -p` on
   the host to refresh it, and stops if it's still not fresh.
 - `bypassPermissions` is acceptable because each session runs unattended in
@@ -160,8 +170,16 @@ call in a step's transcript, it reports:
   allowed directories, or that use `~`, `$HOME` or `..`. A slash-led word
   counts as a path when its first segment exists at `/`, so sed addresses
   like `/## Events/` don't;
-- any web access, though the web tools aren't offered. It reports and never blocks; a reported item may be
-harmless, and the reader of `failures.md` judges.
+- shell commands that use the network: a URL (`scheme://`), a network
+  client in command position (`curl`, `wget`, `ssh`, `nc`, `npx` and so
+  on), `git clone`/`fetch`/`pull`/`push`/`ls-remote`/`remote`, a package
+  install (`pip`, `npm`, `bun add`, ...), `/dev/tcp`, or `urllib`;
+- anything naming `.credentials.json`;
+- process listings (`ps`, `pgrep`, `top`, ...) and anything under `/proc/`;
+- any web tool, though none is offered.
+
+It reports and never blocks; a reported item may be harmless, and the
+reader of `failures.md` judges.
 
 ## Packets
 
