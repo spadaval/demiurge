@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Commands for everything in a story file"
-updated_at: "2026-10-31T02:17:08.908015201+00:00"
+updated_at: "2026-11-04T20:34:52.430361971+00:00"
 ---
 
 ## Goal
