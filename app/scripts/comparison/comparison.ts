@@ -395,6 +395,16 @@ export async function runOne(
     if (expected !== undefined && !existsSync(join(workdir, expected))) {
       problems.push(`${expected} is missing`);
     }
+    if (step === 4) {
+      // The scene is scratch: the story itself should come out unchanged.
+      const story = arm === "tool" ? FILES.toolStory : FILES.notesStory;
+      if (
+        readIf(join(raw, "step-3", "files", story)) !==
+        readIf(join(workdir, story))
+      ) {
+        problems.push(`step 4 changed ${story}`);
+      }
+    }
     const transcript = checkTranscript(
       readFileSync(join(stepDir, "transcript.jsonl"), "utf8"),
       workdir,
@@ -429,6 +439,9 @@ export async function runOne(
       gaps,
     );
   }
+  // Every step's snapshot holds a full copy, history included. Removing the
+  // directory keeps later runs from finding this one in /tmp.
+  must(["rm", "-rf", workdir]);
   return record;
 }
 
@@ -542,10 +555,29 @@ export function writePackets(outDirArg: string): void {
   }
   writeJson(join(outDir, "key", "key.json"), key);
   writeFileSync(join(outDir, "key", "key.md"), `${keyLines.join("\n")}\n`);
-  writeFileSync(join(outDir, "key", "failures.md"), failuresReport(runs));
+  writeFileSync(
+    join(outDir, "key", "failures.md"),
+    failuresReport(outDir, runs),
+  );
 }
 
-function failuresReport(runs: readonly RunRecord[]): string {
+/** Re-checks a step's saved transcript, the source of truth for its reads. */
+function recheck(outDir: string, run: RunRecord, step: Step) {
+  const addDir = run.claudeArgs.indexOf("--add-dir");
+  const frozen = addDir === -1 ? undefined : run.claudeArgs[addDir + 1];
+  const allowed = frozen === undefined ? [run.workdir] : [run.workdir, frozen];
+  const path = join(
+    outDir,
+    "key",
+    "raw",
+    run.runId,
+    `step-${step}`,
+    "transcript.jsonl",
+  );
+  return checkTranscript(readIf(path) ?? "", run.workdir, allowed);
+}
+
+function failuresReport(outDir: string, runs: readonly RunRecord[]): string {
   const lines = ["# Failures and transcript checks", ""];
   const failed = runs.filter((r) => r.failed);
   lines.push(`${failed.length} of ${runs.length} runs failed.`, "");
@@ -555,10 +587,11 @@ function failuresReport(runs: readonly RunRecord[]): string {
       lines.push(
         `- Step ${s.step}: exit ${s.exitCode}, ${s.durationSeconds}s, models ${s.transcript.models.join(", ") || "none"}${s.problems.length > 0 ? `; problems: ${s.problems.join("; ")}` : ""}`,
       );
-      if (s.transcript.outside.length === 0) {
+      const { outside } = recheck(outDir, run, s.step);
+      if (outside.length === 0) {
         lines.push("  - Nothing read outside the allowed directories.");
       }
-      for (const f of s.transcript.outside) {
+      for (const f of outside) {
         lines.push(
           `  - Outside: ${f.tool}: \`${f.detail.replaceAll("`", "'")}\``,
         );

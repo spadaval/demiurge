@@ -5,6 +5,7 @@
  * `$HOME`, `..`), and web access. It reports; it never blocks or retries.
  */
 
+import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 
 export type Finding = { tool: string; detail: string };
@@ -150,8 +151,17 @@ function toolFindings(
     .map((path) => ({ tool: name, detail: path }));
 }
 
-/** Absolute paths a shell command names. */
+/**
+ * Absolute paths a shell command names. A slash-led word counts only if its
+ * first segment exists at the filesystem root (`/home`, `/etc`, `/tmp`), so
+ * sed addresses such as `/## Events/` aren't taken for paths.
+ */
 export function shellPaths(command: string): string[] {
   const found = command.matchAll(/(?:^|[\s'"=:(<>|;&])(\/[^\s'"`;|&<>()]*)/g);
-  return [...found].map((match) => match[1] ?? "").filter((p) => p !== "");
+  return [...found]
+    .map((match) => match[1] ?? "")
+    .filter((path) => {
+      const first = path.split("/")[1] ?? "";
+      return first !== "" && existsSync(`/${first}`);
+    });
 }

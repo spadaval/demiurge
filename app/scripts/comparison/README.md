@@ -31,7 +31,8 @@ repository.
   `packets/`. Not part of the comparison.
 
 Each run works in its own new git repository, `/tmp/story.XXXXXX`, never in
-this repository.
+this repository. The harness removes it when the run ends, so later runs
+can't find it; every step's snapshot in `key/raw/` holds a full copy.
 
 ## Commands
 
@@ -112,8 +113,9 @@ env -i PATH=<bun dir>:<claude dir>:/usr/local/bin:/usr/bin:/bin HOME=$HOME USER=
 
 For every tool call in a step's transcript, it reports file tools on paths
 outside the run directory (plus the frozen directory, for tool runs only),
-shell commands that name an absolute path outside them or use `~`, `$HOME` or
-`..`, and any web access. It reports and never blocks; a reported item may be
+shell commands that name an absolute path outside them (a slash-led word
+counts as a path when its first segment exists at `/`, so sed addresses like
+`/## Events/` don't) or use `~`, `$HOME` or `..`, and any web access. It reports and never blocks; a reported item may be
 harmless, and the reader of `failures.md` judges.
 
 ## Packets
@@ -135,7 +137,9 @@ within a pair the letters A and B are assigned at random.
 ## Failures
 
 A step fails if `claude` exits non-zero or times out, an expected file is
-missing, the readable text can't be produced, or another model answered.
+missing, the readable text can't be produced, another model answered, or
+step 4 changed the story. `failures.md` re-runs the transcript check on the
+saved transcripts, which are the source of truth for what a step read.
 Failed runs are counted in `failures.md` and flagged in the key; they are
 never rerun, and phase B refuses to start over a root that already has a key.
 If phase B stops partway, what to do is the human's call.
