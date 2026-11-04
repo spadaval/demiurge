@@ -19,7 +19,7 @@ bun "$STORY_CLI" story.json init "<premise>"
 bun "$STORY_CLI" story.json <command> [arguments]
 ```
 
-If `STORY_CLI` is unset, ask for it. Read `--help` once before you start; it
+If `STORY_CLI` is unset, stop and report that it is missing. Read `--help` once before you start; it
 is the reference for every command and the ref format (`actor:mara`,
 `candidate:who-wrote/ferryman`).
 

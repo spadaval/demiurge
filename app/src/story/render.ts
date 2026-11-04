@@ -23,6 +23,7 @@ export function renderStory(story: Story): string {
     ),
     section("Scenes, in telling order", sceneLines(story)),
     section("What the reader is waiting to find out", readerLines(story)),
+    section("Decided", decidedLines(story)),
     section("Not decided yet", openQuestionLines(story)),
     section("Where the story pulls against itself", contradictionLines(story)),
   ].filter((text) => text !== "");
@@ -266,27 +267,42 @@ function readerLines(story: Story): string[] {
   });
 }
 
+/** Unanswered questions, each with every candidate answer. */
 function openQuestionLines(story: Story): string[] {
+  return story.openQuestions
+    .filter((q) => !isAnswered(q))
+    .flatMap((q) => {
+      const marker = q.conflict ? " (a contradiction to resolve)" : "";
+      return [
+        `- ${q.question}${marker}${concerns(story, q.about)}`,
+        ...q.candidates.map((c) => {
+          const touches =
+            c.touches.length === 0
+              ? ""
+              : ` Would touch ${c.touches.map((ref) => refName(story, ref)).join("; ")}.`;
+          return `  - ${sentence(named(c.answer))}${touches}`;
+        }),
+      ];
+    });
+}
+
+/** Answered questions with the chosen answer only; rejected ones are left out. */
+function decidedLines(story: Story): string[] {
   return story.openQuestions.flatMap((q) => {
-    const settled = isAnswered(q);
-    const marker =
-      q.conflict && !settled ? " (a contradiction to resolve)" : "";
-    const about =
-      q.about.length === 0
-        ? ""
-        : ` Concerns ${q.about.map((ref) => refName(story, ref)).join("; ")}.`;
-    return [
-      `- ${q.question}${marker}${about}`,
-      ...q.candidates.map((c) => {
-        const chosen = c.id === q.answer ? " (chosen)" : "";
-        const touches =
-          c.touches.length === 0
-            ? ""
-            : ` Would touch ${c.touches.map((ref) => refName(story, ref)).join("; ")}.`;
-        return `  - ${sentence(named(c.answer))}${chosen}${touches}`;
-      }),
-    ];
+    const chosen = q.candidates.find((c) => c.id === q.answer);
+    return chosen === undefined
+      ? []
+      : [
+          `- ${q.question}${concerns(story, q.about)}`,
+          `  - ${sentence(named(chosen.answer))}`,
+        ];
   });
+}
+
+function concerns(story: Story, about: readonly Ref[]): string {
+  return about.length === 0
+    ? ""
+    : ` Concerns ${about.map((ref) => refName(story, ref)).join("; ")}.`;
 }
 
 /** Timeline problems in words; open conflicts are already marked above. */

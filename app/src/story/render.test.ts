@@ -75,6 +75,34 @@ describe("renderStory", () => {
     );
   });
 
+  test("gives an answered question its chosen answer only", () => {
+    const answered = run(
+      sketch,
+      {
+        type: "addCandidate",
+        questionId: "who",
+        id: "keeper",
+        answer: "The old keeper",
+        touches: [],
+      },
+      { type: "answerOpenQuestion", id: "who", candidateId: "keeper" },
+      {
+        type: "addOpenQuestion",
+        id: "why",
+        question: "Why now?",
+        about: [],
+        conflict: false,
+      },
+    );
+    const text = renderStory(answered);
+    expect(text).toContain(
+      "## Decided\n\n- Who wrote it?\n  - The old keeper.\n",
+    );
+    expect(text).toContain("## Not decided yet\n\n- Why now?\n");
+    expect(text).not.toContain("The ferryman");
+    expect(text).not.toContain("chosen");
+  });
+
   test("lists events in story order", () => {
     const text = renderStory(sketch);
     expect(text.indexOf("The wreck")).toBeLessThan(

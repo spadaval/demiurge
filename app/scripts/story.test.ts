@@ -113,6 +113,16 @@ describe("story CLI", () => {
     ok("update-drive", "belong", "--want", "Expose what the tribe carried");
     ok("set-drive-origins", "belong", "exile", "titan");
 
+    // A lone "none" clears a list.
+    ok("set-scene-actors", "docks", "none");
+    expect(saved().scenes[0]?.actors).toEqual([]);
+    ok("set-scene-actors", "docks", "joel");
+    ok("set-drive-origins", "secret", "titan");
+    ok("set-drive-origins", "secret", "none");
+    expect(saved().drives.find(({ id }) => id === "secret")?.origins).toEqual(
+      [],
+    );
+
     // Move an event against the constraint: kept, reported, exit zero.
     const moved = ok("set-position", "exile", "30");
     expect(moved).toContain("Timeline problem");
@@ -147,7 +157,10 @@ describe("story CLI", () => {
 
     const rendered = ok("render");
     expect(rendered).toContain("Expose what the tribe carried");
-    expect(rendered).toContain("He found what the caravans carried. (chosen)");
+    expect(rendered).toContain(
+      "## Decided\n\n- Why did Joel leave? Concerns Joel; Joel leaves the tribe.\n  - He found what the caravans carried.\n",
+    );
+    expect(rendered).not.toContain("He wanted adventure");
     expect(rendered).toMatch(/\(\d+ words\)\n$/);
     for (const id of ["joel", "belong", "exile", "why-leave", "cargo"]) {
       expect(rendered).not.toContain(id);

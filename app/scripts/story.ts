@@ -176,8 +176,10 @@ class Reader {
     return this.parsed.positional.get(name);
   }
 
+  /** The remaining arguments; a lone `none` is an empty list. */
   rest(): string[] {
-    return this.parsed.rest;
+    const { rest } = this.parsed;
+    return rest.length === 1 && rest[0] === "none" ? [] : rest;
   }
 
   text(flag: string): string | undefined {
@@ -598,7 +600,7 @@ export const EDITS: EditSpecs = {
   setSceneActors: {
     group: "Scenes: the telling",
     args: ["id", "actor-id..."],
-    summary: "Set who is in the scene.",
+    summary: "Set who is in the scene (none clears them).",
     example: ["set-scene-actors", "storm", "mara", "ivo"],
     build: (a) => ({
       type: "setSceneActors",
@@ -609,7 +611,7 @@ export const EDITS: EditSpecs = {
   setSceneEvents: {
     group: "Scenes: the telling",
     args: ["id", "event-id..."],
-    summary: "Set the events the scene shows.",
+    summary: "Set the events the scene shows (none clears them).",
     example: ["set-scene-events", "storm", "letter"],
     build: (a) => ({
       type: "setSceneEvents",
@@ -620,7 +622,7 @@ export const EDITS: EditSpecs = {
   setScenePressures: {
     group: "Scenes: the telling",
     args: ["id", "drive-id..."],
-    summary: "Set the drives the scene puts under pressure.",
+    summary: "Set the drives the scene puts under pressure (none clears them).",
     example: ["set-scene-pressures", "storm", "find-sender"],
     build: (a) => ({
       type: "setScenePressures",

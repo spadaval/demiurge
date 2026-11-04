@@ -38,7 +38,7 @@ answers, including at least one you wouldn't have reached first.
 
 Try each candidate against the rest of the story before choosing. Ask what it
 would connect to and what it would change. An answer that touches nothing
-else ("he wanted adventure") is usually weaker than one that ties into
+else ("she was in a bad mood that day") is usually weaker than one that ties into
 several things already there, though an answer can also be too neat. Ask
 whether it brings back something already planted: reincorporation is much of
 what makes a story feel satisfying. Settle a question when a satisfying
