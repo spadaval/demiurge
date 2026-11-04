@@ -600,7 +600,11 @@ function loadRuns(outDir: string): RunRecord[] {
     .map((path) => JSON.parse(readFileSync(path, "utf8")) as RunRecord);
 }
 
-function packetFor(outDir: string, run: RunRecord, label: string): string {
+export function packetFor(
+  outDir: string,
+  run: RunRecord,
+  label: string,
+): string {
   const raw = join(outDir, "key", "raw", run.runId);
   const readable = (step: Step) =>
     readIf(join(raw, `step-${step}`, "readable.md"));
