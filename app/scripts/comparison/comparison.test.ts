@@ -1,5 +1,22 @@
-import { describe, expect, test } from "bun:test";
-import { diffHunks, packetMarkdown, SECTION_TITLES } from "./packet";
+import { afterEach, describe, expect, test } from "bun:test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { freeze, lineDiff, main, phaseB, writePackets } from "./comparison";
+import {
+  diffHunks,
+  packetMarkdown,
+  SECTION_TITLES,
+  sentenceLines,
+} from "./packet";
 import { PREMISES, STEPS, stepPrompt } from "./prompts";
 import { checkTranscript } from "./transcript";
 
@@ -14,7 +31,7 @@ const tool = (name: string, input: Record<string, unknown>) =>
 
 describe("transcript check", () => {
   const run = "/tmp/story.abc";
-  const frozen = "/srv/frozen";
+  const frozen = "/opt/story-tool";
   const jsonl = [
     JSON.stringify({
       type: "system",
@@ -24,7 +41,7 @@ describe("transcript check", () => {
     }),
     tool("Read", { file_path: "story.md" }),
     tool("Read", { file_path: "/tmp/story.abc/scene.md" }),
-    tool("Read", { file_path: "/srv/frozen/story-sketch/SKILL.md" }),
+    tool("Read", { file_path: "/opt/story-tool/story-sketch/SKILL.md" }),
     tool("Read", { file_path: "/home/someone/projects/demiurge/AGENTS.md" }),
     tool("Bash", { command: 'bun "$STORY_CLI" story.json render 2>/dev/null' }),
     tool("Bash", {
@@ -34,6 +51,13 @@ describe("transcript check", () => {
     tool("Bash", { command: "cat ../other/story.md" }),
     tool("Bash", { command: "ls ~/.claude" }),
     tool("Bash", { command: "cat /etc/passwd" }),
+    tool("Bash", { command: "find / -name story.md" }),
+    tool("Bash", { command: "grep -rl Thukker /" }),
+    tool("Bash", { command: "ls /" }),
+    tool("Bash", { command: "cat /*/supadava/x" }),
+    tool("Bash", { command: "cd / && cat home/someone/AGENTS.md" }),
+    tool("Write", { file_path: "/opt/story-tool/story.js", content: "" }),
+    tool("Edit", { file_path: "/tmp/story.abc/story.md" }),
     tool("WebSearch", { query: "Thukker tribe" }),
     "not json",
     JSON.stringify({
@@ -45,24 +69,34 @@ describe("transcript check", () => {
   ].join("\n");
 
   test("reports reads outside the allowed directories, and nothing inside them", () => {
-    const summary = checkTranscript(jsonl, run, [run, frozen]);
+    const summary = checkTranscript(jsonl, run, {
+      read: [run, frozen],
+      write: [run],
+    });
     expect(summary.outside.map((f) => f.detail)).toEqual([
       "/home/someone/projects/demiurge/AGENTS.md",
       "cat ../other/story.md",
       "ls ~/.claude",
       "cat /etc/passwd",
+      "find / -name story.md",
+      "grep -rl Thukker /",
+      "ls /",
+      "cat /*/supadava/x",
+      "cd / && cat home/someone/AGENTS.md",
+      // Readable for a tool run, but never writable.
+      "/opt/story-tool/story.js",
       JSON.stringify({ query: "Thukker tribe" }),
     ]);
     expect(summary.initModel).toBe("claude-opus-5-5");
     expect(summary.models).toEqual(["claude-opus-5-5"]);
     expect(summary.unparsed).toBe(1);
-    expect(summary.toolUses).toBe(10);
+    expect(summary.toolUses).toBe(17);
   });
 
   test("the frozen directory counts as outside for a notes run", () => {
-    const summary = checkTranscript(jsonl, run, [run]);
+    const summary = checkTranscript(jsonl, run, { read: [run], write: [run] });
     expect(summary.outside.map((f) => f.detail)).toContain(
-      "/srv/frozen/story-sketch/SKILL.md",
+      "/opt/story-tool/story-sketch/SKILL.md",
     );
   });
 });
@@ -128,6 +162,159 @@ describe("packet", () => {
     const git =
       "diff --git a/before b/after\nindex 1..2 100644\n--- a/before\n+++ b/after\n@@ -1 +1 @@\n-x\n+y\n";
     expect(diffHunks(git)).toBe("@@ -1 +1 @@\n-x\n+y\n");
+    expect(diffHunks("@@ -2,7 +2,7 @@ A.\n-x\n")).toBe("@@ -2,7 +2,7 @@\n-x\n");
     expect(diffHunks("")).toBe("");
+  });
+});
+
+describe("sentence diff", () => {
+  test("puts each sentence on its own line, the same for any text", () => {
+    expect(sentenceLines('One. Two! Three? "Four." Five\n\nSix.')).toBe(
+      'One.\nTwo!\nThree?\n"Four."\nFive\n\nSix.',
+    );
+  });
+
+  test("a changed sentence shows alone, not its whole paragraph", () => {
+    const para = (middle: string) =>
+      `A. B. C. D. ${middle} E. F. G. H.\n\nNext paragraph.\n`;
+    const diff = lineDiff(para("Old."), para("New."));
+    expect(diff).toContain("-Old.");
+    expect(diff).toContain("+New.");
+    expect(diff).not.toContain("A.");
+    expect(diff).not.toContain("Next paragraph.");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Packets, the key and the harness's refusals, against files on disk.
+
+const temps: string[] = [];
+const temp = () => {
+  const dir = mkdtempSync(join(tmpdir(), "comparison-test."));
+  temps.push(dir);
+  return dir;
+};
+afterEach(() => {
+  for (const dir of temps.splice(0))
+    rmSync(dir, { recursive: true, force: true });
+});
+
+/** A finished run in `<out>/key/raw/<id>`, as runOne leaves it. */
+function fakeRun(out: string, id: string, arm: "tool" | "notes"): void {
+  const raw = join(out, "key", "raw", id);
+  const story = arm === "tool" ? "story.json" : "story.md";
+  for (const step of [1, 2, 3, 4]) {
+    const files = join(raw, `step-${step}`, "files");
+    mkdirSync(files, { recursive: true });
+    writeFileSync(join(files, story), "{}");
+    if (step < 4) {
+      writeFileSync(
+        join(raw, `step-${step}`, "readable.md"),
+        `## Premise\n\nA ship. Version ${step}.\n`,
+      );
+    }
+    if (step >= 2)
+      writeFileSync(join(files, "rework-1-note.md"), "Changed a want.");
+    if (step >= 3)
+      writeFileSync(join(files, "rework-2-note.md"), "Moved an event.");
+    if (step === 4) writeFileSync(join(files, "scene.md"), "She ran.");
+    writeFileSync(join(raw, `step-${step}`, "transcript.jsonl"), "");
+  }
+  writeFileSync(
+    join(raw, "run.json"),
+    JSON.stringify({
+      runId: id,
+      arm,
+      premise: "thukker",
+      workdir: `/tmp/story.${id}`,
+      frozenCommit: "abc",
+      model: "claude-opus-5-5",
+      claudeArgs: arm === "tool" ? ["--add-dir", "/opt/story-tool"] : [],
+      sandbox: [],
+      steps: [],
+      failed: false,
+    }),
+  );
+}
+
+type KeyEntry = { packet: string; runId: string; arm: string };
+
+describe("writePackets", () => {
+  test("pairs one run of each arm, letters at random, with nothing in a packet naming its run or arm", () => {
+    const letterOfTool = new Set<string>();
+    for (let i = 0; i < 8; i++) {
+      const out = temp();
+      const ids = { tool: ["t0001", "t0002"], notes: ["n0001", "n0002"] };
+      for (const id of ids.tool) fakeRun(out, id, "tool");
+      for (const id of ids.notes) fakeRun(out, id, "notes");
+      writePackets(out);
+
+      const names = readdirSync(join(out, "packets")).sort();
+      expect(names).toEqual([
+        "thukker-pair-1-A.md",
+        "thukker-pair-1-B.md",
+        "thukker-pair-2-A.md",
+        "thukker-pair-2-B.md",
+      ]);
+      const key = JSON.parse(
+        readFileSync(join(out, "key", "key.json"), "utf8"),
+      ) as KeyEntry[];
+      for (const pair of [1, 2]) {
+        const arms = key
+          .filter((k) => k.packet.startsWith(`thukker-pair-${pair}-`))
+          .map((k) => k.arm)
+          .sort();
+        expect(arms).toEqual(["notes", "tool"]);
+      }
+      for (const k of key) {
+        if (k.arm === "tool") letterOfTool.add(k.packet.slice(-4, -3));
+      }
+      for (const name of names) {
+        const text = readFileSync(join(out, "packets", name), "utf8");
+        for (const id of [...ids.tool, ...ids.notes]) {
+          expect(text).not.toContain(id);
+        }
+        expect(text).not.toMatch(/\b(tool|notes)\b/i);
+        expect(text).not.toContain("story.json");
+        expect(text).not.toContain("story.md");
+      }
+      expect(() => writePackets(out)).toThrow("packets are written once");
+    }
+    // Over 16 pairs, the tool run landed on both letters.
+    expect([...letterOfTool].sort()).toEqual(["A", "B"]);
+  });
+});
+
+describe("refusals", () => {
+  test("freeze refuses an existing directory and uncommitted changes", () => {
+    const existing = temp();
+    expect(() => freeze(existing)).toThrow("never redone in place");
+
+    const repo = temp();
+    const git = (...args: string[]) =>
+      Bun.spawnSync(["git", ...args], { cwd: repo, stdout: "ignore" });
+    git("init", "-q");
+    mkdirSync(join(repo, "app/scripts"), { recursive: true });
+    writeFileSync(join(repo, "app/scripts/story.ts"), "// v1\n");
+    git("add", ".");
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "v1");
+    writeFileSync(join(repo, "app/scripts/story.ts"), "// v2\n");
+    const target = join(temp(), "frozen");
+    expect(() => freeze(target, repo)).toThrow("Commit these before freezing");
+    expect(existsSync(target)).toBe(false);
+  });
+
+  test("phase-b refuses a root that already has a key", async () => {
+    const root = temp();
+    mkdirSync(join(root, "key"));
+    await expect(phaseB(root)).rejects.toThrow("aren't quietly rerun");
+  });
+
+  test("run refuses the held-back premise", async () => {
+    const out = temp();
+    await expect(
+      main(["run", out, join(out, "frozen"), "tool", "magical-girl-therapist"]),
+    ).rejects.toThrow("only the thukker premise");
+    expect(readdirSync(out)).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@
  *   bun scripts/comparison/comparison.ts phase-b <root>
  */
 
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -18,12 +19,13 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { diffHunks, packetMarkdown } from "./packet";
+import { diffHunks, packetMarkdown, sentenceLines } from "./packet";
 import {
   type Arm,
   FILES,
@@ -34,6 +36,7 @@ import {
   type Step,
   stepPrompt,
 } from "./prompts";
+import { sandboxArgs, TOOL_MOUNT, tokenExpiresAt } from "./sandbox";
 import { checkTranscript, type TranscriptSummary } from "./transcript";
 
 export const MODEL = "claude-opus-5-5";
@@ -43,10 +46,11 @@ export const STEP_TIMEOUT_SECONDS = 2700;
 const MIN_AVAILABLE_GIB = 3;
 /**
  * Built-in tools a session may use. Leaves out subagents (their reads would
- * be harder to check) and anything that reaches other sessions, schedules
- * work, or touches worktrees.
+ * be harder to check), the web (this repository is public, so a search
+ * could find the comparison and the held-back premise), and anything that
+ * reaches other sessions, schedules work, or touches worktrees.
  */
-const TOOLS = "Bash,Read,Edit,Write,ToolSearch,WebFetch,WebSearch";
+const TOOLS = "Bash,Read,Edit,Write";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
@@ -60,14 +64,20 @@ const FROZEN_PATHS = [
   "app/scripts/comparison",
 ];
 
+/**
+ * `FROZEN.json`, beside the tool directory and never mounted into a session.
+ * The tool itself is `<frozen>/tool/`: `story.js` and `story-sketch/`.
+ */
 type Frozen = {
   commit: string;
   frozenAt: string;
   claudeVersion: string;
   model: string;
-  storyCli: string;
-  skillDir: string;
+  /** sha256 of every file under `tool/`, by path relative to it. */
+  sha256: Record<string, string>;
 };
+
+const toolDir = (frozenDir: string) => join(frozenDir, "tool");
 
 type StepRecord = {
   step: Step;
@@ -86,7 +96,7 @@ export type RunRecord = {
   frozenCommit: string;
   model: string;
   claudeArgs: string[];
-  env: Record<string, string>;
+  sandbox: string[];
   steps: StepRecord[];
   failed: boolean;
 };
@@ -160,52 +170,105 @@ function which(name: string): string {
 // ---------------------------------------------------------------------------
 // Freeze.
 
-export function freeze(frozenDir: string): Frozen {
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, encoding: "utf8" })
+    .filter((path) => statSync(join(dir, path)).isFile())
+    .sort();
+}
+
+function hashes(dir: string): Record<string, string> {
+  return Object.fromEntries(
+    filesUnder(dir).map((path) => [
+      path,
+      createHash("sha256")
+        .update(readFileSync(join(dir, path)))
+        .digest("hex"),
+    ]),
+  );
+}
+
+/** Fails loudly if the frozen tool has drifted or become writable. */
+function verifyFrozen(frozenDir: string, frozen: Frozen): void {
+  const dir = toolDir(frozenDir);
+  const now = hashes(dir);
+  const drifted = [
+    ...new Set([...Object.keys(now), ...Object.keys(frozen.sha256)]),
+  ].filter((path) => now[path] !== frozen.sha256[path]);
+  if (drifted.length > 0) {
+    throw new Error(
+      `The frozen tool in ${dir} has changed since the freeze: ${drifted.join(", ")}.`,
+    );
+  }
+  const writable = [".", ...filesUnder(dir)].filter(
+    (path) => (statSync(join(dir, path)).mode & 0o222) !== 0,
+  );
+  if (writable.length > 0) {
+    throw new Error(
+      `The frozen tool in ${dir} is writable: ${writable.join(", ")}.`,
+    );
+  }
+}
+
+/** Uncommitted changes to the tool, skill or harness, as `git status` lists them. */
+function uncommitted(repo: string): string {
+  return must(
+    ["git", "status", "--porcelain", "--", ...FROZEN_PATHS],
+    repo,
+  ).trim();
+}
+
+export function freeze(frozenDir: string, repo = REPO): Frozen {
   const dir = resolve(frozenDir);
   if (existsSync(dir)) {
     throw new Error(`${dir} exists; a freeze is never redone in place.`);
   }
-  const dirty = must(["git", "status", "--porcelain", "--", ...FROZEN_PATHS]);
-  if (dirty.trim() !== "") {
+  const dirty = uncommitted(repo);
+  if (dirty !== "") {
     throw new Error(`Commit these before freezing:\n${dirty}`);
   }
-  const commit = must(["git", "rev-parse", "HEAD"]).trim();
-  const skillDir = join(dir, "story-sketch");
+  const commit = must(["git", "rev-parse", "HEAD"], repo).trim();
+  const tool = toolDir(dir);
+  const skillDir = join(tool, "story-sketch");
   mkdirSync(skillDir, { recursive: true });
   for (const file of ["SKILL.md", "craft.md"]) {
     copyFileSync(
-      join(REPO, ".agents/skills/story-sketch", file),
+      join(repo, ".agents/skills/story-sketch", file),
       join(skillDir, file),
     );
   }
-  const storyCli = join(dir, "story.js");
-  must([
-    "bun",
-    "build",
-    "--target=bun",
-    join(REPO, "app/scripts/story.ts"),
-    "--outfile",
-    storyCli,
-  ]);
+  const storyCli = join(tool, "story.js");
+  must(
+    [
+      "bun",
+      "build",
+      "--target=bun",
+      join(repo, "app/scripts/story.ts"),
+      "--outfile",
+      storyCli,
+    ],
+    repo,
+  );
   must(["bun", storyCli, "--help"], dir);
   const frozen: Frozen = {
     commit,
     frozenAt: new Date().toISOString(),
     claudeVersion: must(["claude", "--version"]).trim(),
     model: MODEL,
-    storyCli,
-    skillDir,
+    sha256: hashes(tool),
   };
   writeJson(join(dir, "FROZEN.json"), frozen);
+  must(["chmod", "-R", "a-w", tool, join(dir, "FROZEN.json")]);
+  verifyFrozen(dir, frozen);
   return frozen;
 }
 
-function loadFrozen(frozenDir: string): Frozen {
-  const dir = realpathSync(resolve(frozenDir));
+function loadFrozen(frozenDirArg: string): Frozen {
+  const dir = realpathSync(resolve(frozenDirArg));
   const frozen = JSON.parse(
     readFileSync(join(dir, "FROZEN.json"), "utf8"),
   ) as Frozen;
-  // The harness running now must be the one that was frozen.
+  // The tool, skill and harness running now must be the ones frozen.
+  const dirty = uncommitted(REPO);
   const changed = sh([
     "git",
     "diff",
@@ -214,39 +277,73 @@ function loadFrozen(frozenDir: string): Frozen {
     "--",
     ...FROZEN_PATHS,
   ]);
-  if (changed.code !== 0) {
+  if (dirty !== "" || changed.code !== 0) {
     throw new Error(
-      `The tool, skill or harness differs from the frozen commit ${frozen.commit}.`,
+      `The tool, skill or harness differs from the frozen commit ${frozen.commit}:\n${dirty}`,
     );
   }
-  return {
-    ...frozen,
-    storyCli: join(dir, "story.js"),
-    skillDir: join(dir, "story-sketch"),
-  };
+  verifyFrozen(dir, frozen);
+  return frozen;
+}
+
+/**
+ * Makes sure the OAuth access token outlives the next step, so a sandboxed
+ * session never has to refresh it alongside the host's own sessions. If it
+ * doesn't, waits for it to lapse and has the host's claude refresh it.
+ */
+function ensureToken(): void {
+  const needed = (STEP_TIMEOUT_SECONDS + 600) * 1000;
+  const fresh = () => tokenExpiresAt() - Date.now() > needed;
+  if (fresh()) return;
+  while (!fresh() && Date.now() < tokenExpiresAt() + 60_000) {
+    console.log("Waiting for the OAuth token to lapse before refreshing it.");
+    Bun.sleepSync(60_000);
+  }
+  if (!fresh()) {
+    const dir = mkdtempSync(join(tmpdir(), "token-refresh."));
+    sh(
+      [
+        "claude",
+        "-p",
+        "Reply with ok.",
+        "--model",
+        MODEL,
+        "--setting-sources",
+        "project,local",
+        "--strict-mcp-config",
+        "--disable-slash-commands",
+        "--tools",
+        "",
+        "--no-session-persistence",
+      ],
+      dir,
+    );
+    must(["rm", "-rf", dir]);
+  }
+  if (!fresh()) {
+    throw new Error(
+      "The OAuth access token would expire during the next step and didn't refresh.",
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
 // One run.
 
-function claudeInvocation(
-  arm: Arm,
-  frozenDir: string,
-  storyCli: string,
-): { args: string[]; env: Record<string, string> } {
-  const path = [
-    ...new Set([dirname(which("bun")), dirname(which("claude"))]),
-    "/usr/local/bin",
-    "/usr/bin",
-    "/bin",
-  ].join(":");
+function claudeInvocation(arm: Arm): {
+  args: string[];
+  env: Record<string, string>;
+} {
   const env: Record<string, string> = {
-    PATH: path,
-    HOME: process.env.HOME ?? "",
-    USER: process.env.USER ?? "",
+    USER: "writer",
     LANG: "C.UTF-8",
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
-    ...(arm === "tool" ? { STORY_CLI: storyCli } : {}),
+    DISABLE_AUTOUPDATER: "1",
+    GIT_AUTHOR_NAME: "Writer",
+    GIT_AUTHOR_EMAIL: "writer@example.invalid",
+    GIT_COMMITTER_NAME: "Writer",
+    GIT_COMMITTER_EMAIL: "writer@example.invalid",
+    ...(arm === "tool" ? { STORY_CLI: `${TOOL_MOUNT}/story.js` } : {}),
   };
   const args = [
     "--model",
@@ -264,9 +361,42 @@ function claudeInvocation(
     "stream-json",
     "--verbose",
     "--include-hook-events",
-    ...(arm === "tool" ? ["--add-dir", frozenDir] : []),
+    ...(arm === "tool" ? ["--add-dir", TOOL_MOUNT] : []),
   ];
   return { args, env };
+}
+
+export type Session = { args: string[]; sandbox: string[] };
+
+/** The sandbox and `claude` flags for a session of one arm. */
+export function session(arm: Arm, workdir: string, frozenDir: string): Session {
+  const { args, env } = claudeInvocation(arm);
+  const sandbox = sandboxArgs({
+    workdir,
+    ...(arm === "tool" ? { toolDir: toolDir(frozenDir) } : {}),
+    claude: which("claude"),
+    bun: process.execPath,
+    env,
+  });
+  return { args, sandbox };
+}
+
+/** The whole command line for one session, bounded by `timeout`. */
+export function sessionArgv(
+  { args, sandbox }: Session,
+  prompt: string,
+  timeoutSeconds: number,
+): string[] {
+  return [
+    "/usr/bin/timeout",
+    "--kill-after=60",
+    String(timeoutSeconds),
+    ...sandbox,
+    "claude",
+    "-p",
+    prompt,
+    ...args,
+  ];
 }
 
 /** The story as a reader sees it, or why it couldn't be read. */
@@ -302,20 +432,25 @@ export async function runOne(
   arm: Arm,
   premise: Premise,
 ): Promise<RunRecord> {
-  const frozen = loadFrozen(frozenDir);
   const frozenReal = realpathSync(resolve(frozenDir));
+  const frozen = loadFrozen(frozenReal);
+  const storyCli = join(toolDir(frozenReal), "story.js");
+  const skillDir = join(toolDir(frozenReal), "story-sketch");
   const runId = randomId();
   const raw = join(resolve(outDir), "key", "raw", runId);
   mkdirSync(raw, { recursive: true });
   const workdir = realpathSync(mkdtempSync("/tmp/story."));
   must(["git", "init", "-q", "-b", "main"], workdir);
-  const craft = readFileSync(join(frozen.skillDir, "craft.md"), "utf8");
+  const craft = readFileSync(join(skillDir, "craft.md"), "utf8");
   const skill =
     arm === "tool"
-      ? readFileSync(join(frozen.skillDir, "SKILL.md"), "utf8")
+      ? readFileSync(join(skillDir, "SKILL.md"), "utf8")
       : undefined;
-  const { args, env } = claudeInvocation(arm, frozenReal, frozen.storyCli);
-  const allowed = arm === "tool" ? [workdir, frozenReal] : [workdir];
+  const { args, sandbox } = session(arm, workdir, frozenReal);
+  const allowed = {
+    read: arm === "tool" ? [workdir, TOOL_MOUNT] : [workdir],
+    write: [workdir],
+  };
   const record: RunRecord = {
     runId,
     arm,
@@ -324,7 +459,7 @@ export async function runOne(
     frozenCommit: frozen.commit,
     model: MODEL,
     claudeArgs: args,
-    env,
+    sandbox,
     steps: [],
     failed: false,
   };
@@ -343,23 +478,16 @@ export async function runOne(
     });
     writeFileSync(join(stepDir, "prompt.md"), prompt);
     waitForMemory();
+    ensureToken();
     console.log(
       `[${runId} ${arm} ${premise.id}] step ${step} started ${new Date().toISOString()}`,
     );
     const started = performance.now();
     const proc = Bun.spawn(
-      [
-        "timeout",
-        "--kill-after=60",
-        String(STEP_TIMEOUT_SECONDS),
-        "claude",
-        "-p",
-        prompt,
-        ...args,
-      ],
+      sessionArgv({ args, sandbox }, prompt, STEP_TIMEOUT_SECONDS),
       {
         cwd: workdir,
-        env,
+        env: {},
         stdin: "ignore",
         stdout: Bun.file(join(stepDir, "transcript.jsonl")),
         stderr: Bun.file(join(stepDir, "stderr.txt")),
@@ -367,6 +495,7 @@ export async function runOne(
     );
     const exitCode = await proc.exited;
     const durationSeconds = Math.round((performance.now() - started) / 1000);
+    verifyFrozen(frozenReal, frozen);
 
     // Snapshot everything the run has saved, history included.
     const files = join(stepDir, "files");
@@ -384,7 +513,7 @@ export async function runOne(
       problems.push(`claude exited ${exitCode}`);
     }
     if (step !== 4) {
-      const readable = readableText(arm, workdir, frozen.storyCli);
+      const readable = readableText(arm, workdir, storyCli);
       if (readable.text !== undefined) {
         writeFileSync(join(stepDir, "readable.md"), readable.text);
       } else {
@@ -448,10 +577,12 @@ export async function runOne(
 // ---------------------------------------------------------------------------
 // Packets and the key.
 
-function lineDiff(before: string, after: string): string {
+export function lineDiff(before: string, after: string): string {
   const dir = mkdtempSync(join(tmpdir(), "packet-diff."));
-  writeFileSync(join(dir, "before"), before);
-  writeFileSync(join(dir, "after"), after);
+  // One sentence per line, so a changed sentence shows alone, not its
+  // whole paragraph.
+  writeFileSync(join(dir, "before"), sentenceLines(before));
+  writeFileSync(join(dir, "after"), sentenceLines(after));
   const r = sh(
     ["git", "diff", "--no-index", "--no-color", "-U3", "before", "after"],
     dir,
@@ -565,7 +696,10 @@ export function writePackets(outDirArg: string): void {
 function recheck(outDir: string, run: RunRecord, step: Step) {
   const addDir = run.claudeArgs.indexOf("--add-dir");
   const frozen = addDir === -1 ? undefined : run.claudeArgs[addDir + 1];
-  const allowed = frozen === undefined ? [run.workdir] : [run.workdir, frozen];
+  const allowed = {
+    read: frozen === undefined ? [run.workdir] : [run.workdir, frozen],
+    write: [run.workdir],
+  };
   const path = join(
     outDir,
     "key",
@@ -611,12 +745,12 @@ function failuresReport(outDir: string, runs: readonly RunRecord[]): string {
 export async function phaseB(rootArg: string): Promise<void> {
   const root = resolve(rootArg);
   const frozenDir = join(root, "frozen");
-  loadFrozen(frozenDir);
   if (existsSync(join(root, "key")) || existsSync(join(root, "packets"))) {
     throw new Error(
       `${root} already has a key or packets; failed runs aren't quietly rerun.`,
     );
   }
+  loadFrozen(frozenDir);
   const slots = shuffle(
     Object.values(PREMISES).flatMap((premise) =>
       (["tool", "tool", "notes", "notes"] as const).map((arm) => ({
@@ -633,7 +767,7 @@ export async function phaseB(rootArg: string): Promise<void> {
 
 // ---------------------------------------------------------------------------
 
-async function main(argv: string[]): Promise<void> {
+export async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
   switch (command) {
     case "freeze": {

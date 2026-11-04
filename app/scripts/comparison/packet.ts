@@ -13,7 +13,7 @@ export type PacketInputs = {
   label: string;
   /** The readable text after steps 1, 2 and 3; undefined if missing. */
   readable: Record<1 | 2 | 3, string | undefined>;
-  /** Line diffs of the readable text: step 1 to 2, and 2 to 3. */
+  /** Line diffs of the readable text, one sentence per line. */
   diffs: Record<2 | 3, string | undefined>;
   notes: Record<2 | 3, string | undefined>;
   scene: string | undefined;
@@ -63,7 +63,7 @@ function rework(
           .map((line) => `> ${line}`)
           .join("\n"),
     "",
-    "The readable text, before and after (`-` removed, `+` added):",
+    "What changed in the readable text, one sentence per line (`-` removed, `+` added):",
     "",
     diff === undefined
       ? MISSING
@@ -102,10 +102,28 @@ export function packetMarkdown(p: PacketInputs): string {
 }
 
 /**
+ * The text with each sentence on its own line, so a line diff shows the
+ * sentences that changed rather than whole paragraphs. Existing line breaks
+ * stay; a line is split after `.`, `!` or `?` (and any closing quotes or
+ * brackets) followed by a space. Both arms go through it the same way.
+ */
+export function sentenceLines(text: string): string {
+  return text
+    .split("\n")
+    .map((line) =>
+      line.replace(/([.!?]["'\u201d\u2019)\]*]*) +(?=\S)/g, "$1\n"),
+    )
+    .join("\n");
+}
+
+/**
  * The hunks of a `git diff --no-index` between two texts, without the header
- * lines that name the files.
+ * lines that name the files or the context git adds to hunk headers.
  */
 export function diffHunks(gitDiff: string): string {
   const start = gitDiff.search(/^@@/m);
-  return start === -1 ? "" : gitDiff.slice(start);
+  // Drop the "function context" git appends to each hunk header.
+  return start === -1
+    ? ""
+    : gitDiff.slice(start).replace(/^(@@ [^@]* @@).*$/gm, "$1");
 }

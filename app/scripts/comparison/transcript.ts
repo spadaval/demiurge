@@ -43,22 +43,30 @@ const text = (value: unknown): string | undefined =>
 /** Devices any shell command may name without it being a read elsewhere. */
 const HARMLESS = ["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr"];
 
-/**
- * Checks one step's transcript. `cwd` is the run directory; `allowed` holds
- * it and, for tool runs only, the frozen directory.
- */
+/** Tools that change files; only the run directory may be written. */
+const WRITERS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+export type Allowed = {
+  /** Where the session may read: its run directory, plus the tool for tool runs. */
+  read: readonly string[];
+  /** Where it may write: its run directory only. */
+  write: readonly string[];
+};
+
+/** Checks one step's transcript. `cwd` is the run directory. */
 export function checkTranscript(
   jsonl: string,
   cwd: string,
-  allowed: readonly string[],
+  allowed: Allowed,
 ): TranscriptSummary {
-  const inside = (path: string) => {
+  const within = (dirs: readonly string[]) => (path: string) => {
     const full = resolve(cwd, path);
-    return allowed.some((dir) => {
+    return dirs.some((dir) => {
       const rel = relative(dir, full);
       return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
     });
   };
+  const inside = { read: within(allowed.read), write: within(allowed.write) };
   const summary: TranscriptSummary = {
     initModel: undefined,
     models: [],
@@ -117,15 +125,13 @@ export function checkTranscript(
   return summary;
 }
 
-function toolFindings(
-  name: string,
-  input: Json,
-  inside: (path: string) => boolean,
-): Finding[] {
+type Inside = Record<"read" | "write", (path: string) => boolean>;
+
+function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
   if (name === "Bash") {
     const command = text(input.command) ?? "";
     const named = shellPaths(command).filter(
-      (path) => !HARMLESS.includes(path) && !inside(path),
+      (path) => !HARMLESS.includes(path) && !inside.read(path),
     );
     const vague =
       /(^|[\s'"=:(])~|\$HOME|\$\{HOME\}|(^|[\s/'"=])\.\.(\/|\s|$)/.test(
@@ -146,15 +152,18 @@ function toolFindings(
   ) {
     paths.push(pattern);
   }
+  const ok = WRITERS.has(name) ? inside.write : inside.read;
   return paths
-    .filter((path) => path.startsWith("~") || !inside(path))
+    .filter((path) => path.startsWith("~") || !ok(path))
     .map((path) => ({ tool: name, detail: path }));
 }
 
 /**
- * Absolute paths a shell command names. A slash-led word counts only if its
- * first segment exists at the filesystem root (`/home`, `/etc`, `/tmp`), so
- * sed addresses such as `/## Events/` aren't taken for paths.
+ * Absolute paths a shell command names. The root itself (`ls /`,
+ * `find / ...`, `cd / && ...`) and any path whose first segment is a
+ * wildcard (a star, `?`, `[` or `{`) always count. Otherwise a slash-led
+ * word counts only if its first segment exists at the filesystem root (`/home`, `/etc`, `/tmp`),
+ * so sed addresses such as `/## Events/` aren't taken for paths.
  */
 export function shellPaths(command: string): string[] {
   const found = command.matchAll(/(?:^|[\s'"=:(<>|;&])(\/[^\s'"`;|&<>()]*)/g);
@@ -162,6 +171,6 @@ export function shellPaths(command: string): string[] {
     .map((match) => match[1] ?? "")
     .filter((path) => {
       const first = path.split("/")[1] ?? "";
-      return first !== "" && existsSync(`/${first}`);
+      return first === "" || /[*?[{]/.test(first) || existsSync(`/${first}`);
     });
 }

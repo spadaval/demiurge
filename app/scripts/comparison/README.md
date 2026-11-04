@@ -7,17 +7,20 @@ only difference. Blinding is partial: format may give an arm away, and
 that's accepted.
 
 Files: `prompts.ts` (the four step prompts and the two premises),
-`comparison.ts` (freeze, runs, snapshots, packets, key), `transcript.ts`
-(the check for reads outside a run), `packet.ts` (the packet layout).
+`comparison.ts` (freeze, runs, snapshots, packets, key), `sandbox.ts` (the
+bubblewrap sandbox each session runs in), `transcript.ts` (the check for
+reads and writes outside a run), `packet.ts` (the packet layout).
 
 ## Layout
 
 The root is `/home/supadava/projects/demiurge-comparison/`, outside this
 repository.
 
-- `frozen/`: the frozen tool. `story.js` (the CLI built with
-  `bun build --target=bun`), `story-sketch/SKILL.md` and `craft.md`, and
-  `FROZEN.json` with the commit, the Claude Code version and the model.
+- `frozen/`: `tool/` holds the frozen tool: `story.js` (the CLI built with
+  `bun build --target=bun`) and `story-sketch/SKILL.md` and `craft.md`.
+  Beside it, `FROZEN.json` holds the commit, the Claude Code version, the
+  model and the sha256 of every file in `tool/`. Freezing makes all of it
+  read-only (`chmod -R a-w`). Only `tool/` is ever mounted into a session.
 - `packets/`: one Markdown file per run, `<premise>-pair-<n>-<A|B>.md`.
   Nothing in here says which arm a packet is.
 - `key/`: open only after the packets are judged. `key.md` and `key.json`
@@ -30,8 +33,8 @@ repository.
 - `smoke/`: the phase A smoke test, with its own `frozen/`, `key/` and
   `packets/`. Not part of the comparison.
 
-Each run works in its own new git repository, `/tmp/story.XXXXXX`, never in
-this repository. The harness removes it when the run ends, so later runs
+Each run works in its own new git repository, `/tmp/story.XXXXXX` on the
+host, never in this repository. The harness removes it when the run ends, so later runs
 can't find it; every step's snapshot in `key/raw/` holds a full copy.
 
 ## Commands
@@ -40,12 +43,13 @@ From `app/`:
 
 ```sh
 # Freeze: refuses if the tool, skill or harness has uncommitted changes, or
-# the directory exists.
+# the directory exists. Run it after the last commit to the harness.
 bun scripts/comparison/comparison.ts freeze /home/supadava/projects/demiurge-comparison/frozen
 
 # Phase B: the eight runs in a random order, one at a time, then the packets.
-# Refuses if the harness differs from the frozen commit, or a key or packets
-# already exist.
+# Refuses if a key or packets already exist, if the tool, skill or harness
+# differs from the frozen commit or has uncommitted changes, or if the frozen
+# tool's hashes don't match.
 bun scripts/comparison/comparison.ts phase-b /home/supadava/projects/demiurge-comparison
 
 # Smoke tests: one run (Thukker only), then packets for what's in <out>/key.
@@ -69,53 +73,93 @@ the run has saved so far:
    the story.
 
 Both arms get `craft.md` inlined. The tool arm also gets `SKILL.md` inlined,
-`STORY_CLI` pointing at the frozen `story.js`, and `--add-dir` for the frozen
-directory; the notes arm gets none of these, and keeps the story in
-`story.md`. Sessions are told to work only in their directory and not to name
-tools or commands in anything written for the reader.
+the frozen tool mounted read-only at `/opt/story-tool`, `STORY_CLI` set to
+`/opt/story-tool/story.js`, and `--add-dir /opt/story-tool`. The notes arm
+gets none of these, and keeps the story in `story.md`. Sessions are told to
+work only in their directory and not to name tools or commands in anything
+written for the reader; the sandbox enforces the first.
 
-Steps run one at a time; before each, the harness waits until at least 3 GiB
-of memory is available. Each step is bounded by `timeout 2700` (there's no
+Steps run one at a time. Before each, the harness waits until at least 3 GiB
+of memory is available, and makes sure the OAuth access token outlives the
+step (see Auth below). After each, it checks the frozen tool's hashes and
+stops the whole run with an error if they've changed. Each step is bounded by `timeout 2700` (there's no
 `--max-turns` in this Claude Code). A run stops early only if step 1 leaves no
 readable story.
+
+### The sandbox
+
+Each session runs under bubblewrap (`/usr/bin/bwrap`, `sandbox.ts`), so the
+isolation doesn't rest on the prompt. The session sees:
+
+- `/usr` and `/etc` read-only (with the `/bin`, `/lib`, `/lib64`, `/sbin`
+  links), `/run/systemd/resolve` for DNS, and its own `/proc` and `/dev`;
+- an empty tmpfs at `/tmp`, holding only its own run directory, bound
+  read-write at the same path;
+- an empty tmpfs at `/home`, with its home at `/home/writer`, holding only
+  `~/.claude/.credentials.json` (bound read-write, so a token refresh is
+  written back). Nothing else from `~/.claude` (memory, `CLAUDE.md`,
+  settings, transcripts) is there, and there's no `~/.claude.json`;
+- `claude` and `bun` bound read-only into `/opt/bin`;
+- for tool runs only, the frozen `tool/` read-only at `/opt/story-tool`.
+  `FROZEN.json` and the commit are never mounted.
+
+So this repository, `/home/supadava/projects`, the rest of `/tmp`, other
+runs, `key/` and `smoke/` aren't visible. The network is shared (the
+session needs the API); every other namespace is unshared.
 
 ### Session flags and environment
 
 ```sh
-env -i PATH=<bun dir>:<claude dir>:/usr/local/bin:/usr/bin:/bin HOME=$HOME USER=$USER \
-  LANG=C.UTF-8 CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 [STORY_CLI=<frozen>/story.js] \
-  timeout --kill-after=60 2700 claude -p "<prompt>" \
+timeout --kill-after=60 2700 bwrap <the mounts above> --chdir <run dir> --clearenv \
+  --setenv PATH /opt/bin:/usr/bin:/bin --setenv HOME /home/writer --setenv USER writer \
+  --setenv LANG C.UTF-8 --setenv CLAUDE_CODE_DISABLE_AUTO_MEMORY 1 --setenv DISABLE_AUTOUPDATER 1 \
+  --setenv GIT_AUTHOR_NAME Writer --setenv GIT_AUTHOR_EMAIL writer@example.invalid (and committer) \
+  [--setenv STORY_CLI /opt/story-tool/story.js] \
+  claude -p "<prompt>" \
   --model claude-opus-5-5 --setting-sources project,local --strict-mcp-config \
-  --disable-slash-commands --tools Bash,Read,Edit,Write,ToolSearch,WebFetch,WebSearch \
+  --disable-slash-commands --tools Bash,Read,Edit,Write \
   --permission-mode bypassPermissions --no-session-persistence \
-  --output-format stream-json --verbose --include-hook-events [--add-dir <frozen>]
+  --output-format stream-json --verbose --include-hook-events [--add-dir /opt/story-tool]
 ```
 
-- `--setting-sources project,local` leaves out user settings, so user hooks
-  and `~/.claude/CLAUDE.md` don't load; the run directory has no project or
-  local settings. `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` turns off auto memory.
-- `--disable-slash-commands` turns off user skills and commands;
-  `--strict-mcp-config` with no `--mcp-config` loads no MCP servers.
-- `--tools` limits the session to the listed built-ins: no subagents (whose
-  reads would be harder to check) and nothing that messages other sessions,
-  schedules work or makes worktrees. Web access is allowed for both arms and
-  reported by the transcript check.
-- `env -i` keeps the harness's own environment out.
-- Built-in plugins still load, and git uses the user's identity. Each step's
-  init event (skills, MCP servers, plugins, model) is in its transcript, and
-  `failures.md` lists every answering model.
-- Auth: OAuth from `~/.claude` (`HOME` is passed). `--bare` would need an API
-  key.
+Each run's exact sandbox and flags are in its `run.json`.
+
+- The fresh home keeps user settings, hooks, `CLAUDE.md`, memory, skills and
+  MCP configuration out. `--setting-sources project,local`,
+  `--disable-slash-commands`, `--strict-mcp-config` and
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` keep them out as well.
+- `--tools` limits the session to four built-ins. Left out: subagents, whose
+  reads would be harder to check; the web, because this repository is public
+  and a search could find the comparison and the held-back premise; and
+  anything that messages other sessions, schedules work or makes worktrees.
+- `--clearenv` keeps the harness's environment out. Commits are made as a
+  neutral "Writer".
+- Built-in plugins still load. Each step's init event (skills, MCP servers,
+  plugins, model) is in its transcript, and `failures.md` lists every
+  answering model.
+- Auth: OAuth, through the bound `.credentials.json`. `--bare` would need an
+  API key. So that a sandboxed session never refreshes the token at the same
+  time as the host's own sessions, the harness checks before each step that
+  the access token outlives the step by ten minutes. If it doesn't, the
+  harness waits for the token to lapse, then runs a one-line `claude -p` on
+  the host to refresh it, and stops if it's still not fresh.
 - `bypassPermissions` is acceptable because each session runs unattended in
-  its own throwaway repository.
+  a sandbox over its own throwaway repository.
 
 ### The transcript check
 
-For every tool call in a step's transcript, it reports file tools on paths
-outside the run directory (plus the frozen directory, for tool runs only),
-shell commands that name an absolute path outside them (a slash-led word
-counts as a path when its first segment exists at `/`, so sed addresses like
-`/## Events/` don't) or use `~`, `$HOME` or `..`, and any web access. It reports and never blocks; a reported item may be
+The sandbox prevents access; the check records any attempt. For every tool
+call in a step's transcript, it reports:
+
+- file reads outside the run directory (plus `/opt/story-tool`, for tool
+  runs only);
+- `Edit` or `Write` anywhere outside the run directory;
+- shell commands that name the root (`ls /`, `find / ...`, `cd / && ...`), a
+  path whose first segment is a wildcard, or an absolute path outside the
+  allowed directories, or that use `~`, `$HOME` or `..`. A slash-led word
+  counts as a path when its first segment exists at `/`, so sed addresses
+  like `/## Events/` don't;
+- any web access, though the web tools aren't offered. It reports and never blocks; a reported item may be
 harmless, and the reader of `failures.md` judges.
 
 ## Packets
@@ -127,6 +171,9 @@ Each packet, the same shape for both arms:
    pushed down two levels, and a word count.
 2. First rework: the session's note, then a line diff (`git diff --no-index
    -U3`) of the readable text from step 1 to step 2, and the length after.
+   Before diffing, both arms' text is put one sentence per line, so the diff
+   shows the sentences that changed with a little context, not whole
+   paragraphs.
 3. Second rework: the same, step 2 to step 3.
 4. The scene, `scene.md` as written, with a word count.
 
