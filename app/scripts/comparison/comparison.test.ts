@@ -48,6 +48,9 @@ describe("transcript check", () => {
       command:
         "bun $STORY_CLI story.json render | sed -n '/## People/,/## Events/p'",
     }),
+    tool("Bash", {
+      command: "bun $STORY_CLI story.json show x | sed -n 's/^touches: //p'",
+    }),
     tool("Bash", { command: "cat ../other/story.md" }),
     tool("Bash", { command: "ls ~/.claude" }),
     tool("Bash", { command: "cat /etc/passwd" }),
@@ -90,7 +93,7 @@ describe("transcript check", () => {
     expect(summary.initModel).toBe("claude-opus-5-5");
     expect(summary.models).toEqual(["claude-opus-5-5"]);
     expect(summary.unparsed).toBe(1);
-    expect(summary.toolUses).toBe(17);
+    expect(summary.toolUses).toBe(18);
   });
 
   test("the frozen directory counts as outside for a notes run", () => {

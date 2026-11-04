@@ -98,7 +98,8 @@ isolation doesn't rest on the prompt. The session sees:
 - an empty tmpfs at `/home`, with its home at `/home/writer`, holding only
   `~/.claude/.credentials.json` (bound read-write, so a token refresh is
   written back). Nothing else from `~/.claude` (memory, `CLAUDE.md`,
-  settings, transcripts) is there, and there's no `~/.claude.json`;
+  settings, transcripts) is there, and the host's `~/.claude.json` isn't
+  either (claude writes a fresh one into the tmpfs);
 - `claude` and `bun` bound read-only into `/opt/bin`;
 - for tool runs only, the frozen `tool/` read-only at `/opt/story-tool`.
   `FROZEN.json` and the commit are never mounted.

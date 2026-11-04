@@ -170,7 +170,8 @@ export function shellPaths(command: string): string[] {
   return [...found]
     .map((match) => match[1] ?? "")
     .filter((path) => {
-      const first = path.split("/")[1] ?? "";
-      return first === "" || /[*?[{]/.test(first) || existsSync(`/${first}`);
+      if (/^\/+$/.test(path)) return true;
+      const first = path.split("/").find((part) => part !== "") ?? "";
+      return /[*?[{]/.test(first) || existsSync(`/${first}`);
     });
 }
