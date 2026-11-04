@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-04T20:54:38.011901321+00:00"
+status: "done"
 title: "See what a candidate or a change touches, and what the story lacks"
-updated_at: "2026-11-04T20:46:22.864965696+00:00"
+updated_at: "2026-11-04T20:54:38.011901321+00:00"
 ---
 
 ## Goal
@@ -44,3 +45,17 @@ Records and commands from worldcrafter-8tbh and worldcrafter-cly1. Gaps are a fi
 ## Notes
 
 - 2026-11-04 [note] Also add, from review finding worldcrafter-7eyd on cly1: in app/src/story/commands.test.ts's remove-scene test, remove a scene used as a reader question's opensAt and assert opensAt is cleared. Optionally a constrain test with an unknown 'a'.
+
+## Close Reason
+
+Delivered `whatThisTouches` (app/src/story/touches.ts), `storyGaps` (gaps.ts, 13 rules in `GAP_RULES`), `storyContradictions` (contradictions.ts), with tests; also the deferred cly1 test (finding worldcrafter-7eyd: removing an opensAt scene clears it). `bun run check` 756 pass (evidence worldcrafter-8rau). Scenario test's five "fails if" conditions each mutation-checked.
+
+API for p4zf: `whatThisTouches(story, ref): Result<Touches, UnknownRef>` with `{subject, label, direct, further}`, each a `Record<TouchKind, Touch[]>` (`TOUCH_KINDS` order), `Touch = {ref, label, how: string[]}`; `storyGaps(story): Gap[]` `{kind, ref|null, message}` worded with "yet"/"so far"; `storyContradictions(story)` timeline or openQuestion entries with messages; `refLabel`. Refs are the existing `Ref` objects; `refExists`/`describeRef`/`isAnswered` moved to story.ts. No string ref format yet (p4zf picks one).
+
+Readings of the Done when:
+- A candidate's "one step on" is the direct links of each record it touches; the drive/scene/event carry rules aren't applied on top (that would be two steps).
+- "A fact nothing refers to" is reported only when the fact is also about nothing that exists; read literally nearly every fact would be reported. One-line change if wanted.
+- Event references: drive origins, scene depicts, constraints, refs from facts/open questions/candidates. Positions, placements and correspondences don't count.
+- `direct` also lists a candidate's own question and an open question's candidates.
+- Timeline problems computed with no scenes, as in applyStoryCommand.
+Skipped: the optional constrain-with-unknown-`a` test.
