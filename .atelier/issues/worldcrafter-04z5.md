@@ -22,7 +22,7 @@ updated_at: "2026-11-04T21:55:04.083318263+00:00"
 
 ## Goal
 
-Produce what the human needs to judge, as blind as is practical, whether the model beats plain notes. Both arms get the same craft advice, so the tool is the only difference.
+Produce what the judging panel needs to judge (decision worldcrafter-zybl), as blind as is practical, whether the model beats plain notes. Both arms get the same craft advice, so the tool is the only difference.
 
 ## Done when
 
@@ -38,7 +38,7 @@ Produce what the human needs to judge, as blind as is practical, whether the mod
 
 ## Scope
 
-The agent running this doesn't judge the packets or tell the human which it prefers. Thukker is used to build the tool, so its results are labelled as tuned-on for the verdict; the magical girl therapist premise isn't used by anyone until the tool is frozen.
+The agent running this doesn't judge the packets or tell the judges which it prefers. Thukker is used to build the tool, so its results are labelled as tuned-on for the verdict; the magical girl therapist premise isn't used by anyone until the tool is frozen.
 
 ## Context
 

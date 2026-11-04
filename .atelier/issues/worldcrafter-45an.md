@@ -24,7 +24,7 @@ schema_version: 2
 closed_at: "2026-10-31T04:44:50.173775401+00:00"
 status: "done"
 title: "No stance on AI writing: the best story decides, and the form follows"
-updated_at: "2026-10-31T05:13:40.640876095+00:00"
+updated_at: "2026-11-04T23:08:00.444132447+00:00"
 ---
 
 ## Question
@@ -48,6 +48,7 @@ Consequences: the web app (decision worldcrafter-gcox) is the current plan and n
 - 2026-10-31 [note] 2026-10-31: in Sumeet's words: 'We want to use AI to write the story.' The no-position stance is about AI writing stories in general.
 - 2026-10-31 [note] 2026-10-31: Sumeet clarified: we still want AI 'to assist and enhance the creative process', and we use it because we think it's the best way to create compelling stories. The reason is the point, not neutrality.
 - 2026-10-31 [note] 2026-10-31: Sumeet clarified: 'no position' meant no moral position: AI-written work isn't inherently good or bad. The claim that a story needs to be co-authored to be good is their hunch, a reasonable but unverified belief.
+- 2026-11-04 [note] 2026-11-04: the consequence that changing the web-app plan comes back to the human is superseded by decision worldcrafter-zybl: it's an agent decision, independently reviewed, that Sumeet reviews afterwards.
 
 ## Close Reason
 

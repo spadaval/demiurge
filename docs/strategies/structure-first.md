@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-10-31: we use AI because we think it's the best way to create compelling stories; AI-written work isn't inherently good or bad; co-authoring is an unverified hunch; the form follows the results (Sumeet)"
+last_changed: "2026-11-04: verdicts come from an independent panel of agent judges, not from Sumeet; Sumeet keeps only irreversible or public calls and reviews the rest after the fact (decision worldcrafter-zybl, Sumeet's direction)"
 ---
 
 # Why
@@ -73,8 +73,8 @@ of this plan should change.
   on from there, and what the story lacks, such as a character with no drive or a
   drive nothing opposes. Shown by a comparison read as blind as is practical: fresh
   sessions take the same premise and the same craft advice, with the tool and with
-  plain notes, and the human reads the results without being told which is which
-  and says which they'd rather keep developing. Format may give an arm away, which
+  plain notes, and a judging panel (see Verdicts) reads the results without being
+  told which is which and says which they'd rather keep developing. Format may give an arm away, which
   is accepted. One premise is held back until the tool is frozen.
 - rework: From any character, event, drive, scene or open question, the team can
   see everything connected to it and go there. They can shift an event, change a
@@ -83,12 +83,14 @@ of this plan should change.
   and a contradiction stays until the team resolves it.
   Shown by scenario tests over a fixture story and by the comparison, where fresh
   sessions see only the saved sketch, change a motivation, shift an event and draft
-  a scene those changes affect, and the human judges how well each followed through.
+  a scene those changes affect, and the judging panel judges how well each
+  followed through.
 - on-screen: A writer can do `sketch` and `rework` on a screen, jumping between
   levels and sides without losing their place. This is the part of fluidity a
-  conversation can't test, and a bet like any other: it comes out if the human
-  decides, from the verdicts, that the best stories don't need a screen. Shown by component tests and by the writer trying it on
-  a real story.
+  conversation can't test, and a bet like any other: it comes out if a judging
+  panel decides, from the verdicts, that the best stories don't need a screen.
+  Shown by component tests and by an agent validator using it in a browser on a
+  real story, judged by the panel.
 - coarse-to-fine: A story can exist as a premise alone and be refined into
   books and chapters, scenes and beats, in any order: a scene can have a summary
   and beats before it has a place in a chapter. Outline and weave-grid views are
@@ -126,13 +128,14 @@ of this plan should change.
 # Shape
 
 - **Value decides.** Each increment leaves the team something to try on a real
-  story, and tests the biggest open bet first. It ends with the human's verdict:
-  keep, change or drop. Tests show a thing works; only use shows it is worth
-  having. Later increments are bets, not commitments.
+  story, and tests the biggest open bet first. It ends with a judging panel's
+  verdict (see Verdicts): keep, change or drop. Tests show a thing works; only use
+  shows it is worth having. Later increments are bets, not commitments.
 - **The user is a team.** A human and an agent work on the same model, so it has
   to be readable by both. Building for the agent side first is fine, and an agent
-  can drive alone and reason beyond the model. The human's judgment settles whether
-  the result is any good.
+  can drive alone and reason beyond the model. An independent panel's judgment
+  settles whether the result is any good, and Sumeet can overturn it when he
+  reviews it after the fact.
 - **Headless first.** The first version is a CLI and a skill, used in an ordinary
   agent session, over one readable file per story in git. Screens, the storage
   collections and their upgrades wait for a verdict that supports them. This is a
@@ -176,11 +179,38 @@ of this plan should change.
 - **The unreliable narrator is out of scope.** What the telling states is true
   in the world. Characters can still believe false things.
 - **When qualities conflict:**
-  1. The quality of the story, as the human judges it.
+  1. The quality of the story, as the judging panel judges it, and as Sumeet
+     judges it whenever he reviews.
   2. The writer's visibility into and control over the AI.
   3. Leverage: structural changes are cheap and propagate.
   4. AI capability.
   5. Feature speed.
+
+# Verdicts
+
+Each increment ends with keep, change or drop, decided by a judging panel of
+agents (decision worldcrafter-zybl). Sumeet isn't the gate; he can read the
+reports after the fact and overturn a verdict.
+
+- **Independent.** Judges are fresh agents that didn't build the work, and see
+  neither the authors' reasoning nor handoffs, only the material under judgment
+  and the rubric.
+- **Blind.** Where the work compares arms, judges aren't told which is which until
+  each has recorded a blind report. Then the key is opened to them for the
+  keep, change or drop call.
+- **At least three judges, on at least two models**: for example Opus, Sonnet and
+  Fable. They judge independently and don't see each other's reports.
+- **A rubric fixed before anyone reads.** It is written and committed before the
+  judges see the material, says what to judge and how to weigh it, and doesn't
+  change once judging starts.
+- **Each judge records** keep, change or drop with reasons, and answers every
+  rubric question.
+- **Aggregation.** The verdict is the call at least two judges make. If all three
+  differ, the verdict is change, because it keeps the work while naming what to
+  fix, and the dissent is recorded. "Drop" is a useful result.
+- **Recorded.** Each judge's report and the verdict go into Atelier as evidence on
+  the verdict item, which closes with the verdict and the next step.
+- The next increment is chosen from the verdict and the changes the judges name.
 
 # Scope
 
@@ -221,29 +251,44 @@ The orchestrator may change, without asking:
 - libraries within the Shape
 - how the views look and are laid out
 
-These must come back to the human:
+These are decided by agents, each recorded as an Atelier decision and
+independently reviewed by an agent that didn't make it before the work it
+governs proceeds. Sumeet reviews them after the fact and can reverse any of them
+(decision worldcrafter-zybl):
 
 - the success criteria
 - the primitives and lenses, and how scenes relate to documents
 - adding a backend service
 - reopening decisions worldcrafter-ok5a, worldcrafter-gcox or the platform
-- keep, change or drop after trying an increment
-- the premises and what the comparison asks the human to judge
+- keep, change or drop after trying an increment, by a judging panel (Verdicts)
+- the premises, and the rubric the judging panel uses
+
+Only these wait for Sumeet, because they're irreversible or public:
+
+- pushing to the remote, deploying or publishing anything
+- spending money, such as buying a domain
+- the product's name and anything published under it
+- anything destructive that git history can't undo
 
 # Risks and Unknowns
 
 - That a story needs to be co-authored by a human and an agent to be good is a
   hunch. The first comparison doesn't test it: an agent writes alone in both arms
-  and the human only judges the results. It tests the model, not co-authoring. We
+  and the judging panel only judges the results. It tests the model, not co-authoring. We
   won't test the hunch directly: if the Claude-first headless approach works fine,
   that's the answer (Sumeet).
 - A capable agent can make a weak model look fine by working around it. The
   plain-notes arm of the comparison and a log of what the model couldn't hold are
   the check.
-- The comparison is a few runs on two premises, read by one person, and format can
-  give away which is which. It can show the tool is clearly better or clearly not,
+- The comparison is a few runs on two premises, read by three agent judges, and
+  format can give away which is which. It can show the tool is clearly better or clearly not,
   but not a small difference. It also can't show how working on a screen feels,
   which `on-screen` would have to, if it stays.
+- The judges are models too, mostly from the same family as the authoring
+  sessions, and may prefer what an agent writes or miss what a reader would feel.
+  One judge on a different model, a rubric fixed before reading, and Sumeet's
+  after-the-fact review are the check; disagreement among judges is reported, not
+  hidden.
 - The gap reports are a first guess at what a story needs to be interesting, and
   are the part most likely to be wrong. Runs on the premises should change them.
 - The story file isn't how the app stores things. A keep verdict has to map it onto

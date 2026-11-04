@@ -46,7 +46,7 @@ An agent in an ordinary session, using a CLI and a skill, can take a one-paragra
 ## Done when
 
 - Delivers `sketch` and the change-a-drive, change-its-origin and shift-an-event parts of `rework`, headless. Scenes have no place in story time here, so a shift can conflict with another event but not with a scene. Each child's proof passes, and the increment is independently reviewed.
-- The blind comparison is ready for the human to read (worldcrafter-04z5). The human's keep, change or drop is worldcrafter-i2uz, a standalone validation that follows this increment; agents can't pass it, and the mission's next increment waits on it.
+- The blind comparison is ready for the judging panel to read (worldcrafter-04z5). Its keep, change or drop is worldcrafter-i2uz, a standalone validation decided by a panel of agent judges (decision worldcrafter-zybl), and the mission's next increment waits on it.
 
 ## Unknowns
 

@@ -42,7 +42,7 @@ A story can be a premise alone and grow in any order into books, chapters, scene
 
 ## Done when
 
-Provisional: delivers `coarse-to-fine`. Ends with the writer's keep, change or drop. The children hold reviewed detail from the earlier plan; re-plan them against what the earlier trials teach before starting, including that a scene may have beats and marks without a place in the outline, and that drive editing already exists from the first increment.
+Provisional: delivers `coarse-to-fine`. Ends with the judging panel's keep, change or drop (decision worldcrafter-zybl). The children hold reviewed detail from the earlier plan; re-plan them against what the earlier trials teach before starting, including that a scene may have beats and marks without a place in the outline, and that drive editing already exists from the first increment.
 
 ## Unknowns
 

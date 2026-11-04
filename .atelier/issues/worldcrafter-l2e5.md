@@ -34,7 +34,7 @@ The writer can move scenes between chapters, read the assembled manuscript, and 
 
 ## Done when
 
-Provisional: delivers `arrangement`, with a manuscript view and a way to move scenes in the app. Ends with the writer's keep, change or drop. The child holds reviewed detail from the earlier plan; re-plan it before starting.
+Provisional: delivers `arrangement`, with a manuscript view and a way to move scenes in the app. Ends with the judging panel's keep, change or drop (decision worldcrafter-zybl). The child holds reviewed detail from the earlier plan; re-plan it before starting.
 
 ## Unknowns
 

@@ -32,7 +32,7 @@ The writer can name and curate threads over the primitives, see them as weave-gr
 
 ## Done when
 
-Provisional: delivers `lenses`. Threads appear as weave-grid rows; an arc view traces one actor's drives and fact changes across scenes. AI proposals are inferred data with provenance, and the writer's corrections win, shown by scenario tests against a stub server. Ends with the writer's keep, change or drop.
+Provisional: delivers `lenses`. Threads appear as weave-grid rows; an arc view traces one actor's drives and fact changes across scenes. AI proposals are inferred data with provenance, and the writer's corrections win, shown by scenario tests against a stub server. Ends with the judging panel's keep, change or drop (decision worldcrafter-zybl).
 
 ## Unknowns
 

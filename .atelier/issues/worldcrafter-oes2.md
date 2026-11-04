@@ -32,7 +32,7 @@ The app points out structural problems while they are cheap to fix, without the 
 
 ## Done when
 
-Provisional: delivers `inspection`. A question ledger, a collision map and a scene check are computed from the model and shown in the app, proven by tests over fixture stories with planted problems. The checks report when asked and never block. Ends with the writer's keep, change or drop.
+Provisional: delivers `inspection`. A question ledger, a collision map and a scene check are computed from the model and shown in the app, proven by tests over fixture stories with planted problems. The checks report when asked and never block. Ends with the judging panel's keep, change or drop (decision worldcrafter-zybl).
 
 ## Unknowns
 
