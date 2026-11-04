@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Run the blind comparison: tool against plain notes"
-updated_at: "2026-10-31T03:23:43.455479014+00:00"
+updated_at: "2026-11-04T21:24:17.258220249+00:00"
 ---
 
 ## Goal
