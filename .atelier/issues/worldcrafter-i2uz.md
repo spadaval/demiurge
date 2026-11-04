@@ -23,20 +23,22 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Verdict: a judging panel reads the comparison, then keep, change or drop"
-updated_at: "2026-11-04T23:07:45.809408244+00:00"
+updated_at: "2026-11-04T23:11:25.944552792+00:00"
 ---
 
 ## Goal
 
-Find out whether the model makes stories better than plain notes do. A judging panel of agents reads the comparison blind and decides (decision worldcrafter-zybl). Tests can't answer this.
+Find out whether the model makes stories better than plain notes do. A judging panel of agents reads the comparison blind and decides (decision worldcrafter-zybl, strategy Verdicts). Tests can't answer this.
 
 ## Done when
 
-- At least three fresh judges answer every question in `docs/verdicts/comparison-rubric.md`, which was committed before any of them read a packet. At least one judge runs on a different model from the others. None of them built the tool or ran the comparison, and none sees the authors' reasoning, the handoffs or the other judges' reports.
-- Each judge reads only the packets and the rubric for Part 1, and files that report before getting the key. Part 2 adds the key, the model-gaps logs and the failure notes, and leaves Part 1 unrevised.
-- Each judge's full report is recorded as evidence on this item. The verdict follows the rubric's rule: the call at least two judges make, or change if all three differ.
-- The verdict is recorded as a decision note here. This item closes with the verdict, the judges' main reasons, what they'd change first, and the next increment chosen from it. Any verdict closes this item, and drop is a useful result.
+- Exactly three judges answer every question in `docs/verdicts/comparison-rubric.md`, on Opus 5.5, Sonnet 5.5 and Fable 5.1. The rubric is given to them as it stands at a named commit, committed and reviewed before any judge reads a packet. None of them built the tool or ran the comparison.
+- Each judge runs as an isolated session, sandboxed like the comparison's sessions. It can reach only a copy of the packets and the rubric, with no access to the repository, Atelier, git history, the key or other judges' reports. Each transcript is checked for reads beyond that. A judge that failed or reached beyond its material is replaced by a fresh judge on the same model, and the replacement is recorded.
+- Part 1, the blind report, is recorded as evidence here before that judge's Part 2 starts. Part 2 is a fresh session of the same model, given its Part 1 report, the packets, the rubric, the key, the model-gaps logs and the failure notes. Part 1 isn't revised.
+- Each judge's full report (both parts) is recorded as evidence here. The verdict follows the rubric's rule: the call that at least two of the three make, or change if all three differ. It is recorded as a decision note here.
+- A fresh reviewer, not a judge, checks that the procedure held: the rubric commit, the isolation and blindness, the judges and their models, and the rule applied. The review is recorded before the next increment starts.
+- This item closes with the verdict, the judges' main reasons, what they'd change first, and the next increment chosen from it. Any verdict closes this item, and drop is a useful result.
 
 ## Context
 
-The packets are in `/home/supadava/projects/demiurge-comparison/packets/`. The key, raw output, model-gaps logs and failure notes are in `/home/supadava/projects/demiurge-comparison/key/`. The Thukker pairs are tuned-on and the magical girl therapist pairs are held back. Format may give an arm away, and that's accepted. This verdict doesn't test how a screen feels; that's worldcrafter-frqk. Sumeet may read the reports and overturn the verdict afterwards, but he isn't the gate.
+The packets are in `/home/supadava/projects/demiurge-comparison/packets/`. The key, raw output, model-gaps logs and failure notes are in `/home/supadava/projects/demiurge-comparison/key/`, which judges see only in Part 2. The Thukker pairs are tuned-on and the magical girl therapist pairs are held back. Format may give an arm away, and that's accepted. This verdict doesn't test how a screen feels; that's worldcrafter-frqk. Sumeet may read the reports and overturn the verdict afterwards, but he isn't the gate.

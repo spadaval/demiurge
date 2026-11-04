@@ -192,25 +192,37 @@ Each increment ends with keep, change or drop, decided by a judging panel of
 agents (decision worldcrafter-zybl). Sumeet isn't the gate; he can read the
 reports after the fact and overturn a verdict.
 
-- **Independent.** Judges are fresh agents that didn't build the work, and see
-  neither the authors' reasoning nor handoffs, only the material under judgment
-  and the rubric.
-- **Blind.** Where the work compares arms, judges aren't told which is which until
-  each has recorded a blind report. Then the key is opened to them for the
-  keep, change or drop call.
-- **At least three judges, on at least two models**: for example Opus, Sonnet and
-  Fable. They judge independently and don't see each other's reports.
-- **A rubric fixed before anyone reads.** It is written and committed before the
-  judges see the material, says what to judge and how to weigh it, and doesn't
-  change once judging starts.
+- **Independent and isolated.** Judges are fresh agent sessions that didn't build
+  the work. Each runs isolated, as the comparison's sessions do: it can reach only
+  the material under judgment and the rubric, pinned at a named commit, with no
+  access to the repository, Atelier, git history, handoffs, the key or other
+  judges' reports. Each judge's transcript is checked for reads beyond what it
+  was given.
+- **Blind, in two parts.** Where the work compares arms, a judge first files a
+  blind report (Part 1), recorded as evidence before it sees anything more. Part 2
+  is a fresh session of the same model, given its own Part 1 report, the same
+  material and the key, which makes the keep, change or drop call and leaves Part
+  1 as it was.
+- **Exactly three judges, on three models**: Opus, Sonnet and Fable, so two of
+  the three differ from the authoring model. They judge independently. A judge
+  whose run fails, or whose transcript shows it reached beyond what it was given,
+  is replaced by a fresh judge on the same model, and the replacement is recorded.
+- **A rubric fixed before anyone reads.** It is written, reviewed and committed
+  before the judges see the material, says what to judge and how to weigh it,
+  and doesn't change once judging starts. Part 1's wording says nothing that
+  hints at which arm is which.
 - **Each judge records** keep, change or drop with reasons, and answers every
   rubric question.
-- **Aggregation.** The verdict is the call at least two judges make. If all three
-  differ, the verdict is change, because it keeps the work while naming what to
-  fix, and the dissent is recorded. "Drop" is a useful result.
+- **Aggregation.** The verdict is the call at least two of the three judges make.
+  If all three differ, the verdict is change, because it keeps the work while
+  naming what to fix, and the dissent is recorded. "Drop" is a useful result.
 - **Recorded.** Each judge's report and the verdict go into Atelier as evidence on
   the verdict item, which closes with the verdict and the next step.
-- The next increment is chosen from the verdict and the changes the judges name.
+- **Checked, then acted on.** The panel is the review of the outcome. Before the
+  next increment starts, a fresh reviewer checks only that the procedure held:
+  the rubric commit, the isolation and blindness, the number of judges and their
+  models, and the rule applied. The next increment is then chosen from the verdict
+  and the changes the judges name.
 
 # Scope
 

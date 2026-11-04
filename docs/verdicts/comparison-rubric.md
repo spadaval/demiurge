@@ -18,9 +18,7 @@ sessions differed in one respect only, which you aren't told. Format may hint
 at it. Don't guess at it, and don't let a guess change your judgment: judge the
 story work on the page.
 
-There are two premises. **Thukker** was used while building what one of the two
-sessions had, so it may flatter that session. **Magical girl therapist** was
-held back until everything was fixed, so its pairs count for more.
+There are two premises, Thukker and magical girl therapist, with two pairs each.
 
 Lore accuracy isn't graded unless an error makes the story worse.
 
@@ -52,9 +50,14 @@ you are (low, medium or high).
 
 ## Part 2: with the key open
 
-You then get the key, which says which packet in each pair used the structured
-story tool and which used plain markdown notes, plus each run's log of what the
-tool's model couldn't hold, and notes on any failed runs. Don't revise Part 1.
+You then get your own Part 1 report, the key, which says which packet in each
+pair used the structured story tool and which used plain markdown notes, each
+tool run's log of what the tool's model couldn't hold, and notes on any failed
+runs. Don't revise Part 1.
+
+The **Thukker** premise was used while building the tool, so its pairs may
+flatter the tool. **Magical girl therapist** was held back until the tool was
+frozen, so its pairs count for more.
 
 6. **Keep, change or drop the tool.**
    - *Keep:* the tool made the stories better, so build on it as it is.
@@ -73,7 +76,9 @@ tool's model couldn't hold, and notes on any failed runs. Don't revise Part 1.
 
 ## How the verdict is reached
 
-Three or more judges, at least one on a different model, answer
-independently. The verdict is the call that at least two judges make. If all
-three calls differ, the verdict is change, and the dissent is recorded. Each
-judge's report goes into Atelier as evidence on worldcrafter-i2uz.
+Exactly three judges, on Opus, Sonnet and Fable, answer independently, each in
+an isolated session. The verdict is the call that at least two of the three
+make. If all three calls differ, the verdict is change, and the dissent is
+recorded. A judge whose run fails or reaches beyond what it was given is
+replaced by a fresh judge on the same model. Each judge's report goes into
+Atelier as evidence on worldcrafter-i2uz.

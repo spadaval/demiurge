@@ -24,7 +24,7 @@ schema_version: 2
 closed_at: "2026-11-04T23:07:16.591278194+00:00"
 status: "done"
 title: "Agents judge verdicts; Sumeet keeps only irreversible and public calls"
-updated_at: "2026-11-04T23:07:16.591278194+00:00"
+updated_at: "2026-11-04T23:11:25.960817917+00:00"
 ---
 
 ## Question
@@ -42,6 +42,10 @@ Decided by Sumeet (2026-11-04): he doesn't want to be the verdict gate on the bl
 - **Everything else.** Success criteria, primitives, premises, rubrics and reopening decisions are now agent decisions. Each is recorded as a decision and independently reviewed before the work it governs proceeds.
 
 Consequences: the strategy's Authority section, its success criteria `sketch`, `rework` and `on-screen`, its Shape, and a new Verdicts section change to match. worldcrafter-i2uz loses its needs-human label and is passed by the panel. The backlog increments end with the panel's verdict. This supersedes decision worldcrafter-45an's consequence that changing the web-app plan comes back to the human: it is now an agent decision, reviewed. Agent judges may share the authoring model's taste, so the strategy's Risks name the different-model judge, the fixed rubric and Sumeet's later review as the check.
+
+## Notes
+
+- 2026-11-04 [note] 2026-11-04, after planning review (findings worldcrafter-e34x, carf, bd5i, 0xvm): the panel is exactly three judges on Opus, Sonnet and Fable. Judges run as isolated sessions, reaching only their material and the rubric at a named commit, with their transcripts checked. Part 2 is a fresh session given the judge's own recorded Part 1. A judge that failed or was contaminated is replaced on the same model. The panel is the outcome's review; a fresh reviewer checks only that the procedure held before the next increment starts. The rubric's Part 1 no longer says which premise was tuned on.
 
 ## Close Reason
 
