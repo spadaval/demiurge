@@ -134,7 +134,8 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
       (path) => !HARMLESS.includes(path) && !inside.read(path),
     );
     const vague =
-      /(^|[\s'"=:(])~|\$HOME|\$\{HOME\}|(^|[\s/'"=])\.\.(\/|\s|$)/.test(
+      // `~` as a home (`~`, `~/x`, `~user`), not "~1,500 words".
+      /(^|[\s'"=:(])~(?![\d.,])|\$HOME|\$\{HOME\}|(^|[\s/'"=])\.\.(\/|\s|$)/.test(
         command,
       );
     return named.length > 0 || vague ? [{ tool: name, detail: command }] : [];
