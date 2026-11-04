@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "A CLI and skill for sketching and reworking a story"
-updated_at: "2026-10-31T02:17:08.958844667+00:00"
+updated_at: "2026-11-04T20:59:55.308331629+00:00"
 ---
 
 ## Goal
