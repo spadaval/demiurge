@@ -20,8 +20,6 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-cly1"
   - kind: "issue"
-    id: "worldcrafter-i2uz"
-  - kind: "issue"
     id: "worldcrafter-p4zf"
   attachments: []
   relates:
@@ -38,7 +36,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Sketch a story from a premise and rework it, headless"
-updated_at: "2026-10-31T05:18:53.836240881+00:00"
+updated_at: "2026-11-04T22:28:05.124272474+00:00"
 ---
 
 ## Goal
@@ -48,7 +46,7 @@ An agent in an ordinary session, using a CLI and a skill, can take a one-paragra
 ## Done when
 
 - Delivers `sketch` and the change-a-drive, change-its-origin and shift-an-event parts of `rework`, headless. Scenes have no place in story time here, so a shift can conflict with another event but not with a scene. Each child's proof passes, and the increment is independently reviewed.
-- The human has read the blind comparison and recorded keep, change or drop (worldcrafter-i2uz). Agents can't pass that item.
+- The blind comparison is ready for the human to read (worldcrafter-04z5). The human's keep, change or drop is worldcrafter-i2uz, a standalone validation that follows this increment; agents can't pass it, and the mission's next increment waits on it.
 
 ## Unknowns
 
@@ -70,3 +68,8 @@ Paper walkthrough, 2026-10-30, on the demo world (`app/src/demo/ninefold.ts`), w
 - **Change the motivation (shut to open).** Links reach 4.2 and 5.1 and related drives. They miss scene 2.1, "Ardelia", which shows her without any drive under pressure. So a scene needs to record its actors. "She wanted it shut in 902 and wants it open in 1203" works as two drives with different origins, so time-indexed drives aren't needed yet.
 - **Change the event behind it (she sealed it on Aldric's order).** Needs an event summary and a link from a drive to its origin events. From `seal` the links then reach the drive and its scenes, and 3.2 through `depicts`. Before and after can't say that one event caused another.
 - **Shift the event (902 to 1100).** The same links reach the drive and 3.2. The engine refuses the shift (`contradiction`), because 3.2 has its own position; this was run. The Salt Gate entry's "sealed in 902" and Kesh's "three hundred years" are out of reach as free text. That is the limit of this approach.
+
+## Notes
+
+- 2026-11-04 [decision] The verdict worldcrafter-i2uz becomes a standalone validation blocked by this increment, and the backlog increments that waited on this increment also wait on the verdict
+  Reason: As a child, i2uz (needs-human) kept the reviewed code off master until Sumeet reads the comparison. Reading the packets doesn't need the code unmerged. The verdict still gates what comes next. Reversible; Atelier suggested this shape.

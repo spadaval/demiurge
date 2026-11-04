@@ -14,11 +14,17 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-04z5"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-o8b7"
+    type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-z9qs"
+    type: "advances"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Verdict: read the comparison, then keep, change or drop"
-updated_at: "2026-10-31T03:23:43.474360786+00:00"
+updated_at: "2026-11-04T22:28:04.844938292+00:00"
 ---
 
 ## Goal

@@ -11,6 +11,9 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
+    id: "worldcrafter-i2uz"
+    type: "blocked_by"
+  - kind: "issue"
     id: "worldcrafter-o8b7"
     type: "blocked_by"
   - kind: "issue"
