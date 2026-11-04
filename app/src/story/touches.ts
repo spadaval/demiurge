@@ -48,8 +48,8 @@ type Link = { ref: Ref; how: string };
 
 /**
  * What `ref` touches. For a candidate answer, `direct` holds what it declares
- * in `touches` (and its question), and `further` the direct links of each
- * record it touches.
+ * in `touches` (and its question), and `further` what each record it touches
+ * would report: its direct links and the step past them.
  */
 export function whatThisTouches(
   story: Story,
@@ -305,7 +305,13 @@ function carriedLinks(story: Story, ref: Ref): Link[] {
       return candidateTouches(story, ref)
         .filter((touched) => refExists(story, touched))
         .flatMap((touched) =>
-          directLinks(story, touched).map((link) => ({
+          [
+            ...directLinks(story, touched),
+            // A touched candidate's own step would go two steps out.
+            ...(touched.kind === "candidate"
+              ? []
+              : carriedLinks(story, touched)),
+          ].map((link) => ({
             ref: link.ref,
             how: `${link.how}, of ${describeRef(touched)}`,
           })),

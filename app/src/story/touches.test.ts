@@ -220,9 +220,43 @@ describe("a candidate answer", () => {
     expect(ids(further)).toEqual({
       drive: ["crown", "shut"],
       event: ["coronation"],
-      scene: ["3.2", "4.3"],
+      scene: ["3.2", "4.3", "4.2", "5.1"],
     });
     expect(further.drive[0]?.how).toEqual(["its drive, of actor aldric"]);
+  });
+});
+
+describe("a candidate carries as its touched records do", () => {
+  const withCandidate = (id: string, touched: Ref) =>
+    run(ninefold, {
+      type: "addCandidate",
+      questionId: "why-seal",
+      id,
+      answer: "",
+      touches: [touched],
+    });
+
+  test("touching the drive reaches 2.1 through its actor", () => {
+    const story = withCandidate("drive-only", { kind: "drive", id: "shut" });
+    const further = touches(story, {
+      kind: "candidate",
+      questionId: "why-seal",
+      id: "drive-only",
+    }).further;
+    expect(ids(further).scene).toContain("2.1");
+    expect(further.scene.find(({ ref }) => ref.id === "2.1")?.how).toEqual([
+      "a scene its actor Ardelia is in, of drive shut",
+    ]);
+  });
+
+  test("touching the seal reaches 4.2 through the drive", () => {
+    const story = withCandidate("seal-only", { kind: "event", id: "seal" });
+    const further = touches(story, {
+      kind: "candidate",
+      questionId: "why-seal",
+      id: "seal-only",
+    }).further;
+    expect(ids(further).scene).toEqual(["3.2", "4.2", "5.1"]);
   });
 });
 
