@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-04T23:40:07.832364963+00:00"
+status: "done"
 title: "Run the blind comparison: tool against plain notes"
-updated_at: "2026-11-04T21:55:04.083318263+00:00"
+updated_at: "2026-11-04T23:40:07.832364963+00:00"
 ---
 
 ## Goal
@@ -56,3 +57,13 @@ Lore accuracy isn't graded unless it makes the story worse.
   Reason: Review finding worldcrafter-vurd: one paragraph per line made each diff repeat nearly the whole story (smoke packets 7.5-8.9k words). Sentence lines keep it a line diff and shown identically for both arms, while showing what changed. Reversible; packet format is for Sumeet to judge at i2uz.
 - 2026-11-04 [decision] Isolation is enforced with bwrap, not only by the prompt; web tools are off for both arms; the frozen tool is read-only and mounted at a neutral path
   Reason: Review findings worldcrafter-ghcr, 4zks, wrfr, pe4t: under bypassPermissions a prompt alone can't keep the notes arm from the frozen dir or keep sessions out of the repo, the public GitHub repo, or earlier runs' output.
+
+## Close Reason
+
+Harness in `app/scripts/comparison/` (prompts, sandbox, transcript check, packet writer, freeze/run/phase-b), reviewed over three rounds before the freeze (approval worldcrafter-37zh). Frozen at 33c2e626 into /home/supadava/projects/demiurge-comparison/frozen (FROZEN.json: commit, Claude Code 2.1.318, model claude-opus-5-5, sha256 of story.js, SKILL.md, craft.md; tool made read-only).
+
+Phase B: 8 runs, 32 steps, all exit 0; 0 runs failed, none rerun. Packets: /home/supadava/projects/demiurge-comparison/packets (8 files, 54,001 words). Key, raw output, model-gaps logs, failures.md, phase-b.log: .../key. Evidence on this item.
+
+Deviations and choices: sessions run under bwrap (fresh HOME with read-only OAuth credentials, empty /tmp with only the run dir, tool at /opt/story-tool for tool runs only), no web tools, `--setting-sources project,local --strict-mcp-config --disable-slash-commands`; network open for the API, so network use is detected, not blocked. Rework diffs are line diffs over one sentence per line (decision note). Packets are about twice the planned 25,000 words because reworks changed 20-50% of sentences. The transcript check flagged 7 items in 5 steps; all were heredoc prose or scratch files in the sandbox's own /tmp.
+
+Smoke runs (Thukker, not part of the comparison) are in .../smoke/. The p4zf fresh-session output in the session scratchpad is unread.
