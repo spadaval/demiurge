@@ -234,6 +234,69 @@ describe("storyGaps", () => {
     }
   });
 
+  test("an event referred to only by a fact, open question or candidate is woven in", () => {
+    const event: StoryCommand = {
+      type: "addEvent",
+      id: "storm",
+      label: "",
+      summary: "",
+    };
+    const storm: Ref = { kind: "event", id: "storm" };
+    const unreferenced = (...commands: StoryCommand[]) =>
+      storyGaps(run(woven, event, ...commands)).filter(
+        (gap) => gap.kind === "event_unreferenced",
+      );
+    expect(unreferenced()).toHaveLength(1);
+    expect(
+      unreferenced({ type: "addFact", id: "f", text: "", about: [storm] }),
+    ).toEqual([]);
+    expect(
+      unreferenced({
+        type: "addOpenQuestion",
+        id: "q",
+        question: "",
+        about: [storm],
+        conflict: false,
+      }),
+    ).toEqual([]);
+    expect(
+      unreferenced({
+        type: "addCandidate",
+        questionId: "why",
+        id: "storm-did-it",
+        answer: "",
+        touches: [storm],
+      }),
+    ).toEqual([]);
+  });
+
+  test("a fact about nothing that something refers to is woven in", () => {
+    const fact: StoryCommand = {
+      type: "addFact",
+      id: "salt",
+      text: "",
+      about: [],
+    };
+    const salt: Ref = { kind: "fact", id: "salt" };
+    const unconnected = (...commands: StoryCommand[]) =>
+      storyGaps(run(woven, fact, ...commands)).filter(
+        (gap) => gap.kind === "fact_unconnected",
+      );
+    expect(unconnected()).toHaveLength(1);
+    expect(
+      unconnected({ type: "addFact", id: "rust", text: "", about: [salt] }),
+    ).toEqual([]);
+    expect(
+      unconnected({
+        type: "addCandidate",
+        questionId: "why",
+        id: "salt-did-it",
+        answer: "",
+        touches: [salt],
+      }),
+    ).toEqual([]);
+  });
+
   test("a story with a premise and nothing else", () => {
     expect(storyGaps(newStory("A gate that remembers."))).toEqual([]);
   });
