@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-04T20:43:12.383235740+00:00"
+status: "done"
 title: "Commands for everything in a story file"
-updated_at: "2026-11-04T20:34:52.430361971+00:00"
+updated_at: "2026-11-04T20:43:12.383235740+00:00"
 ---
 
 ## Goal
@@ -45,3 +46,20 @@ Records from worldcrafter-8tbh. `app/src/time/commands.ts` (`TimelineCommand`, `
 ## Notes
 
 - 2026-10-30 [note] Deferred from review of spike worldcrafter-4vxp: removeScene, or deleting a document, orphans the document's passage_anchors annotation (ID passage-anchors:<documentId>, added by worldcrafter-jd8b), because storage requires callers to delete annotations themselves. Delete it where the scene or document is deleted, once jd8b exists.
+
+## Close Reason
+
+Delivered `app/src/story/commands.ts` (`StoryCommand`, `applyStoryCommand` returning `Result<{story, problems}, StoryError>`) and `applyTimelineCommandKeepingProblems` in `app/src/time/commands.ts`; `applyTimelineCommand`, its callers and `TimelineCommand` unchanged. Tests in `app/src/story/commands.test.ts`; `bun run check` 724 pass (evidence worldcrafter-44hv).
+
+Deviations and choices beyond the Done when:
+- `removeEvent` also drops correspondences starting or ending at the event. Scene placements and reveals naming it are left alone (no scenes in story time in the file).
+- `addEvent` goes through the timeline's own `addEvent`: blank IDs or `scene:`-prefixed IDs are refused as `invalid_command`; duplicates reported as `duplicate_id` first.
+- Blank IDs are refused on every add command.
+- `unrelateDrives` on unrelated drives is refused (`invalid_command`) rather than a no-op.
+- Only links a command sets are checked; an existing dangling reference doesn't block unrelated commands.
+- Set-lists (origins, actors, depicts, pressures) are stored as given, without dedup.
+- Only setPosition/constrain/removeConstraint return problems; that removeEvent can't add one is by reading, not a test.
+
+Command names for 33qr/p4zf: setPremise; add/update/removeActor; add/update/removeDrive, setDriveOrigins, relateDrives {from,to,relation}, unrelateDrives {a,b}; add/update/removeFact; add/update/removeReaderQuestion, setReaderQuestionScenes; add/update/removeScene, moveScene {id,index}, setSceneActors, setSceneEvents {depicts}, setScenePressures; add/update/removeOpenQuestion; add/update/removeCandidate {questionId,id}; answerOpenQuestion, unanswerOpenQuestion; addEvent, describeEvent, removeEvent; setPosition, constrain, removeConstraint (TimelineCommand shapes, empty scene list).
+
+Open: the passage-anchors orphaning note still applies once worldcrafter-jd8b exists.
