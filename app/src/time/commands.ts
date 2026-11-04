@@ -4,6 +4,8 @@
  * the order, a frame whose correspondences disagree, or a duration the
  * positions rule out. Problems already in
  * the timeline don't block edits, so they can be repaired one at a time.
+ * `applyTimelineCommandKeepingProblems` keeps such an edit instead, and
+ * returns the problems it added.
  *
  * Values written by the AI (inferred) never replace values the writer
  * asserted. Omitted, the authority is asserted.
@@ -98,13 +100,15 @@ export type TimelineCommand =
 
 export type TimelineCommandType = TimelineCommand["type"];
 
+/** The command breaks a rule; `message` says which. */
+export type InvalidTimelineCommand = {
+  kind: "invalid_command";
+  command: TimelineCommandType;
+  message: string;
+};
+
 export type TimelineError =
-  | {
-      /** The command breaks a rule; `message` says which. */
-      kind: "invalid_command";
-      command: TimelineCommandType;
-      message: string;
-    }
+  | InvalidTimelineCommand
   /** The command would add this problem. */
   | TimelineProblem;
 
@@ -127,16 +131,42 @@ export function applyTimelineCommand(
   scenes: readonly SceneRef[],
 ): Result<Timeline, TimelineError> {
   return edit(timeline, command, scenes).andThen((next) => {
-    const known = new Set(
-      timelineProblems(compileChronology(timeline, scenes)).flatMap(
-        problemKeys,
-      ),
-    );
-    const added = timelineProblems(compileChronology(next, scenes)).find(
-      (problem) => problemKeys(problem).some((key) => !known.has(key)),
-    );
+    const [added] = addedProblems(timeline, next, scenes);
     return added === undefined ? ok(next) : err(added);
   });
+}
+
+/**
+ * Like `applyTimelineCommand`, but keeps an edit that adds problems and
+ * returns them with the new timeline, so a contradiction can be recorded and
+ * worked on. It refuses only a malformed command.
+ */
+export function applyTimelineCommandKeepingProblems(
+  timeline: Timeline,
+  command: TimelineCommand,
+  scenes: readonly SceneRef[],
+): Result<
+  { timeline: Timeline; problems: TimelineProblem[] },
+  InvalidTimelineCommand
+> {
+  return edit(timeline, command, scenes).map((next) => ({
+    timeline: next,
+    problems: addedProblems(timeline, next, scenes),
+  }));
+}
+
+/** The problems `next` has that `timeline` doesn't. */
+function addedProblems(
+  timeline: Timeline,
+  next: Timeline,
+  scenes: readonly SceneRef[],
+): TimelineProblem[] {
+  const known = new Set(
+    timelineProblems(compileChronology(timeline, scenes)).flatMap(problemKeys),
+  );
+  return timelineProblems(compileChronology(next, scenes)).filter((problem) =>
+    problemKeys(problem).some((key) => !known.has(key)),
+  );
 }
 
 const ASSERTED: Authority = { level: "asserted" };
@@ -145,9 +175,9 @@ function edit(
   timeline: Timeline,
   command: TimelineCommand,
   scenes: readonly SceneRef[],
-): Result<Timeline, TimelineError> {
+): Result<Timeline, InvalidTimelineCommand> {
   const invalid = (message: string) =>
-    err<Timeline, TimelineError>({
+    err<Timeline, InvalidTimelineCommand>({
       kind: "invalid_command",
       command: command.type,
       message,
