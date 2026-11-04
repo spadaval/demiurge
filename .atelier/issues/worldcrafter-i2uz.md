@@ -4,6 +4,9 @@ id: "worldcrafter-i2uz"
 issue_type: "validation"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: validation/worldcrafter-i2uz
 priority: "P1"
 relationships:
   blocks: []
@@ -21,9 +24,9 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Verdict: a judging panel reads the comparison, then keep, change or drop"
-updated_at: "2026-11-04T23:11:25.944552792+00:00"
+updated_at: "2026-11-04T23:44:42.613977203+00:00"
 ---
 
 ## Goal
