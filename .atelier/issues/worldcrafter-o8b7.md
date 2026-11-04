@@ -34,9 +34,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-04T23:40:18.167022280+00:00"
+status: "done"
 title: "Sketch a story from a premise and rework it, headless"
-updated_at: "2026-11-04T22:28:05.124272474+00:00"
+updated_at: "2026-11-04T23:40:18.167022280+00:00"
 ---
 
 ## Goal
@@ -73,3 +74,7 @@ Paper walkthrough, 2026-10-30, on the demo world (`app/src/demo/ninefold.ts`), w
 
 - 2026-11-04 [decision] The verdict worldcrafter-i2uz becomes a standalone validation blocked by this increment, and the backlog increments that waited on this increment also wait on the verdict
   Reason: As a child, i2uz (needs-human) kept the reviewed code off master until Sumeet reads the comparison. Reading the packets doesn't need the code unmerged. The verdict still gates what comes next. Reversible; Atelier suggested this shape.
+
+## Close Reason
+
+Delivered headless sketch and rework: story commands (cly1), touches/gaps/contradictions (33qr), CLI and story-sketch skill (p4zf), and the blind comparison, run and packeted (04z5: 8 runs, 0 failed, frozen at 33c2e626). Each child independently reviewed. The verdict is worldcrafter-i2uz, now decided by a judging panel of agents (decision worldcrafter-zybl) rather than Sumeet; it follows this increment and gates the next one.
