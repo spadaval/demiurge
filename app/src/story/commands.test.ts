@@ -679,6 +679,10 @@ describe("removing a record", () => {
       { id: "alive", question: "Is she alive?", opensAt: "bar" },
     ]);
     expect(refsTo(story, (ref) => ref.kind === "scene")).toEqual([]);
+    const opening = run(linked, { type: "removeScene", id: "bar" });
+    expect(opening.readerQuestions).toEqual([
+      { id: "alive", question: "Is she alive?", answeredAt: "found" },
+    ]);
   });
 
   test("an open question, and refs to its candidates", () => {
