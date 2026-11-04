@@ -30,8 +30,8 @@ export const Route = createRootRouteWithContext<{
         content: "width=device-width, initial-scale=1",
       },
       ...seo({
-        title: "WorldCrafter",
-        description: `WorldCrafter is a tool for creating imaginary worlds`,
+        title: "Demiurge",
+        description: `Demiurge is a tool for creating imaginary worlds`,
       }),
     ],
     links: [

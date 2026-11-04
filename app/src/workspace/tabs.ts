@@ -42,6 +42,7 @@ export interface KeyValueStore {
   setItem(key: string, value: string): void;
 }
 
+// Keeps the old product name: renaming it would strand existing data.
 const keyFor = (worldId: string) => `worldcrafter:${worldId}:tabs`;
 
 /** Reads a world's tabs. Anything unreadable counts as no tabs. */

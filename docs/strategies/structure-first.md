@@ -11,7 +11,7 @@ high-dimensional, and a page is linear: writing it down too early flattens it,
 and after that it stops evolving. That is why most stories never leave the
 head.
 
-The rebuild (`docs/strategies/rebuild.md`) gave WorldCrafter a sound
+The rebuild (`docs/strategies/rebuild.md`) gave Demiurge a sound
 foundation for prose: stable block IDs, AI projections, generation with
 visible context, a storage adapter and story time. But it was planned as a
 manuscript tool. Decision worldcrafter-ok5a makes it structure-first: the
@@ -21,7 +21,7 @@ compiled from it (`docs/rebuild/story-model.md`).
 
 Outlining tools already exist (Plottr, Dabble's plot grid, Scrivener's
 corkboard), but their structure is cards and rows the app doesn't understand.
-WorldCrafter's structure is a typed model of actors, drives and questions that
+Demiurge's structure is a typed model of actors, drives and questions that
 the app can check, and that prose hangs off.
 
 Holding a story is only half of it. Stories get made by picking elements that

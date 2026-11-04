@@ -35,6 +35,7 @@ export interface ProfileStore extends Store<BackendProfile | null> {
   save(profile: BackendProfile): Result<void, string>;
 }
 
+// Keeps the old product name: renaming it would strand existing data.
 const keyFor = (worldId: string) => `worldcrafter:${worldId}:backend-profile`;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

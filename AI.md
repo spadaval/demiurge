@@ -1,6 +1,6 @@
 # AI Features Design Document
 
-This document outlines the proposed AI-powered features for WorldCrafter, including data model changes and UI/UX considerations.
+This document outlines the proposed AI-powered features for Demiurge, including data model changes and UI/UX considerations.
 
 ## Proposed Features
 

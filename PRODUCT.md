@@ -12,11 +12,11 @@ The app is being rebuilt from a fresh skeleton (decision worldcrafter-zyc2). It 
 
 ## Users
 
-WorldCrafter is for writers and worldbuilders equally. Some users mostly draft prose, some mostly build the world, and many do both. It was built first for its author, a long-form speculative-fiction writer, and is meant for others later. The user is a team of a human and an agent, so the story model has to make sense to both (decision worldcrafter-2y4g).
+Demiurge is for writers and worldbuilders equally. Some users mostly draft prose, some mostly build the world, and many do both. It was built first for its author, a long-form speculative-fiction writer, and is meant for others later. The user is a team of a human and an agent, so the story model has to make sense to both (decision worldcrafter-2y4g).
 
 ## Product Purpose
 
-WorldCrafter exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We use AI to assist and enhance the creative process, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). WorldCrafter is a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
+Demiurge exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We use AI to assist and enhance the creative process, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). Demiurge is a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
 
 Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: jump between levels and sides, rework in the abstract, try answers against the rest of the story, and leave things undecided or contradictory until a satisfying way through appears (`docs/rebuild/story-model.md`).
 
@@ -26,7 +26,7 @@ The first version is headless, a CLI and a skill used in an agent session, to te
 
 ## Positioning
 
-Other tools either inject lore into prompts (Novelcrafter, NovelAI, Sudowrite), are wikis with AI added on (World Anvil, Campfire), or offer outlines and plot grids the app doesn't understand (Plottr, Dabble, Scrivener). WorldCrafter treats the story and the world as a typed model that the AI maintains and the writer controls:
+Other tools either inject lore into prompts (Novelcrafter, NovelAI, Sudowrite), are wikis with AI added on (World Anvil, Campfire), or offer outlines and plot grids the app doesn't understand (Plottr, Dabble, Scrivener). Demiurge treats the story and the world as a typed model that the AI maintains and the writer controls:
 
 - the story is a graph of actors, drives, questions, events and scenes, and threads are writer-owned lenses over it
 - the app checks the structure: stale promises, drives that never collide, scenes that move nothing
@@ -57,11 +57,11 @@ As planned for the web app; the headless first version runs in an agent session.
   - *timeline*, *frame*, *event*
   - *holds* and *revealed*
   - *inferred* and *asserted*: AI-inferred versus writer-confirmed data
-- **Undecided:** the visual design, the styling stack, the product name, and whether entries need a different editing surface from scenes. Scenes and entries are documents (decision worldcrafter-9zj1, amended by worldcrafter-ok5a).
+- **Undecided:** the visual design, the styling stack, and whether entries need a different editing surface from scenes. Scenes and entries are documents (decision worldcrafter-9zj1, amended by worldcrafter-ok5a).
 
 ## Brand Commitments
 
-The name is WorldCrafter. There are no other binding visual or voice commitments.
+The name is Demiurge (decision worldcrafter-cogw): Plato's craftsman, who shapes a world from material that already exists, and the Gnostics' flawed creator of a broken world who thinks he's the true god. Both sides are meant. The intended domain is demiurge.ink, which isn't bought yet. There are no other binding visual or voice commitments.
 
 ## Evidence on Hand
 

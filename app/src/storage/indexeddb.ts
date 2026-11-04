@@ -101,7 +101,7 @@ function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
     request.onerror = () => reject(request.error);
     request.onblocked = () => {
       blocked = true;
-      reject(new Error("upgrade blocked: close other tabs using WorldCrafter"));
+      reject(new Error("upgrade blocked: close other tabs using Demiurge"));
     };
   });
 }

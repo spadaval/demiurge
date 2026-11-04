@@ -183,7 +183,7 @@ export function ModelSettingsPage() {
           )}
           {readOnly && (
             <p className="settings-outcome">
-              This tab is read-only because WorldCrafter is open in another tab.
+              This tab is read-only because Demiurge is open in another tab.
             </p>
           )}
         </div>

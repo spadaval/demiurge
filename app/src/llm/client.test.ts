@@ -133,7 +133,7 @@ describe("request assembly", () => {
     expect(JSON.stringify(request)).not.toContain("sk-test");
     await send(router, request);
     expect(received[0]?.headers.get("authorization")).toBe("Bearer sk-test");
-    expect(received[0]?.headers.get("x-title")).toBe("WorldCrafter");
+    expect(received[0]?.headers.get("x-title")).toBe("Demiurge");
   });
 });
 

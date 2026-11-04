@@ -36,10 +36,11 @@ async function openWorld(root: HTMLElement): Promise<Opened | null> {
     acquireWriterLock(navigator.locks, WORLD_ID),
     requestPersistentStorage(navigator.storage),
   ]);
+  // The name keeps the old product name: renaming it would strand existing data.
   const open = () => openIndexedDbStorage({ name: `worldcrafter-${WORLD_ID}` });
   const storage = await open();
   if (storage.isErr()) {
-    root.textContent = `WorldCrafter could not open its storage: ${storage.error.kind === "failure" ? storage.error.message : storage.error.kind}`;
+    root.textContent = `Demiurge could not open its storage: ${storage.error.kind === "failure" ? storage.error.message : storage.error.kind}`;
     return null;
   }
   return {

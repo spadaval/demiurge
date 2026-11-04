@@ -1,4 +1,4 @@
-# Agent Guidelines for WorldCrafter
+# Agent Guidelines for Demiurge
 
 ## ⚠️ CRITICAL WARNING
 **DO NOT RUN THE DEV SERVER!** `bun dev` is a watch command that never terminates. The dev server is always running - starting it will duplicate the server _and_ cause you to wait indefinitely.
@@ -9,6 +9,12 @@ This repository uses [Atelier](https://github.com/spadaval/atelier) for missions
 - Start work with `atelier start <id>` and integrate with `atelier merge <id>`. Only tracker records and mission strategies may be committed directly to `master`.
 - The rebuilt app lives in `app/` (its own package: run `bun install` and `bun run check` there). The root `src/` is the old app, kept for reference until it is retired.
 - Mission strategies live in `docs/strategies/`. The current mission is Structure first (`docs/strategies/structure-first.md`), which builds on the rebuild (`docs/strategies/rebuild.md`); design proposals are in `docs/rebuild/`. Read the Fluidity section of `docs/rebuild/story-model.md` before changing the story model: it says what the model is for and how to judge changes to it. Where those docs conflict with the rest of this file, they describe the target and this file describes the old code.
+
+## Naming
+The product is Demiurge (decision `worldcrafter-cogw`), and `worldcrafter` stays in some places on purpose. Don't rename these as cleanup:
+- Browser storage: the `worldcrafter-*` IndexedDB names and the `worldcrafter:*` localStorage and lock keys. Renaming them would strand existing data, and a lock under a new name wouldn't exclude tabs still running the old build.
+- Atelier: the `worldcrafter-` issue IDs and past records.
+- The Cloudflare Worker in `app/wrangler.jsonc`, until the domain is settled (`worldcrafter-v61k`).
 
 ## Commands
 Use bun for all commands.

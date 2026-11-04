@@ -20,7 +20,7 @@ const chrome = spawn(
     "--allow-file-access-from-files",
     "--window-size=1440,900",
     `--remote-debugging-port=${PORT}`,
-    "--user-data-dir=/tmp/worldcrafter-measure",
+    "--user-data-dir=/tmp/demiurge-measure",
     url,
   ],
   { stdio: "ignore" },

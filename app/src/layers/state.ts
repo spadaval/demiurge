@@ -20,6 +20,7 @@ export interface LayerStore extends Store<LayerState> {
   toggle(layer: LayerId, documentId: string): void;
 }
 
+// Keeps the old product name: renaming it would strand existing data.
 const keyFor = (worldId: string) => `worldcrafter:${worldId}:layers`;
 
 const isLayer = (value: unknown): value is LayerId =>

@@ -32,7 +32,7 @@ export function Rail({
   return (
     <nav className="rail" aria-label="Manuscript and world">
       <div className="rail-brand">
-        <span className="wordmark">WorldCrafter</span>
+        <span className="wordmark">Demiurge</span>
         {environment.worldName && (
           <span className="world-name">{environment.worldName}</span>
         )}

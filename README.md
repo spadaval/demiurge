@@ -1,11 +1,13 @@
-# WorldCrafter
+# Demiurge
 
 Some writers can just write - no preparation, no planning, no thought. Just words. 
 If that's you, move along. This is for the rest of us.
 
-WorldCrafter is a AI-native tool for creating imaginary worlds, inspired by software engineering tooling. 
+Demiurge is an AI-native tool for creating imaginary worlds, inspired by software engineering tooling. 
 
-Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. WorldCrafter keeps that fluid: you can jump between levels and sides, rework a motivation or a timeline in the abstract while seeing what it touches, try answers, and leave things undecided or contradictory for as long as you need.
+The name is Plato's: the demiurge is a craftsman who shapes a world from material that already exists, not a creator working from nothing. The Gnostics' version is a flawed creator of a broken world who thinks he's the true god, which is also a fair description of the job.
+
+Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Demiurge keeps that fluid: you can jump between levels and sides, rework a motivation or a timeline in the abstract while seeing what it touches, try answers, and leave things undecided or contradictory for as long as you need.
 
 We use AI throughout the work, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged.
 
@@ -41,8 +43,8 @@ So this is built for a team of a human and an AI agent, working on the same mode
 
 1. Clone the repository:
    ```sh
-   git clone <repository-url>
-   cd worldcrafter
+   git clone <repository-url> demiurge
+   cd demiurge
    ```
 
 2. Install dependencies:

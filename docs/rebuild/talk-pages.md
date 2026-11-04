@@ -4,7 +4,7 @@ Status: proposal (2026-10-17).
 
 ## Idea
 
-Chat is useful, but WorldCrafter isn't a chatbot. Use Wikipedia's model: **every document has a talk page**. The document is the artifact. The talk page is where you discuss it. Conversation is always *about* something, and it's kept next to the thing it's about.
+Chat is useful, but Demiurge isn't a chatbot. Use Wikipedia's model: **every document has a talk page**. The document is the artifact. The talk page is where you discuss it. Conversation is always *about* something, and it's kept next to the thing it's about.
 
 This replaces the old global chat threads (`src/lib/state/chat.ts`), which weren't attached to anything.
 
