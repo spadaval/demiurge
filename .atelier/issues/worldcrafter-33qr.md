@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "See what a candidate or a change touches, and what the story lacks"
-updated_at: "2026-10-31T02:17:08.925424749+00:00"
+updated_at: "2026-11-04T20:46:22.864965696+00:00"
 ---
 
 ## Goal
@@ -40,3 +40,7 @@ No scoring or ranking of candidates: how much a candidate touches is for people 
 ## Context
 
 Records and commands from worldcrafter-8tbh and worldcrafter-cly1. Gaps are a first guess (strategy, Risks), so keep the list easy to change.
+
+## Notes
+
+- 2026-11-04 [note] Also add, from review finding worldcrafter-7eyd on cly1: in app/src/story/commands.test.ts's remove-scene test, remove a scene used as a reader question's opensAt and assert opensAt is cleared. Optionally a constrain test with an unknown 'a'.
