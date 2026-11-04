@@ -141,7 +141,18 @@ export function newStory(premise: string): Story {
 
 export type StoryError =
   | { kind: "not_json"; message: string }
-  | { kind: "invalid_story"; message: string };
+  | { kind: "invalid_story"; message: string }
+  /** A command refused (`./commands.ts`): `command` is its type. */
+  | {
+      kind:
+        | "unknown_id"
+        | "duplicate_id"
+        | "self_relation"
+        | "relation_exists"
+        | "invalid_command";
+      command: string;
+      message: string;
+    };
 
 type Check<T> = Result<T, string>;
 type JsonRecord = { [key: string]: JsonValue };
