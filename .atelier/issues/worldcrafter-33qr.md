@@ -18,7 +18,7 @@ schema_version: 2
 closed_at: "2026-11-04T20:54:38.011901321+00:00"
 status: "done"
 title: "See what a candidate or a change touches, and what the story lacks"
-updated_at: "2026-11-04T20:54:38.011901321+00:00"
+updated_at: "2026-11-04T20:59:03.953637592+00:00"
 ---
 
 ## Goal
@@ -45,6 +45,7 @@ Records and commands from worldcrafter-8tbh and worldcrafter-cly1. Gaps are a fi
 ## Notes
 
 - 2026-11-04 [note] Also add, from review finding worldcrafter-7eyd on cly1: in app/src/story/commands.test.ts's remove-scene test, remove a scene used as a reader question's opensAt and assert opensAt is cleared. Optionally a constrain test with an unknown 'a'.
+- 2026-11-04 [note] Correction to the Close Reason after review finding worldcrafter-yydf: a candidate's 'one step on' now applies the carry rules to each touched record (its direct links plus its own step further), except a touched candidate's further step. Fixed in 4e02693; gaps no-gap cases added in eb67c54 (worldcrafter-1uph); evidence worldcrafter-m1t5.
 
 ## Close Reason
 
