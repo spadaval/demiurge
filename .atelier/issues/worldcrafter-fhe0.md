@@ -12,9 +12,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:30.988357870+00:00"
+status: "superseded"
 title: "Choose and seal the long-run premise"
-updated_at: "2026-11-05T05:44:05.154874139+00:00"
+updated_at: "2026-11-05T06:27:30.988357870+00:00"
 ---
 
 ## Goal
@@ -27,3 +28,7 @@ The long runs need a premise nobody building the harness or rubric has read, so 
 - The agent writes the premise to a sealed file in a new run root outside the repository. A decision record names the file and its sha256, not the text.
 - A second fresh agent, which also builds nothing, reviews the premise against that record.
 - Nobody working on the rubric or the harness reads the premise before the runs.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).

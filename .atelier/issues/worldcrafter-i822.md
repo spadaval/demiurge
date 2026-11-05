@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:30.891729067+00:00"
+status: "superseded"
 title: "Panel reads the long runs"
-updated_at: "2026-11-05T05:44:05.273458942+00:00"
+updated_at: "2026-11-05T06:27:30.891729067+00:00"
 ---
 
 ## Goal
@@ -31,3 +32,7 @@ Three independent judges say where the finished stories fall short, and how much
 - A ranked list, with citations, of the shortfalls at least two judges name is recorded on worldcrafter-efis.
 - A fresh reviewer, not a judge, checks that the procedure held before worldcrafter-i41m starts.
 - The judge input is size-checked against the trial run first (finding worldcrafter-z9wp). If it doesn't fit comfortably, each judge reads one run per session and finishes with a ranking session, decided and recorded before any judge reads.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).

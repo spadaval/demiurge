@@ -18,9 +18,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:30.826720891+00:00"
+status: "superseded"
 title: "Extend the harness for long runs with a read budget, and try it once"
-updated_at: "2026-11-05T05:45:42.070462823+00:00"
+updated_at: "2026-11-05T06:27:30.826720891+00:00"
 ---
 
 ## Goal
@@ -41,3 +42,7 @@ The comparison harness runs a premise to a finished novella across many fresh se
 ## Notes
 
 - 2026-11-05 [note] From planning review finding worldcrafter-p8h4: the read budget can be bypassed through the notes. Log per session the notes' size and their word-for-word overlap with the draft, and check it in the trial run. Measure it, don't forbid it.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).

@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:30.860765854+00:00"
+status: "superseded"
 title: "Three long runs on the sealed premise"
-updated_at: "2026-11-05T05:44:05.244567184+00:00"
+updated_at: "2026-11-05T06:27:30.860765854+00:00"
 ---
 
 ## Goal
@@ -32,3 +33,7 @@ Produce the finished stories the panel reads.
 - Failed runs aren't quietly rerun; failures are written down.
 - Each transcript is checked for reads outside its run's directory. Any session over the read budget is reported.
 - The handoff gives the paths, the model, the frozen commit and the number of failed runs.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).

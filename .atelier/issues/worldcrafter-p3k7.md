@@ -14,9 +14,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:31.052577597+00:00"
+status: "superseded"
 title: "Notes first: find where an agent with plain notes falls short, and aim aids there"
-updated_at: "2026-11-05T05:45:54.670333463+00:00"
+updated_at: "2026-11-05T06:27:31.052577597+00:00"
 ---
 
 ## Outcome
@@ -30,3 +31,7 @@ Follows the superseded mission worldcrafter-z9qs, whose typed-model bet lost two
 ## Notes
 
 - 2026-11-05 [note] 2026-11-05: created from decision worldcrafter-03rp. First increment worldcrafter-efis (todo) and docs task worldcrafter-5xig (todo). Planning not yet independently reviewed: neither starts until it is. Mission stays draft until review.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).

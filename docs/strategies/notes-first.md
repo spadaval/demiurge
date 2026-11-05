@@ -1,7 +1,11 @@
 ---
-status: draft
-last_changed: "2026-11-05: Outcome says what a long run means in practice (fresh sessions with a read budget smaller than the draft); the Verdicts procedure now lives here (planning review findings gqvm, 55mt on decision worldcrafter-03rp)"
+status: superseded
+last_changed: "2026-11-05: superseded by Sumeet's direction (decision worldcrafter-jeue); head-to-head comparisons and the notes-first framing are dropped, and what follows is docs/strategies/world-demo.md"
 ---
+
+# Result
+
+Superseded on 2026-11-05 by Sumeet's direction (decision worldcrafter-jeue) before any long run. The rest of this file is kept as it stood. What follows is `docs/strategies/world-demo.md`.
 
 # Why
 

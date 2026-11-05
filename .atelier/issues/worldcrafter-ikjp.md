@@ -12,9 +12,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:30.956693371+00:00"
+status: "superseded"
 title: "Write the long-run rubric"
-updated_at: "2026-11-05T05:44:05.186643227+00:00"
+updated_at: "2026-11-05T06:27:30.956693371+00:00"
 ---
 
 ## Goal
@@ -29,3 +30,7 @@ Fix what the panel in worldcrafter-efis judges before anyone reads a run, so the
 - whether the notes held what the drafting sessions needed, or whether sessions lost or contradicted what had been decided.
 
 It also says how each judge ranks the shortfalls, and how the shortfalls named by at least two judges are combined into one ranked list. The panel follows the "Reading one arm" case in the Verdicts section of `docs/strategies/notes-first.md`.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).

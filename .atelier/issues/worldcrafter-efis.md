@@ -30,9 +30,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T06:27:31.020803864+00:00"
+status: "superseded"
 title: "Take a premise to a finished long story with plain notes, and find where it falls short"
-updated_at: "2026-11-05T05:44:14.098681755+00:00"
+updated_at: "2026-11-05T06:27:31.020803864+00:00"
 ---
 
 ## Goal
@@ -69,3 +70,7 @@ The runs also have to show that the read budget held. If sessions read the whole
 ## Notes
 
 - 2026-11-05 [note] 2026-11-05: deferred finding worldcrafter-z9wp (judge load): after the trial run in worldcrafter-9ecm, size-check what each judge must read (three novellas plus notes) and, if it doesn't fit comfortably, split the panel into one session per run plus a ranking session; carried in worldcrafter-i822's Done when.
+
+## Close Reason
+
+Superseded by Sumeet's direction of 2026-11-05, decision worldcrafter-jeue: head-to-head comparisons and the notes-first framing are dropped; the next mission is worldcrafter-gwx3. Work done is parked unmerged on feature/worldcrafter-efis (dcc1e0a).
