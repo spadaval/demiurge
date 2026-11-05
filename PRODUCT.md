@@ -18,11 +18,11 @@ Demiurge is for writers and worldbuilders equally. Some users mostly draft prose
 
 Demiurge exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We use AI to assist and enhance the creative process, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). The current approach is plain notes: an agent, with craft advice, keeps the story in readable markdown notes and drafts from them. An earlier bet that a typed story model would do better than plain notes lost two blind comparisons and has ended (decision worldcrafter-03rp, `docs/verdicts/`). Aids over plain notes are built only where judged runs show the notes falling short, and each is tested blind against plain notes (`docs/strategies/notes-first.md`).
 
-Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: jump between levels and sides, rework in the abstract, try answers against the rest of the story, and leave things undecided or contradictory until a satisfying way through appears (`docs/rebuild/story-model.md`).
+Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: jump between levels and sides, rework in the abstract, try answers against the rest of the story, and leave things undecided or contradictory until a satisfying way through appears (first written up in `docs/rebuild/story-model.md`, for the ended typed-model bet; it holds for plain notes too).
 
 Success means a story can grow outside the writer's head without being flattened onto the page too early, and that any aid we build makes the team's stories better than plain notes do, as an independent panel judges them.
 
-The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The web app is the current plan and not a commitment: the form follows the results.
+The work is headless for now: an agent session over plain notes, with screens only if a verdict shows they help. The web app is the current plan and not a commitment: the form follows the results.
 
 ## Positioning
 
@@ -32,7 +32,7 @@ Not yet earned. An earlier positioning around a typed story model the app checks
 
 As planned for the web app; the headless first version runs in an agent session.
 
-- Sessions mix outlining, building the world, arranging scenes, drafting and reviewing what the AI inferred or proposed. Most of the leverage, and most of the time, is in the structure.
+- Sessions mix outlining, building the world, arranging scenes, drafting and reviewing what the AI inferred or proposed. Where the leverage is, is what the current mission is finding out.
 - Mainly used on desktop Chromium, on a laptop or desktop screen, and also on a phone.
 - Models are local (llama.cpp) or hosted (OpenRouter, featherless), and the user supplies their own keys. The writer controls samplers, system prompts and prompt format, which coding harnesses and chat frontends decide for you.
 - Scenes and entries are documents, but a scene is a structural unit first, and its prose is a set of passages anchored to its beats. There is no global chat; discussion is planned as talk pages attached to what they discuss.
@@ -64,7 +64,7 @@ There are no users, testimonials, metrics or sample worlds yet. Don't invent any
 
 1. **The best story wins.** Whatever gets to the best story is what we build, whether that's a screen, a database or an agent. An independent panel of judges decides what's good, and Sumeet can overturn it (decision worldcrafter-zybl).
 2. **Stories stay fluid.** Anything can be reworked at any time, in any order, and unfinished or contradictory is a normal state for a story to be in.
-3. **The structure is the stage.** Work happens at the highest level where a change applies. Prose is the finish, anchored to the structure rather than compiled from it.
+3. **Change things where they apply.** Work happens at the highest level where a change applies. Prose is the finish, anchored to the structure rather than compiled from it.
 4. **The AI is an accountable teammate.** It can do the bookkeeping, drive a whole sketch or write the prose, and it signs its work. In the app it stays quiet and doesn't compete for attention.
 5. **The writer stays in control.** Context is visible and editable, AI changes are reversible, and the writer's corrections always win.
 6. **Results decide the form.** What holds the story (notes, a model, an app) is whatever judged runs show works best; the typed model lost to plain notes (decision worldcrafter-03rp). World and story shape each other both ways.
