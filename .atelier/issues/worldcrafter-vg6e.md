@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Trace precision (Round 2 reading 2)"
-updated_at: "2026-11-05T11:33:23.681409055+00:00"
+updated_at: "2026-11-05T11:43:18.012356486+00:00"
 ---
 
 ## Goal
