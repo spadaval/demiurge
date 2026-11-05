@@ -60,8 +60,10 @@ tree.
 A session may read its run dir, plus the files Claude Code itself saved its
 large tool results to, in the sandbox's own fresh home under
 `~/.claude/projects/<the run dir's slug>/`, as those tool results name them.
-Text that `cat` writes to a file from a heredoc (`cat > part1.md <<'EOF'`)
-isn't checked as commands or paths; the rest of the command is.
+Text that `cat` writes to a file from a heredoc with a quoted delimiter
+(`cat > part1.md <<'EOF'`, `<<"EOF"` or `<<\EOF`) isn't checked as commands or
+paths, since bash doesn't expand it; the rest of the command is, and so is the
+body of an unquoted heredoc.
 
 A run fails, in `STATUS`, if claude exits non-zero or times out, the
 transcript check finds anything outside the run dir, any model other than
