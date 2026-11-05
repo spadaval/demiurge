@@ -25,7 +25,7 @@ import type {
   TimeEvent,
   Timeline,
 } from "../time/timeline";
-import { describeSpan, describeYears } from "./calendar";
+import { describeWhen, describeYears } from "./calendar";
 import { storyContradictions } from "./contradictions";
 import {
   type DriveTurn,
@@ -36,26 +36,93 @@ import {
   type Story,
 } from "./story";
 
-/** The story as Markdown-like text. */
-export function renderStory(story: Story): string {
-  const sections = [
-    section("Premise", story.premise.trim() === "" ? [] : [story.premise]),
-    section("People and groups", actorLines(story)),
-    section("Wants nobody holds yet", unheldDriveLines(story)),
-    section("Events, in story order", eventLines(story)),
-    section(
-      "The world",
-      story.facts.map((fact) => `- ${sentence(fact.text)}`),
-    ),
-    section("Things", objectLines(story)),
-    section("Who knows or believes what", knowledgeLines(story)),
-    section("Scenes, in telling order", sceneLines(story)),
-    section("What the reader is waiting to find out", readerLines(story)),
-    section("Decided", decidedLines(story)),
-    section("Left open for the reader", leftOpenLines(story)),
-    section("Not decided yet", openQuestionLines(story)),
-    section("Where the story pulls against itself", contradictionLines(story)),
-  ].filter((text) => text !== "");
+type Section = {
+  /** What `render --section` takes. */
+  name: string;
+  title: string;
+  lines: (story: Story) => string[];
+};
+
+/**
+ * The bible's sections, in order. Open questions get one section per state
+ * (`questionState`), titled after it.
+ */
+const SECTIONS: readonly Section[] = [
+  {
+    name: "premise",
+    title: "Premise",
+    lines: (story) => (story.premise.trim() === "" ? [] : [story.premise]),
+  },
+  { name: "people", title: "People and groups", lines: actorLines },
+  {
+    name: "unheld-wants",
+    title: "Wants nobody holds yet",
+    lines: unheldDriveLines,
+  },
+  { name: "events", title: "Events, in story order", lines: eventLines },
+  {
+    name: "world",
+    title: "The world",
+    lines: (story) => story.facts.map((fact) => `- ${sentence(fact.text)}`),
+  },
+  { name: "things", title: "Things", lines: objectLines },
+  {
+    name: "knowledge",
+    title: "Who knows or believes what",
+    lines: knowledgeLines,
+  },
+  { name: "scenes", title: "Scenes, in telling order", lines: sceneLines },
+  {
+    name: "reader-questions",
+    title: "What the reader is waiting to find out",
+    lines: readerLines,
+  },
+  {
+    name: "undecided",
+    title: "Open questions: undecided",
+    lines: openQuestionLines,
+  },
+  {
+    name: "decided",
+    title: "Open questions: decided, not revealed yet",
+    lines: (story) => answeredLines(story, "decided"),
+  },
+  {
+    name: "revealed",
+    title: "Open questions: revealed",
+    lines: (story) => answeredLines(story, "revealed"),
+  },
+  {
+    name: "left-open",
+    title: "Open questions: left open for the reader",
+    lines: leftOpenLines,
+  },
+  {
+    name: "contradictions",
+    title: "Where the story pulls against itself",
+    lines: contradictionLines,
+  },
+];
+
+/** The names `renderStory` takes, in the order it prints them. */
+export const RENDER_SECTION_NAMES = SECTIONS.map(({ name }) => name);
+
+/**
+ * The story as Markdown-like text: every section with something in it, or
+ * only the named ones. A named section with nothing in it says so, so asking
+ * for it never prints nothing.
+ */
+export function renderStory(story: Story, only?: readonly string[]): string {
+  const sections = SECTIONS.filter(
+    ({ name }) => only === undefined || only.includes(name),
+  )
+    .map(({ title, lines }) => {
+      const text = section(title, lines(story));
+      return text === "" && only !== undefined
+        ? `## ${title}\n\n(nothing yet)`
+        : text;
+    })
+    .filter((text) => text !== "");
   return `${sections.join("\n\n")}\n`;
 }
 
@@ -322,15 +389,14 @@ function unheldDriveLines(story: Story): string[] {
 function positionText(story: Story, position: Position | undefined): string {
   if (position === undefined) return "";
   const { worldUnit } = story.timeline;
-  const date = worldUnit === "year" ? describeSpan(position) : undefined;
-  if (date !== undefined) {
-    return ` (${date}${position.precision === null ? "" : `, ${position.precision}`})`;
-  }
+  const precision =
+    position.precision === null ? "" : `, ${position.precision}`;
+  if (worldUnit === "year") return ` (${describeWhen(position)}${precision})`;
   const range =
     position.start === position.end
       ? `${position.start}`
       : `${position.start} to ${position.end}`;
-  return ` (${worldUnit} ${range}${position.precision === null ? "" : `, ${position.precision}`})`;
+  return ` (${worldUnit} ${range}${precision})`;
 }
 
 function constraintText(story: Story, c: Constraint): string {
@@ -653,20 +719,21 @@ function openQuestionLines(story: Story): string[] {
 }
 
 /**
- * Answered questions with the chosen answer, where it is revealed, and the
- * candidates ruled out. What the question concerns stays in the file.
+ * Answered questions in `state` with the chosen answer, where a revealed one
+ * is revealed, and the candidates ruled out. What the question concerns
+ * stays in the file.
  */
-function decidedLines(story: Story): string[] {
+function answeredLines(story: Story, state: "decided" | "revealed"): string[] {
   return story.openQuestions.flatMap((q) => {
-    const state = questionState(story, q);
+    const found = questionState(story, q);
     const chosen = q.candidates.find((c) => c.id === q.answer);
-    if (chosen === undefined || state.state === "left_open") return [];
+    if (chosen === undefined || found.state !== state) return [];
     const where =
-      state.state === "revealed"
-        ? `Revealed in "${sceneTitle(story, state.scene)}".`
-        : "Not revealed yet.";
+      found.state === "revealed"
+        ? ` Revealed in "${sceneTitle(story, found.scene)}".`
+        : "";
     return [
-      `- ${q.question} ${sentence(named(chosen.answer))} ${where}`,
+      `- ${q.question} ${sentence(named(chosen.answer))}${where}`,
       ...ruledOutLines(q),
     ];
   });

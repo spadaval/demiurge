@@ -160,7 +160,7 @@ describe("story CLI", () => {
     const rendered = ok("render");
     expect(rendered).toContain("Expose what the tribe carried");
     expect(rendered).toContain(
-      "## Decided\n\n- Why did Joel leave? He found what the caravans carried. Not revealed yet.\n",
+      "## Open questions: decided, not revealed yet\n\n- Why did Joel leave? He found what the caravans carried.\n",
     );
     expect(rendered).not.toContain("He wanted adventure");
     // The bible carries no word budget.
@@ -212,7 +212,9 @@ describe("story CLI", () => {
     ok("leave-for-reader", "who", "--reason", "The reader should wonder");
     expect(state()).toBe("state: left open for the reader");
     expect(ok("list", "open-question")).toContain("(left open for the reader)");
-    expect(ok("render")).toContain("## Left open for the reader\n");
+    expect(ok("render")).toContain(
+      "## Open questions: left open for the reader\n",
+    );
     expect(ok("gaps")).not.toContain("open-question:who");
 
     ok("set-scene-links", "docks", "reveals", "candidate:who/ferry");
@@ -235,7 +237,7 @@ describe("story CLI", () => {
     ok("add-event", "wreck", "The wreck");
     ok("set-position", "storm", "10");
     ok("set-position", "wreck", "12");
-    expect(ok("add-cause", "storm", "wreck")).toBe("Saved.\n");
+    expect(ok("add-cause", "storm", "wreck")).toBe("");
     expect(saved().causes).toEqual([{ cause: "storm", effect: "wreck" }]);
     expect(ok("show", "event:wreck")).toContain(
       'because of: event:storm ("The storm")',
@@ -256,8 +258,8 @@ describe("story CLI", () => {
     );
     expect(ok("contradictions")).toContain("recorded as its cause");
     // Reported once, by the edit that made it.
-    expect(ok("set-position", "storm", "15")).toBe("Saved.\n");
-    expect(ok("set-position", "storm", "12")).toBe("Saved.\n");
+    expect(ok("set-position", "storm", "15")).toBe("");
+    expect(ok("set-position", "storm", "12")).toBe("");
     expect(ok("contradictions")).toBe("No contradictions.\n");
 
     const self = cli(file, "add-cause", "storm", "storm");
@@ -318,10 +320,10 @@ describe("story CLI", () => {
       "may state when this happened",
     );
     // Other edits don't prompt.
-    expect(ok("update-scene", "market", "--title", "Market")).toBe("Saved.\n");
+    expect(ok("update-scene", "market", "--title", "Market")).toBe("");
   });
 
-  test("an edit prompts only when it changes what text can state, and at most five lines", () => {
+  test("an edit prompts only when it changes what text can state, and at most three lines", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-actor", "mara", "Mara");
     ok("add-drive", "calm", "Stay calm", "--actor", "mara");
@@ -333,28 +335,23 @@ describe("story CLI", () => {
     const prompt = "What may still state the old";
 
     // No-op and kind-only edits change nothing text states.
-    expect(ok("update-actor", "mara", "--name", "Mara")).toBe("Saved.\n");
-    expect(ok("update-actor", "mara", "--kind", "person")).toBe("Saved.\n");
-    expect(ok("update-actor", "mara", "--notes", "Keeps the light")).toBe(
-      "Saved.\n",
-    );
-    expect(ok("update-drive", "calm", "--stakes", "Her post")).toBe("Saved.\n");
-    expect(ok("update-drive", "calm", "--want", "Stay calm")).toBe("Saved.\n");
-    expect(ok("describe-event", "wreck", "--summary", "It sinks")).toBe(
-      "Saved.\n",
-    );
-    expect(ok("set-position", "wreck", "10")).toBe("Saved.\n");
+    expect(ok("update-actor", "mara", "--name", "Mara")).toBe("");
+    expect(ok("update-actor", "mara", "--kind", "person")).toBe("");
+    expect(ok("update-actor", "mara", "--notes", "Keeps the light")).toBe("");
+    expect(ok("update-drive", "calm", "--stakes", "Her post")).toBe("");
+    expect(ok("update-drive", "calm", "--want", "Stay calm")).toBe("");
+    expect(ok("describe-event", "wreck", "--summary", "It sinks")).toBe("");
+    expect(ok("set-position", "wreck", "10")).toBe("");
 
-    // A rename prompts, five lines at most, then points at trace.
+    // A rename prompts, three lines at most, then points at trace.
     const renamed = ok("update-actor", "mara", "--name", "Maren");
     const lines = renamed.trimEnd().split("\n");
-    expect(lines[0]).toBe("Saved.");
-    expect(lines[1]).toContain(`${prompt} actor:mara`);
-    expect(lines.slice(2, 7).every((line) => line.includes('"Mara"'))).toBe(
+    expect(lines[0]).toContain(`${prompt} actor:mara`);
+    expect(lines.slice(1, 4).every((line) => line.includes('"Mara"'))).toBe(
       true,
     );
-    expect(lines[7]).toBe("...run trace actor:mara for all 8.");
-    expect(lines).toHaveLength(8);
+    expect(lines[4]).toBe("...run trace actor:mara for all 8.");
+    expect(lines).toHaveLength(5);
     // A new holder prompts for the old one's name.
     ok("add-actor", "ivo", "Ivo");
     ok("update-actor", "mara", "--name", "Mara");
@@ -376,13 +373,13 @@ describe("story CLI", () => {
     const lines = ok("update-drive", "d", "--want", "Leave the island")
       .trimEnd()
       .split("\n");
-    expect(lines[2]).toBe(
+    expect(lines[1]).toBe(
       '- fact:vow ("Her vow to keep the light binds her"): text "keep the light" names it',
     );
-    expect(lines.slice(3, 7).every((l) => l.includes("names its holder"))).toBe(
+    expect(lines.slice(2, 4).every((l) => l.includes("names its holder"))).toBe(
       true,
     );
-    expect(lines[7]).toBe("...run trace drive:d for all 14.");
+    expect(lines[4]).toBe("...run trace drive:d for all 14.");
   });
 
   test("show lists a reworked answer's history, and render doesn't", () => {
@@ -631,16 +628,16 @@ describe("story CLI", () => {
     expect(ok("list", "knowledge")).toContain("knowledge:oren-lightning");
 
     expect(ok("remove-version", "lightning")).toBe(
-      'Saved.\nAlso removed: knowledge:oren-lightning ("Oren believes: Lightning struck it")\n',
+      'Also removed: knowledge:oren-lightning ("Oren believes: Lightning struck it")\n',
     );
     ok("add-knowledge", "oren-arson", "oren", "knows", "version:arson");
     expect(ok("remove-event", "burning")).toBe(
-      'Saved.\nAlso removed: version:arson ("Vell set the fire"), knowledge:oren-arson ("Oren knows: Vell set the fire")\n',
+      'Also removed: version:arson ("Vell set the fire"), knowledge:oren-arson ("Oren knows: Vell set the fire")\n',
     );
     expect(ok("remove-fact", "tithe")).toContain(
       "Also removed: knowledge:vell-tithe",
     );
-    expect(ok("remove-actor", "oren")).toBe("Saved.\n");
+    expect(ok("remove-actor", "oren")).toBe("");
     expect(saved().knowledge).toEqual([]);
     expect(saved().scenes[0]?.reveals).toEqual([]);
     const bad = cli(
@@ -719,10 +716,152 @@ describe("story CLI", () => {
     );
 
     expect(ok("remove-event", "death")).toBe(
-      "Saved.\nAlso removed: the part of actor:lew in event:death, the part of object:hook in event:death\n",
+      "Also removed: the part of actor:lew in event:death, the part of object:hook in event:death\n",
     );
-    expect(ok("remove-drive-turn", "truth", "1")).toBe("Saved.\n");
+    expect(ok("remove-drive-turn", "truth", "1")).toBe("");
     expect(saved().drives.find((d) => d.id === "truth")?.turns).toHaveLength(1);
+  });
+
+  test("stays quiet in batch use: no trace for adds or a first placement, and dates said as dates", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-fact", "reef", "The wreck on the reef in 1954 drowned the crew");
+    // A clean edit prints nothing, and neither does adding or first placing.
+    expect(ok("add-event", "wreck", "The wreck")).toBe("");
+    expect(ok("set-position", "wreck", "1954-10-12")).toBe("");
+    expect(ok("add-event", "letter", "The letter")).toBe("");
+    expect(ok("set-position", "letter", "1954-10-12 21:00")).toBe("");
+    // A real move still prints the trace.
+    expect(ok("set-position", "wreck", "1953")).toContain(
+      "What may still state the old event:wreck",
+    );
+    ok("set-position", "wreck", "1954-10-12");
+
+    // Finding mdk6: a gap given in weeks is said in units, not years.
+    const problem = ok(
+      "constrain",
+      "c3",
+      "wreck",
+      "before",
+      "letter",
+      "--gap",
+      "2w",
+    );
+    expect(problem).toBe(
+      "Timeline problem (kept; see contradictions): constraint c3 puts 2 weeks give or take 84 hours between wreck and letter, but their positions put -3 hours to 21 hours between them\n",
+    );
+    expect(ok("contradictions")).toContain(
+      "- constraint c3 puts 2 weeks give or take 84 hours between wreck and letter",
+    );
+    expect(ok("show", "event:wreck")).toContain(
+      "constraint c3: wreck before letter (gap 2 weeks ± 84 hours)\n",
+    );
+    ok("remove-constraint", "c3");
+
+    // A range of dates prints as dates everywhere.
+    ok("set-position", "letter", "1954-11-01", "--end", "1954-11-03");
+    expect(ok("show", "event:letter")).toContain(
+      "position: 1 to 3 November 1954\n",
+    );
+    expect(ok("list", "event")).toContain(
+      'event:letter ("The letter") at 1 to 3 November 1954\n',
+    );
+    expect(ok("render")).toContain("- **The letter** (1 to 3 November 1954)");
+    ok("add-scene", "storm", "Storm");
+    ok("set-scene-links", "storm", "reveals", "event:letter");
+    expect(ok("reader-order")).toContain(
+      'reveals event:letter ("The letter") at 1 to 3 November 1954\n',
+    );
+    ok("set-position", "letter", "1954.5", "--end", "1954-11");
+    expect(ok("show", "event:letter")).toContain(
+      "position: 2 July 1954, 12:00 to 30 November 1954\n",
+    );
+    // Whole years stay years.
+    ok("set-position", "letter", "1200", "--end", "1210");
+    expect(ok("show", "event:letter")).toContain(
+      "position: year 1200 to 1210\n",
+    );
+
+    // gaps no longer lists facts linked to nothing.
+    expect(ok("gaps")).not.toContain("fact-unconnected");
+
+    // update-event is describe-event.
+    expect(ok("update-event", "letter", "--label", "The letter comes")).toBe(
+      "",
+    );
+    expect(saved().timeline.events.find((e) => e.id === "letter")?.label).toBe(
+      "The letter comes",
+    );
+    expect(cli("--help").stdout).toContain(
+      "  describe-event <id> [--label <text>] [--summary <text>] (also update-event)\n",
+    );
+  });
+
+  test("set-scene-links adds and removes without retyping, and a set says what it dropped", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-object", "penny", "The penny");
+    ok("add-object", "hook", "The hook");
+    ok("add-actor", "mara", "Mara");
+    ok("add-scene", "smoke", "Smoke");
+    const plants = () =>
+      saved()
+        .scenes.find((s) => s.id === "smoke")
+        ?.plants.map((r) => r.id);
+    expect(ok("set-scene-links", "smoke", "plants", "object:penny")).toBe("");
+    expect(
+      ok(
+        "set-scene-links",
+        "smoke",
+        "plants",
+        "--add",
+        "object:hook",
+        "object:penny",
+      ),
+    ).toBe("");
+    expect(plants()).toEqual(["hook", "penny"]);
+    expect(
+      ok("set-scene-links", "smoke", "plants", "--remove", "object:hook"),
+    ).toBe("");
+    expect(plants()).toEqual(["penny"]);
+    const missing = cli(
+      file,
+      "set-scene-links",
+      "smoke",
+      "plants",
+      "--remove",
+      "object:hook",
+    );
+    expect(missing.code).toBe(2);
+    expect(missing.stderr).toContain(
+      "smoke plants doesn't include object:hook",
+    );
+    // Replacing the list names what went, as Round 1's writer dropped a plant.
+    expect(ok("set-scene-links", "smoke", "plants", "actor:mara")).toBe(
+      "Dropped from smoke plants: object:penny (--add adds without replacing the list)\n",
+    );
+    expect(ok("set-scene-links", "smoke", "pays-off", "actor:mara")).toBe("");
+    expect(ok("set-scene-links", "smoke", "pays-off", "none")).toBe(
+      "Dropped from smoke pays-off: actor:mara (--add adds without replacing the list)\n",
+    );
+  });
+
+  test("render prints only the sections asked for, named after what they hold", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-open-question", "who", "Who wrote it?");
+    ok("add-candidate", "who", "ferry", "The ferryman");
+    ok("add-open-question", "why", "Why now?");
+    ok("add-candidate", "why", "debt", "A debt came due");
+    ok("answer-open-question", "why", "debt");
+    expect(ok("render", "--section", "undecided")).toBe(
+      "## Open questions: undecided\n\n- Who wrote it?\n  - The ferryman.\n",
+    );
+    expect(ok("render", "--section", "decided,revealed")).toBe(
+      "## Open questions: decided, not revealed yet\n\n- Why now? A debt came due.\n\n## Open questions: revealed\n\n(nothing yet)\n",
+    );
+    const wrong = cli(file, "render", "--section", "open-questions");
+    expect(wrong.code).toBe(2);
+    expect(wrong.stderr).toContain(
+      "no section open-questions: --section takes premise, people,",
+    );
   });
 
   test("trace lists dependents mentions misses, scene prose among them, and edits print the top of it", () => {

@@ -980,6 +980,11 @@ describe("answer history and deliberate gaps in the file", () => {
         ref: { kind: "readerQuestion", id: "who" },
         reason: "Left hanging",
       },
+      {
+        gap: "fact_unconnected",
+        ref: { kind: "fact", id: "salt" },
+        reason: "Stands alone",
+      },
     );
     const story = parseStory(JSON.stringify(value))._unsafeUnwrap();
     expect(serializeStory(story)).toBe(serializeStory(withHistory));

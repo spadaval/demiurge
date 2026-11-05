@@ -276,7 +276,6 @@ export const GAP_KINDS = [
   "scene_without_pressure",
   "drive_without_scene",
   "event_unreferenced",
-  "fact_unconnected",
   "no_reader_question",
   "reader_question_never_opens",
   "open_question_without_candidates",
@@ -289,10 +288,13 @@ export type GapKind = (typeof GAP_KINDS)[number];
  * Gap kinds `storyGaps` no longer reports. A deliberate mark of one in an old
  * file has nothing left to silence, so it is dropped on load. A person with
  * no drive is no gap: reporting it pushed sessions to delete minor characters.
+ * Nor is a fact linked to nothing: listing each one pushed a writer to link
+ * every world fact just to clear the list (Round 1 reading, issue 4).
  */
 const RETIRED_GAP_KINDS: readonly string[] = [
   "reader_question_never_answered",
   "person_without_drive",
+  "fact_unconnected",
 ];
 
 /** The kind of record each gap is about, or null for the whole story. */
@@ -303,7 +305,6 @@ export const GAP_SUBJECTS: Record<GapKind, RefKind | null> = {
   scene_without_pressure: "scene",
   drive_without_scene: "drive",
   event_unreferenced: "event",
-  fact_unconnected: "fact",
   no_reader_question: null,
   reader_question_never_opens: "readerQuestion",
   open_question_without_candidates: "openQuestion",

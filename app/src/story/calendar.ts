@@ -12,6 +12,7 @@
 import { err, ok, type Result } from "neverthrow";
 
 const MS_PER_MINUTE = 60_000;
+const MS_PER_DAY = 24 * 60 * MS_PER_MINUTE;
 const DAYS_PER_YEAR = 365.2425;
 
 /** Milliseconds since the epoch at the start of that minute, any year. */
@@ -136,6 +137,68 @@ export function describeSpan({ start, end }: Span): string | undefined {
   return undefined;
 }
 
+/** A number of years without float noise: `612.8`, not `612.8000000000001`. */
+const yearNumber = (years: number) => String(Number(years.toFixed(6)));
+
+const isMidnight = (d: Date) =>
+  d.getUTCHours() === 0 && d.getUTCMinutes() === 0;
+
+/** `12 October 1954`, with `, 21:00` when `time`. */
+function dateText(d: Date, time: boolean): string {
+  const date = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()] ?? ""} ${d.getUTCFullYear()}`;
+  return time
+    ? `${date}, ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
+    : date;
+}
+
+/**
+ * Where a span of fractional years falls, said as dates when it can be: one
+ * month, day or minute as `describeSpan` says it; a range whose ends fall on
+ * whole minutes as dates, its end said inclusively (`1 to 3 November 612`,
+ * `October to November 1954`, `12 October 1954, 21:00 to 13 October 1954,
+ * 02:00`); otherwise in years (`year 1954`, `year 1200 to 1210`). Whole
+ * years stay years, as a year-based file wrote them.
+ */
+export function describeWhen(span: Span): string {
+  const exact = describeSpan(span);
+  if (exact !== undefined) return exact;
+  const { start, end } = span;
+  const inYears =
+    start === end
+      ? `year ${yearNumber(start)}`
+      : `year ${yearNumber(start)} to ${yearNumber(end)}`;
+  if (end <= start || (Number.isInteger(start) && Number.isInteger(end))) {
+    return inYears;
+  }
+  const from = wholeMinute(start);
+  const to = wholeMinute(end);
+  if (from === undefined || to === undefined) return inYears;
+  const monthStart = (d: Date) => isMidnight(d) && d.getUTCDate() === 1;
+  if (monthStart(from) && monthStart(to)) {
+    const last = new Date(to.getTime());
+    last.setUTCMonth(last.getUTCMonth() - 1);
+    const month = (d: Date) => MONTHS[d.getUTCMonth()] ?? "";
+    return from.getUTCFullYear() === last.getUTCFullYear()
+      ? `${month(from)} to ${month(last)} ${last.getUTCFullYear()}`
+      : `${month(from)} ${from.getUTCFullYear()} to ${month(last)} ${last.getUTCFullYear()}`;
+  }
+  if (isMidnight(from) && isMidnight(to)) {
+    const last = new Date(to.getTime() - MS_PER_DAY);
+    const until = dateText(last, false);
+    if (from.getUTCFullYear() !== last.getUTCFullYear()) {
+      return `${dateText(from, false)} to ${until}`;
+    }
+    return from.getUTCMonth() === last.getUTCMonth()
+      ? `${from.getUTCDate()} to ${until}`
+      : `${from.getUTCDate()} ${MONTHS[from.getUTCMonth()] ?? ""} to ${until}`;
+  }
+  // An end at midnight closes the day before; any other is the minute it ends.
+  const last = isMidnight(to)
+    ? new Date(to.getTime() - MS_PER_DAY)
+    : new Date(to.getTime() - MS_PER_MINUTE);
+  return `${dateText(from, true)} to ${dateText(last, !isMidnight(to))}`;
+}
+
 /** Units a gap can be given in, as years. */
 const UNITS: readonly {
   names: readonly string[];
@@ -187,5 +250,11 @@ export function describeYears(years: number): string {
       return `${whole} ${word}${Math.abs(whole) === 1 ? "" : "s"}`;
     }
   }
-  return `${years} years`;
+  // Not whole in any unit: the largest unit it reaches, to one decimal.
+  const unit =
+    UNITS.find(({ years: size }) => Math.abs(years) >= size) ??
+    UNITS[UNITS.length - 1];
+  if (unit === undefined) return `${years} years`;
+  const count = Number((years / unit.years).toFixed(1));
+  return `${count} ${unit.word}${Math.abs(count) === 1 ? "" : "s"}`;
 }

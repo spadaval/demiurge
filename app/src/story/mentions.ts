@@ -303,13 +303,21 @@ export function terms(story: Story, ref: Ref): Term[] {
     const position = story.timeline.positions.find(
       (p) => p.event === ref.id && p.frame === WORLD_FRAME,
     );
-    // A date is stored as a fractional year, and text states its year.
+    // A date is stored as a fractional year, and text states its year: a
+    // range's end is exclusive, so a range ending at a new year is in the last.
     const years =
       position === undefined
         ? []
-        : describeSpan(position) === undefined
-          ? [...new Set([position.start, position.end])]
-          : [Math.floor(position.start)];
+        : describeSpan(position) !== undefined
+          ? [Math.floor(position.start)]
+          : Number.isInteger(position.start) && Number.isInteger(position.end)
+            ? [...new Set([position.start, position.end])]
+            : [
+                ...new Set([
+                  Math.floor(position.start),
+                  Math.ceil(position.end) - 1,
+                ]),
+              ];
     for (const year of years) {
       found.push({
         pattern: numberPattern(year),

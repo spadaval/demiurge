@@ -26,7 +26,11 @@ is the reference for every command and the ref format (`actor:mara`,
 Keep the story file, `story.json` unless you were told otherwise, in the git
 repository you're working in. Each edit is checked and written only if it
 succeeds; a refused edit says why, so fix it and run it again. Add a record
-before linking to it.
+before linking to it. An edit that succeeds prints nothing unless there is
+something to read: a contradiction it kept, records it removed with the one
+you named, scene links it dropped, or what may still state a record's old
+version. So read whatever an edit prints, and don't filter the output, even
+in a long batch.
 
 ## The bible and the prose
 
@@ -58,8 +62,11 @@ Say what each scene does with the bible:
   `add-object knife "Doran's knife"` makes a thing the scenes can link to,
   and `show object:knife` lists where it is planted and paid off.
 
-Each command sets that kind of link for the scene; `none` clears it. Any
-record or candidate can be linked. `show scene:<id>` lists a scene's links,
+Each command sets that kind of link for the scene, replacing the list;
+`none` clears it, and the edit names any ref it dropped. Add `--add` to add
+refs to the list (`set-scene-links storm plants --add object:knife`) or
+`--remove` to take them off, without retyping the rest. Any record or
+candidate can be linked. `show scene:<id>` lists a scene's links,
 and `scenes <ref>` lists, in telling order, every scene that touches a
 record and how: who is in it, what it depicts or pressures, which reader
 questions it opens or answers, and what it reveals, implies or withholds.
@@ -82,16 +89,19 @@ prose (and the records) that may need rereading.
   the file, and `show` and `render` list it as ruled out. `--undo` puts it
   back in the running, and choosing it as the answer does too.
 - **Where a question stands.** `show open-question:who-wrote` prints its
-  state, and `render` groups questions by it:
-  - *undecided*: no answer chosen yet. This is your task.
-  - *decided, not revealed yet*: you know the answer and no scene has told
-    the reader.
-  - *left open for the reader*: `leave-for-reader who-wrote --reason "..."`
-    says the story never answers it, whether or not you have; `--undo`
-    takes the mark off.
-  - *revealed in scene X*: the first scene, in telling order, whose
-    `set-scene-links ... reveals` names the question or its chosen
+  state, and `render` gives each state its own section, headed "Open
+  questions: undecided" and so on (`render --section undecided` prints just
+  that one):
+  - *undecided* (`--section undecided`): no answer chosen yet. This is
+    your task.
+  - *decided, not revealed yet* (`decided`): you know the answer and no
+    scene has told the reader.
+  - *revealed in scene X* (`revealed`): the first scene, in telling order,
+    whose `set-scene-links ... reveals` names the question or its chosen
     candidate.
+  - *left open for the reader* (`left-open`): `leave-for-reader who-wrote
+    --reason "..."` says the story never answers it, whether or not you
+    have; `--undo` takes the mark off.
 
   Only undecided questions are prompts in `gaps`. A decided question no
   scene reveals, or one left open, is a normal place to rest: a story leaves
@@ -155,19 +165,24 @@ prose (and the records) that may need rereading.
   before) or a date: `1954-10` (that month), `1954-10-12` (that day) or
   `"1954-10-12 21:00"` (that minute). A date is the span it names, so two
   events on the same day can be ordered with `constrain ... before`, and
-  `render` prints dates, not fractions of a year. `constrain --gap` takes a
-  unit too: `--gap 3d`, `2w`, `6h`, `4mo`; without `--tolerance` it is give
-  or take half that unit. Knowledge `--since` and `--until` and drive turns
+  `set-position wreck 1954-10-12 --end 1954-10-14` spans days. `render`,
+  `show`, `list`, `reader-order` and `contradictions` print dates (`12 to
+  14 October 1954`) and gaps in units (`2 weeks`), not fractions of a
+  year. `constrain --gap` takes a unit too: `--gap 3d`, `2w`, `6h`, `4mo`;
+  without `--tolerance` it is give or take half that unit. Knowledge `--since` and `--until` and drive turns
   `--at` name events, so they follow the events wherever they are placed.
 - **Rework** a motive with `update-drive` or `set-drive-origins`, an event
-  with `describe-event`, `set-position` or `constrain`, and see what it
-  reaches with `touches`.
+  with `describe-event` (or its other name, `update-event`), `set-position`
+  or `constrain`, and see what it reaches with `touches`.
 - **Find what a change left behind with `trace`.** After an edit that
   changes a record (moving or rewording an event, updating an actor, drive,
   fact, version, knowledge or object, re-answering a question, a drive
-  turn), the CLI prints the top of `trace` under "What may still state the
-  old ...": records and paragraphs of scene prose (`scenes/<id>.md:<line>`)
-  that may now be wrong, each with why it is suspected. It looks only for
+  turn), the CLI prints the top three of `trace` under "What may still
+  state the old ...": records and paragraphs of scene prose
+  (`scenes/<id>.md:<line>`) that may now be wrong, each with why it is
+  suspected, and how many more `trace` would list. Adding a record, or
+  placing an event for the first time, prints none, since nothing can yet
+  state an old version of it. It looks only for
   what the change took away: the old name or year if those changed, words
   the old text had that the new lacks, and for a moved event spans such as
   "ten years since" (and says when the span matches the gap to another
@@ -194,7 +209,9 @@ prose (and the records) that may need rereading.
   stops listing it. Mark only what you have decided, not what you haven't
   got to yet.
 - **Read the whole bible with `render`**, which prints it as text with no
-  IDs, for you to check what it holds and how it hangs together. It is not
+  IDs, for you to check what it holds and how it hangs together. `render
+  --section events,scenes` prints only those sections; `--help` lists the
+  section names. It is not
   the story and no reader sees it. It says each thing once: a want in full
   under its holder, and briefly elsewhere; a relation once; a constraint
   only when the positions don't already show it; a decided question as its

@@ -714,6 +714,9 @@ describe("frames order events", () => {
       kind: "inconsistent_duration",
       referencedBy: "constraint c",
       events: ["a", "b"],
+      stated: { amount: 10, tolerance: 0.5 },
+      between: { min: 1, max: 1 },
+      unit: "year",
       message:
         "constraint c puts 10 give or take 0.5 year between a and b, but their positions put 1 year between them",
     });

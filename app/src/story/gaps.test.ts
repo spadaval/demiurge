@@ -139,11 +139,6 @@ const cases: [GapKind, StoryCommand[], Ref | null][] = [
     [{ type: "addEvent", id: "storm", label: "", summary: "" }],
     { kind: "event", id: "storm" },
   ],
-  [
-    "fact_unconnected",
-    [{ type: "addFact", id: "salt", text: "Salt rusts iron.", about: [] }],
-    { kind: "fact", id: "salt" },
-  ],
   ["no_reader_question", [{ type: "removeReaderQuestion", id: "opens" }], null],
   [
     "reader_question_never_opens",
@@ -292,30 +287,16 @@ describe("storyGaps", () => {
     ).toEqual([]);
   });
 
-  test("a fact about nothing that something refers to is woven in", () => {
-    const fact: StoryCommand = {
-      type: "addFact",
-      id: "salt",
-      text: "",
-      about: [],
-    };
-    const salt: Ref = { kind: "fact", id: "salt" };
-    const unconnected = (...commands: StoryCommand[]) =>
-      storyGaps(run(woven, fact, ...commands)).filter(
-        (gap) => gap.kind === "fact_unconnected",
-      );
-    expect(unconnected()).toHaveLength(1);
+  test("a fact linked to nothing is no gap", () => {
     expect(
-      unconnected({ type: "addFact", id: "rust", text: "", about: [salt] }),
-    ).toEqual([]);
-    expect(
-      unconnected({
-        type: "addCandidate",
-        questionId: "why",
-        id: "salt-did-it",
-        answer: "",
-        touches: [salt],
-      }),
+      storyGaps(
+        run(woven, {
+          type: "addFact",
+          id: "salt",
+          text: "Salt rusts iron.",
+          about: [],
+        }),
+      ),
     ).toEqual([]);
   });
 
@@ -363,7 +344,7 @@ describe("storyGaps", () => {
     }
     expect(
       messages.filter((m) => m.includes("it can also stand on its own")),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 });
 

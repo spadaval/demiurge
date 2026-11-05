@@ -561,6 +561,9 @@ export function durationProblems(chronology: Chronology): TimelineProblem[] {
         kind: "inconsistent_duration",
         referencedBy: by,
         events: [earlier, later],
+        stated: { amount: duration.amount, tolerance },
+        between: { min: gap.min, max: gap.max },
+        unit: gap.unit,
         message: `${by} puts ${stated} ${gap.unit} between ${earlier} and ${later}, but their positions put ${formatRange(gap)} ${gap.unit} between them`,
       });
     }

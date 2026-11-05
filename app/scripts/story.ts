@@ -12,7 +12,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { err, ok, Result } from "neverthrow";
 import {
-  describeSpan,
+  describeYears,
   parseSpan,
   parseWhen,
   type Span,
@@ -22,7 +22,10 @@ import {
   type StoryCommand,
   type StoryCommandType,
 } from "../src/story/commands";
-import { storyContradictions } from "../src/story/contradictions";
+import {
+  storyContradictions,
+  timelineProblemMessage,
+} from "../src/story/contradictions";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
 import {
   type FirstTold,
@@ -32,7 +35,12 @@ import {
   trueOrder,
 } from "../src/story/learning";
 import { type Mention, whatMentions } from "../src/story/mentions";
-import { eventTime, renderStory, wordCount } from "../src/story/render";
+import {
+  eventTime,
+  RENDER_SECTION_NAMES,
+  renderStory,
+  wordCount,
+} from "../src/story/render";
 import { scenesTouching } from "../src/story/scenes";
 import {
   type Candidate,
@@ -136,6 +144,8 @@ type Spec = {
   summary: string;
   /** The arguments after `<file>`, starting with the command name. */
   example: readonly string[];
+  /** Another name the command answers to, such as `update-event`. */
+  alias?: string;
 };
 
 type Parsed = {
@@ -463,6 +473,7 @@ export const EDITS: EditSpecs = {
     args: ["id"],
     flags: { label: text, summary: text },
     summary: "Change an event's label or summary.",
+    alias: "update-event",
     example: [
       "describe-event",
       "wreck",
@@ -879,16 +890,41 @@ export const EDITS: EditSpecs = {
   setSceneLinks: {
     group: "Scenes: the telling",
     args: ["id", "how", "ref..."],
+    flags: {
+      add: {
+        bool: true,
+        help: "add the refs to the list instead of replacing it",
+      },
+      remove: { bool: true, help: "take the refs off the list" },
+    },
     summary:
-      "Set the records the scene reveals (tells the reader), implies (lets the reader infer), withholds (keeps back where the reader would expect it), plants (sets up to matter later) or pays-off (brings back what was planted); none clears them. Any record or candidate can be linked.",
-    example: ["set-scene-links", "storm", "withholds", "event:letter"],
-    build: (a) => {
-      const how = a.choice(a.arg("how"), SCENE_LINK_NAMES, "<how>");
+      "Set the records the scene reveals (tells the reader), implies (lets the reader infer), withholds (keeps back where the reader would expect it), plants (sets up to matter later) or pays-off (brings back what was planted); none clears them. Any record or candidate can be linked. Without --add or --remove the refs replace the list, and the edit names any it dropped.",
+    example: ["set-scene-links", "storm", "withholds", "--add", "event:letter"],
+    build: (a, story) => {
+      const choice = a.choice(a.arg("how"), SCENE_LINK_NAMES, "<how>");
+      const how = choice === "pays-off" ? "paysOff" : choice;
+      const id = a.arg("id");
+      const given = a.restRefs();
+      const add = a.bool("add") === true;
+      const remove = a.bool("remove") === true;
+      const linked = story.scenes.find((scene) => scene.id === id)?.[how] ?? [];
+      const has = (refs: readonly Ref[], ref: Ref) =>
+        refs.some((r) => formatRef(r) === formatRef(ref));
+      if (add && remove) a.errors.push("give --add or --remove, not both");
+      if (remove) {
+        for (const ref of given.filter((ref) => !has(linked, ref))) {
+          a.errors.push(`${id} ${choice} doesn't include ${formatRef(ref)}`);
+        }
+      }
       return {
         type: "setSceneLinks",
-        id: a.arg("id"),
-        how: how === "pays-off" ? "paysOff" : how,
-        refs: a.restRefs(),
+        id,
+        how,
+        refs: add
+          ? [...linked, ...given.filter((ref) => !has(linked, ref))]
+          : remove
+            ? linked.filter((ref) => !has(given, ref))
+            : given,
       };
     },
   },
@@ -1404,7 +1440,13 @@ const isEditType = (type: string): type is StoryCommandType => type in EDITS;
 const EDIT_BY_NAME = new Map(
   Object.keys(EDITS)
     .filter(isEditType)
-    .map((type) => [kebab(type), type]),
+    .flatMap((type) => {
+      const alias = EDITS[type].alias;
+      return [
+        [kebab(type), type] as const,
+        ...(alias === undefined ? [] : [[alias, type] as const]),
+      ];
+    }),
 );
 
 // ---------------------------------------------------------------------------
@@ -1513,9 +1555,15 @@ export const READS: Record<ReadName, Spec> = {
   render: {
     group: "Start and read",
     args: [],
+    flags: {
+      section: {
+        value: "<name,...>",
+        help: `only these sections: ${RENDER_SECTION_NAMES.join(", ")}`,
+      },
+    },
     summary:
-      "The whole bible as readable text with no IDs, for you while you work. It is not the story and no reader sees it; the story is the scenes' prose.",
-    example: ["render"],
+      "The whole bible as readable text with no IDs, for you while you work. It is not the story and no reader sees it; the story is the scenes' prose. Open questions are grouped by state: undecided, decided (not revealed yet), revealed and left open.",
+    example: ["render", "--section", "undecided,decided"],
   },
 };
 
@@ -1553,7 +1601,7 @@ function commandHelp(name: string, spec: Spec): string[] {
     .filter(([, f]) => f.help !== undefined)
     .map(([flag, f]) => `--${flag}: ${f.help}`);
   return [
-    `  ${usage(name, spec)}`,
+    `  ${usage(name, spec)}${spec.alias === undefined ? "" : ` (also ${spec.alias})`}`,
     `      ${spec.summary}${flagNotes.length === 0 ? "" : ` (${flagNotes.join("; ")})`}`,
     `      e.g. story story.json ${spec.example.map(quote).join(" ")}`,
   ];
@@ -1567,8 +1615,10 @@ export function helpText(): string {
     "however you run this script (for example `bun app/scripts/story.ts` or",
     '`bun "$STORY_CLI"`). Each edit is checked and the file is written only if',
     "it succeeds; a refused edit prints why on stderr and exits non-zero. An",
-    "edit that makes events contradict each other is kept: it prints the",
-    "problem and exits zero, so the contradiction can be worked on.",
+    "edit that succeeds prints nothing unless there is something to read, so",
+    "anything an edit prints is worth reading. An edit that makes events",
+    "contradict each other is kept: it prints the problem and exits zero, so",
+    "the contradiction can be worked on.",
     "",
     "IDs are short names you choose, such as mara or who-wrote. A ref names",
     `any record as kind:id, with kind one of ${Object.values(KIND_NAMES).join(", ")};`,
@@ -1594,10 +1644,12 @@ export function helpText(): string {
     "or what takes part in an event; add-drive-turn says a want was satisfied,",
     "renounced, replaced or flipped, and where.",
     "",
-    "After an edit that changes a record, the CLI prints what may still state",
-    "its old version, records and lines of scene prose, each with why; trace",
-    "<ref> lists them all. touches (links only) and mentions (text naming it",
-    "only) are the narrower views it builds on.",
+    "After an edit that changes a record, the CLI prints the top three",
+    "suspects that may still state its old version, records and lines of",
+    "scene prose, each with why; trace <ref> lists them all. Adding a record",
+    "or placing an event for the first time prints none, since nothing can",
+    "state an old version yet. touches (links only) and mentions (text naming",
+    "it only) are the narrower views trace builds on.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -1743,9 +1795,7 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...field("summary", event.summary),
         ...(position === undefined
           ? ["position: none"]
-          : [
-              `position: ${describeSpan(position) ?? `${position.start}${position.end === position.start ? "" : ` to ${position.end}`} (${story.timeline.worldUnit})`}${position.precision === null ? "" : `, ${position.precision}`}`,
-            ]),
+          : [`position: ${eventTime(story, event.id) ?? ""}`]),
         ...story.participants
           .filter((p) => p.event === event.id)
           .map(
@@ -1755,7 +1805,7 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...turnsAt(story, event.id),
         ...story.timeline.constraints
           .filter((c) => c.a === event.id || c.b === event.id)
-          .map((c) => `constraint ${constraintLine(c)}`),
+          .map((c) => `constraint ${constraintLine(story, c)}`),
         ...ids(
           "because of",
           "event",
@@ -1951,17 +2001,23 @@ function describe(story: Story, ref: Ref): string {
   return label === ref.id ? formatRef(ref) : `${formatRef(ref)} ("${label}")`;
 }
 
-function constraintLine(c: {
-  id: string;
-  a: string;
-  relation: string;
-  b: string;
-  duration: { amount: number; tolerance?: number } | null;
-}): string {
+function constraintLine(
+  story: Story,
+  c: {
+    id: string;
+    a: string;
+    relation: string;
+    b: string;
+    duration: { amount: number; tolerance?: number } | null;
+  },
+): string {
+  // A gap given in a unit (2w) is stored in years; say it in the unit.
+  const amount = (years: number) =>
+    story.timeline.worldUnit === "year" ? describeYears(years) : `${years}`;
   const gap =
     c.duration === null
       ? ""
-      : ` (gap ${c.duration.amount}${c.duration.tolerance === undefined ? "" : ` ± ${c.duration.tolerance}`})`;
+      : ` (gap ${amount(c.duration.amount)}${c.duration.tolerance === undefined ? "" : ` ± ${amount(c.duration.tolerance)}`})`;
   return `${c.id}: ${c.a} ${c.relation} ${c.b}${gap}`;
 }
 
@@ -1979,10 +2035,10 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
         const p = story.timeline.positions.find(
           (x) => x.event === e.id && x.frame === WORLD_FRAME,
         );
-        return `${line({ kind: "event", id: e.id })}${p === undefined ? "" : ` at ${p.start}`}`;
+        return `${line({ kind: "event", id: e.id })}${p === undefined ? "" : ` at ${eventTime(story, e.id) ?? ""}`}`;
       });
     case "constraint":
-      return story.timeline.constraints.map(constraintLine);
+      return story.timeline.constraints.map((c) => constraintLine(story, c));
     case "scene":
       return story.scenes.map(
         (s, i) => `${i + 1}. ${line({ kind: "scene", id: s.id })}`,
@@ -2103,7 +2159,7 @@ function mentionLines(story: Story, found: readonly Mention[]): string[] {
 }
 
 /** The most suspects an edit prints; `trace` lists them all. */
-const MAX_STALE_LINES = 5;
+const MAX_STALE_LINES = 3;
 
 /** The record as stored, with an event's position, to see whether an edit changed it. */
 function recordState(story: Story, ref: Ref): string {
@@ -2237,7 +2293,13 @@ function staleTextLines(
   storyPath: string,
 ): string[] {
   const ref = changedRef(before, after, command);
-  if (ref === undefined) return [];
+  // Nothing can state where an event was before it had a place.
+  const firstPlacement =
+    command.type === "setPosition" &&
+    !before.timeline.positions.some(
+      (p) => p.event === command.event && p.frame === WORLD_FRAME,
+    );
+  if (ref === undefined || firstPlacement) return [];
   const all = traceDependents(after, ref, {
     was: before,
     prose: readProse(storyPath, after),
@@ -2415,8 +2477,19 @@ function runRead(
             ),
       );
     }
-    case "render":
-      return ok([renderStory(story).trimEnd()]);
+    case "render": {
+      const only = a.list("section");
+      const unknown = only?.filter(
+        (name) => !RENDER_SECTION_NAMES.includes(name),
+      );
+      return unknown !== undefined && unknown.length > 0
+        ? err(
+            usageError(
+              `no section ${unknown.join(", ")}: --section takes ${RENDER_SECTION_NAMES.join(", ")}`,
+            ),
+          )
+        : ok([renderStory(story, only).trimEnd()]);
+    }
   }
 }
 
@@ -2476,20 +2549,22 @@ function runEdit(
         .map(({ story: next, problems }) => ({
           story: next,
           stdout: [
-            "Saved.",
             ...problems.map(
               (p) =>
-                `Timeline problem (kept; see contradictions): ${p.message}`,
+                `Timeline problem (kept; see contradictions): ${timelineProblemMessage(next, p)}`,
             ),
             ...addedCauseProblems(story, next).map(
               (message) =>
                 `Cause problem (kept; see contradictions): ${message}`,
             ),
             ...alsoRemovedLines(story, next, command),
+            ...(a.bool("remove") === true
+              ? []
+              : droppedLinkLines(story, next, command)),
             ...staleTextLines(story, next, command, path),
           ]
-            .join("\n")
-            .concat("\n"),
+            .map((line) => `${line}\n`)
+            .join(""),
         }));
     }),
   );
@@ -2535,6 +2610,30 @@ function alsoRemovedLines(
     ...participants.map((p) => `the part of ${p}`),
   ];
   return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
+}
+
+/**
+ * The refs a scene-links set took off the list, since replacing a list can
+ * drop one by accident. (`--remove` drops what it names, so isn't reported.)
+ */
+function droppedLinkLines(
+  before: Story,
+  after: Story,
+  command: StoryCommand,
+): string[] {
+  if (command.type !== "setSceneLinks") return [];
+  const links = (story: Story) =>
+    (story.scenes.find((s) => s.id === command.id)?.[command.how] ?? []).map(
+      formatRef,
+    );
+  const now = new Set(links(after));
+  const dropped = links(before).filter((ref) => !now.has(ref));
+  const how = SCENE_LINK_NAMES[SCENE_LINK_KINDS.indexOf(command.how)];
+  return dropped.length === 0
+    ? []
+    : [
+        `Dropped from ${command.id} ${how}: ${dropped.join(", ")} (--add adds without replacing the list)`,
+      ];
 }
 
 /** Cause contradictions in `after` that weren't in `before`. */

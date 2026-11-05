@@ -143,9 +143,9 @@ describe("renderStory", () => {
     );
     const text = renderStory(answered);
     expect(text).toContain(
-      "## Decided\n\n- Who wrote it? The old keeper. Not revealed yet.\n",
+      "## Open questions: decided, not revealed yet\n\n- Who wrote it? The old keeper.\n",
     );
-    expect(text).toContain("## Not decided yet\n\n- Why now?\n");
+    expect(text).toContain("## Open questions: undecided\n\n- Why now?\n");
     expect(text).not.toContain("The ferryman");
     expect(text).not.toContain("chosen");
   });
@@ -172,7 +172,7 @@ describe("renderStory", () => {
     expect(reworked.openQuestions[0]?.superseded).toHaveLength(1);
     const text = renderStory(reworked);
     expect(text).toContain(
-      "## Decided\n\n- Who wrote it? The old keeper. Not revealed yet.\n",
+      "## Open questions: decided, not revealed yet\n\n- Who wrote it? The old keeper.\n",
     );
     expect(text).not.toContain("ferryman");
     expect(text).not.toMatch(/supersed|replaced/i);
@@ -292,7 +292,7 @@ describe("renderStory", () => {
   test("prints an open question's candidates in a line each, without what they touch", () => {
     const text = renderStory(sketch);
     expect(text).toContain(
-      "## Not decided yet\n\n- Who wrote it?\n  - The ferryman.\n",
+      "## Open questions: undecided\n\n- Who wrote it?\n  - The ferryman.\n",
     );
     expect(text).not.toContain("Would touch");
   });
@@ -315,7 +315,7 @@ describe("renderStory", () => {
       },
     );
     expect(renderStory(story)).toContain(
-      "## Not decided yet\n\n- Who wrote it?\n  - The ferryman.\n  - Ruled out: The old keeper. He died before the wreck.\n",
+      "## Open questions: undecided\n\n- Who wrote it?\n  - The ferryman.\n  - Ruled out: The old keeper. He died before the wreck.\n",
     );
     const decided = run(story, {
       type: "answerOpenQuestion",
@@ -323,7 +323,7 @@ describe("renderStory", () => {
       candidateId: "ferry",
     });
     expect(renderStory(decided)).toContain(
-      "## Decided\n\n- Who wrote it? The ferryman. Not revealed yet.\n  - Ruled out: The old keeper. He died before the wreck.\n",
+      "## Open questions: decided, not revealed yet\n\n- Who wrote it? The ferryman.\n  - Ruled out: The old keeper. He died before the wreck.\n",
     );
     const scene = decided.scenes[0]?.id ?? "";
     const revealed = run(decided, {
@@ -342,9 +342,9 @@ describe("renderStory", () => {
     });
     const text = renderStory(left);
     expect(text).toContain(
-      "## Left open for the reader\n\n- Who wrote it? The author's answer: The ferryman. The reader should never be sure.\n",
+      "## Open questions: left open for the reader\n\n- Who wrote it? The author's answer: The ferryman. The reader should never be sure.\n",
     );
-    expect(text).not.toContain("## Decided");
+    expect(text).not.toContain("## Open questions: decided");
   });
 
   test("a decided question leaves out the candidates not chosen, unless ruled out, and what it concerns", () => {
@@ -365,9 +365,7 @@ describe("renderStory", () => {
       { type: "answerOpenQuestion", id: "who", candidateId: "keeper" },
     );
     const text = renderStory(decided);
-    expect(text).toContain(
-      "- Who wrote it? The old keeper. Not revealed yet.\n",
-    );
+    expect(text).toContain("- Who wrote it? The old keeper.\n");
     expect(text).not.toContain("ferryman");
     expect(text).not.toContain("Concerns");
     expect(text.match(/Keep the wreck quiet/g)).toHaveLength(1);

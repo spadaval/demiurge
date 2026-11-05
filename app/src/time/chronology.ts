@@ -110,6 +110,11 @@ export type TimelineProblem =
       /** The constraint or scene placement that states the duration. */
       referencedBy: string;
       events: EventId[];
+      /** The duration stated, give or take `tolerance`, in `unit`. */
+      stated: { amount: number; tolerance: number };
+      /** The time the positions put between the events, in `unit`. */
+      between: { min: number; max: number };
+      unit: string;
       message: string;
     };
 

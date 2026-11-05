@@ -5,7 +5,9 @@
  * reason to delete: each one asks for something to be added or linked, and a
  * kind whose only honest fix is cutting true story doesn't belong here. A
  * person with no drive was one (sessions deleted minor characters to clear
- * it), so it is gone; see `RETIRED_GAP_KINDS` in `./story.ts`.
+ * it), so it is gone, and so is a fact linked to nothing (a world fact
+ * standing alone is normal, and listing each one pushed a writer to link
+ * every fact to clear the list); see `RETIRED_GAP_KINDS` in `./story.ts`.
  *
  * The list is a first guess (docs/strategies/structure-first.md, Risks): each
  * kind of gap is one entry in `GAP_RULES`, so adding, dropping or rewording
@@ -18,7 +20,6 @@ import {
   type GapKind,
   questionState,
   type Ref,
-  refExists,
   type Story,
 } from "./story";
 import { refLabel } from "./touches";
@@ -140,32 +141,6 @@ const GAP_RULES: readonly GapRule[] = [
         .map(({ id }) => ({
           ref: { kind: "event", id },
           message: `The event "${refLabel(story, { kind: "event", id })}" isn't linked to anything yet: no drive, scene, other event, fact or question refers to it. Link it to what it bears on, if anything; it can also stand on its own.`,
-        }));
-    },
-  },
-  {
-    kind: "fact_unconnected",
-    find: (story) => {
-      const held = heldRefs(story);
-      return story.facts
-        .filter(
-          (fact) =>
-            !fact.about.some(
-              (ref) =>
-                !(ref.kind === "fact" && ref.id === fact.id) &&
-                refExists(story, ref),
-            ) &&
-            // A fact about itself doesn't count as referred to.
-            !held.some(
-              (ref) =>
-                ref.kind === "fact" &&
-                ref.id === fact.id &&
-                !fact.about.includes(ref),
-            ),
-        )
-        .map((fact) => ({
-          ref: { kind: "fact", id: fact.id },
-          message: `The fact "${refLabel(story, { kind: "fact", id: fact.id })}" isn't linked to anything yet: it's about nothing and nothing refers to it. Link it to what it bears on, if anything; it can also stand on its own.`,
         }));
     },
   },
