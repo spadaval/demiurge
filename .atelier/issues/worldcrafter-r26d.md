@@ -1,7 +1,7 @@
 ---
 created_at: "2026-11-05T06:28:02.365759326+00:00"
 id: "worldcrafter-r26d"
-issue_type: "task"
+issue_type: "feature"
 labels: []
 priority: "P1"
 relationships:
@@ -10,13 +10,16 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
+    id: "worldcrafter-gwx3"
+    type: "advances"
+  - kind: "issue"
     id: "worldcrafter-wtiz"
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Give open questions distinct states"
-updated_at: "2026-11-05T06:47:53.437213784+00:00"
+updated_at: "2026-11-05T06:49:45.633012842+00:00"
 ---
 
 ## Goal

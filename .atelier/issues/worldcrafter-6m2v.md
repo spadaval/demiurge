@@ -1,7 +1,7 @@
 ---
 created_at: "2026-11-05T06:28:02.424101926+00:00"
 id: "worldcrafter-6m2v"
-issue_type: "task"
+issue_type: "feature"
 labels: []
 priority: "P1"
 relationships:
@@ -10,13 +10,16 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
+    id: "worldcrafter-gwx3"
+    type: "advances"
+  - kind: "issue"
     id: "worldcrafter-wefn"
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Model knowledge and belief, tied to reveals"
-updated_at: "2026-11-05T06:28:02.424101926+00:00"
+updated_at: "2026-11-05T06:49:45.753559174+00:00"
 ---
 
 ## Goal

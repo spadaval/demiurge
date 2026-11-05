@@ -1,7 +1,7 @@
 ---
 created_at: "2026-11-05T06:28:02.394770763+00:00"
 id: "worldcrafter-wefn"
-issue_type: "task"
+issue_type: "feature"
 labels: []
 priority: "P1"
 relationships:
@@ -10,13 +10,16 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
+    id: "worldcrafter-gwx3"
+    type: "advances"
+  - kind: "issue"
     id: "worldcrafter-r26d"
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Make gap reports advisory"
-updated_at: "2026-11-05T06:28:02.394770763+00:00"
+updated_at: "2026-11-05T06:49:45.686721107+00:00"
 ---
 
 ## Goal

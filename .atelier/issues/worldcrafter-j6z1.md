@@ -1,7 +1,7 @@
 ---
 created_at: "2026-11-05T06:28:02.454321564+00:00"
 id: "worldcrafter-j6z1"
-issue_type: "task"
+issue_type: "feature"
 labels: []
 priority: "P1"
 relationships:
@@ -12,11 +12,14 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-6m2v"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-gwx3"
+    type: "advances"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Fill the remaining model gaps: objects, participants, drive life, finer time"
-updated_at: "2026-11-05T06:28:02.454321564+00:00"
+updated_at: "2026-11-05T06:49:45.811735067+00:00"
 ---
 
 ## Goal
