@@ -26,7 +26,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Verdict: a judging panel reads the comparison, then keep, change or drop"
-updated_at: "2026-11-04T23:44:42.613977203+00:00"
+updated_at: "2026-11-05T00:06:13.519679114+00:00"
 ---
 
 ## Goal
@@ -45,3 +45,9 @@ Find out whether the model makes stories better than plain notes do. A judging p
 ## Context
 
 The packets are in `/home/supadava/projects/demiurge-comparison/packets/`. The key, raw output, model-gaps logs and failure notes are in `/home/supadava/projects/demiurge-comparison/key/`, which judges see only in Part 2. The Thukker pairs are tuned-on and the magical girl therapist pairs are held back. Format may give an arm away, and that's accepted. This verdict doesn't test how a screen feels; that's worldcrafter-frqk. Sumeet may read the reports and overturn the verdict afterwards, but he isn't the gate.
+
+## Notes
+
+- 2026-11-04 [decision] Part 1 judges get the rubric only up to the '## Part 2' heading, from the pinned commit; Part 2 gets the full rubric
+  Reason: Review finding worldcrafter-8vrv: the rubric's Part 2 names the arms and the tuned-on premise, so giving Part 1 the whole file would break blindness. The excerpt's hash is recorded.
+- 2026-11-04 [note] Refinement of the decision note above: Part 1's excerpt is the rubric's lines from '## What you're judging' up to (not including) '## Part 2' at the pinned commit; the title ('tool against plain notes') and the preamble are dropped too, since they name the arms.
