@@ -38,6 +38,7 @@ import {
   rubricFor,
   runDirSources,
   runJudge,
+  slotPart,
   statusOf,
   verdict,
 } from "./panel";
@@ -712,6 +713,73 @@ describe("recheck", () => {
     expect(problems[0]).toBe("answered by claude-opus-4-8");
     expect(problems[1]).toStartWith(
       "outside the run dir: Bash: cat > part1.md",
+    );
+  });
+  test("works on a run moved aside by --replacement", () => {
+    const root = material();
+    const dir = join(root, "judging/sonnet/part2-failed-1");
+    const sonnet = JUDGES.sonnet;
+    const run6 = "/tmp/judge.6ub61Q";
+    const command = `cd ${run6}; cat > part2.md <<'EOF'\nkeep / change\n\nVERDICT: change\nEOF\ntail -3 part2.md`;
+    write(join(dir, "files/rubric.md"), "rubric\n");
+    write(join(dir, "files/part2.md"), "Reasons.\n\nVERDICT: change\n");
+    write(join(dir, "part2.md"), "Reasons.\n\nVERDICT: change\n");
+    write(
+      join(dir, "transcript.jsonl"),
+      [
+        JSON.stringify({ type: "system", subtype: "init", model: sonnet }),
+        JSON.stringify({
+          type: "assistant",
+          message: {
+            model: sonnet,
+            content: [
+              { type: "tool_use", id: "1", name: "Bash", input: { command } },
+            ],
+          },
+        }),
+      ].join("\n"),
+    );
+    const first = `failed\n- outside the run dir: Bash: ${command.slice(0, 40)}\n`;
+    write(join(dir, "STATUS"), first);
+    write(
+      join(dir, "run.json"),
+      JSON.stringify({
+        judge: "sonnet",
+        part: "part2",
+        model: sonnet,
+        runDir: run6,
+        exitCode: 0,
+        inputs: { "rubric.md": sha256Text("rubric\n") },
+      }),
+    );
+    expect(recheck(root, "sonnet", "part2-failed-1", "abc123")).toEqual([]);
+    expect(statusOf(dir)).toBe("ok");
+    expect(readFileSync(join(dir, "STATUS"), "utf8")).toContain(
+      "at commit abc123",
+    );
+    expect(readFileSync(join(dir, "STATUS.original"), "utf8")).toBe(first);
+    // The part it's checked as is part2: a missing verdict line fails it.
+    writeFileSync(join(dir, "files/part2.md"), "Reasons.\n");
+    expect(recheck(root, "sonnet", "part2-failed-1", "abc123")[0]).toContain(
+      "VERDICT",
+    );
+    expect(readFileSync(join(dir, "STATUS.original"), "utf8")).toBe(first);
+  });
+  test("addresses only a part or a moved-aside run", () => {
+    expect(slotPart("part1")).toBe("part1");
+    expect(slotPart("part2-failed-1")).toBe("part2");
+    expect(slotPart("part1-failed-12")).toBe("part1");
+    for (const slot of [
+      "part3",
+      "part2-failed-0",
+      "part2-failed-",
+      "../x",
+      "part1/../part2",
+    ]) {
+      expect(() => slotPart(slot)).toThrow("isn't part1, part2");
+    }
+    expect(() => recheck(material(), "opus", "../../x", "abc123")).toThrow(
+      "isn't part1, part2",
     );
   });
   test("refuses a part that never finished, or whose runner failed", () => {

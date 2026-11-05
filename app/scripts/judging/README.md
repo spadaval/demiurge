@@ -97,11 +97,12 @@ bun scripts/judging/panel.ts part2 <root> <opus|sonnet|fable|all> --rubric-commi
 bun scripts/judging/panel.ts part1 <root> <judge> --rubric-commit <sha> --replacement
 
 # Re-run the checks on a finished part's saved transcript and files, after a
-# fix to the checks. Keeps the first STATUS as STATUS.original, rewrites STATUS
+# fix to the checks; also on a run moved aside by --replacement, by its
+# directory name (part2-failed-1). Keeps the first STATUS as STATUS.original, rewrites STATUS
 # with the result and the commit, and writes recheck.json. Refuses with
 # uncommitted changes to the runner or the checks, and for a part whose
 # runner failed or was interrupted.
-bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2>
+bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2|<part>-failed-<n>>
 
 # The verdict, from the three Part 2 reports; also writes <root>/judging/verdict.md.
 bun scripts/judging/panel.ts verdict <root>

@@ -10,7 +10,7 @@
  *   bun scripts/judging/panel.ts part1 <root> <judge|all> --rubric-commit <sha> [--replacement]
  *   bun scripts/judging/panel.ts mark-recorded <root> <judge> <evidence-id>
  *   bun scripts/judging/panel.ts part2 <root> <judge|all> --rubric-commit <sha> [--replacement]
- *   bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2>
+ *   bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2|<part>-failed-<n>>
  *   bun scripts/judging/panel.ts verdict <root>
  */
 
@@ -775,6 +775,21 @@ export async function runJudge(
 }
 
 /**
+ * The part a run's directory holds: `part1` or `part2`, or a run moved
+ * aside by `--replacement` (`part1-failed-<n>`, `part2-failed-<n>`).
+ */
+export function slotPart(slot: string): Part {
+  const match = /^(part1|part2)(?:-failed-[1-9]\d*)?$/.exec(slot);
+  const part = match?.[1];
+  if (part !== "part1" && part !== "part2") {
+    throw new Error(
+      `${slot} isn't part1, part2, or a run moved aside as <part>-failed-<n>.`,
+    );
+  }
+  return part;
+}
+
+/**
  * Re-runs the checks a finished part can redo from its saved files: the
  * transcript check (as it stands now) and model check on the saved
  * transcript, and the input hashes, report and verdict line on the saved
@@ -786,10 +801,11 @@ export async function runJudge(
 export function recheck(
   rootArg: string,
   judge: Judge,
-  part: Part,
+  slot: string,
   commit: string,
 ): string[] {
-  const dir = partDir(resolve(rootArg), judge, part);
+  const part = slotPart(slot);
+  const dir = join(resolve(rootArg), "judging", judge, slot);
   if (statusOf(dir) === undefined) {
     throw new Error(`${dir} has no finished STATUS to recheck.`);
   }
@@ -1028,7 +1044,7 @@ const USAGE = `Usage:
   panel.ts part1 <root> <opus|sonnet|fable|all> --rubric-commit <sha> [--replacement]
   panel.ts mark-recorded <root> <judge> <evidence-id>
   panel.ts part2 <root> <opus|sonnet|fable|all> --rubric-commit <sha> [--replacement]
-  panel.ts recheck <root> <judge> <part1|part2>
+  panel.ts recheck <root> <judge> <part1|part2|<part>-failed-<n>>
   panel.ts verdict <root>`;
 
 export async function main(argv: string[]): Promise<void> {
@@ -1077,7 +1093,7 @@ export async function main(argv: string[]): Promise<void> {
     case "recheck": {
       const [root, who, which] = positional;
       if (root === undefined || who === undefined || !isJudge(who)) break;
-      if (which !== "part1" && which !== "part2") break;
+      if (which === undefined) break;
       const dirty = must([
         "git",
         "status",
@@ -1093,7 +1109,7 @@ export async function main(argv: string[]): Promise<void> {
       const problems = recheck(root, who, which, commit);
       console.log(
         readFileSync(
-          join(partDir(resolve(root), who, which), "STATUS"),
+          join(resolve(root), "judging", who, which, "STATUS"),
           "utf8",
         ),
       );
