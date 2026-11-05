@@ -167,7 +167,8 @@ type Inside = Record<"read" | "write", (path: string) => boolean>;
 
 function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
   if (name === "Bash") {
-    const command = text(input.command) ?? "";
+    const full = text(input.command) ?? "";
+    const command = withoutFileHeredocs(full);
     const named = shellPaths(command).filter(
       (path) => !HARMLESS.includes(path) && !inside.read(path),
     );
@@ -177,10 +178,10 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
         command,
       );
     const findings: Finding[] =
-      named.length > 0 || vague ? [{ tool: name, detail: command }] : [];
+      named.length > 0 || vague ? [{ tool: name, detail: full }] : [];
     for (const [label, pattern] of SHELL_PATTERNS) {
       if (pattern.test(command)) {
-        findings.push({ tool: `${name} (${label})`, detail: command });
+        findings.push({ tool: `${name} (${label})`, detail: full });
       }
     }
     return findings;
@@ -204,6 +205,38 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
       (path) => path.startsWith("~") || !ok(path) || CREDENTIALS.test(path),
     )
     .map((path) => ({ tool: name, detail: path }));
+}
+
+/** A line that is only `cat` writing a heredoc to a file, either order. */
+const CAT_HEREDOC_TO_FILE =
+  /^\s*cat\s+(?:>>?\s*[^\s<>|;&]+\s+<<(-?)\s*(['"]?)(\w+)\2|<<(-?)\s*(['"]?)(\w+)\5\s+>>?\s*[^\s<>|;&]+)\s*$/;
+
+/**
+ * The command without the bodies of heredocs that `cat` writes straight to
+ * a file (`cat > f <<'EOF'`, `cat <<EOF >> f`). That text is only written,
+ * never run, so prose in a report isn't taken for paths or commands. The
+ * `cat` line itself, the terminator and everything around them are kept,
+ * and any other heredoc (fed to an interpreter, piped on, or after another
+ * command on its line) is kept whole.
+ */
+export function withoutFileHeredocs(command: string): string {
+  const lines = command.split("\n");
+  const kept: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    kept.push(line);
+    const match = CAT_HEREDOC_TO_FILE.exec(line);
+    if (match === null) continue;
+    const dash = (match[1] ?? match[4]) === "-";
+    const word = match[3] ?? match[6];
+    const ends = (next: string) =>
+      (dash ? next.replace(/^\t+/, "") : next) === word;
+    let end = i + 1;
+    while (end < lines.length && !ends(lines[end] ?? "")) end++;
+    // An unterminated heredoc runs to the end of the command, as in bash.
+    i = end - 1;
+  }
+  return kept.join("\n");
 }
 
 /**

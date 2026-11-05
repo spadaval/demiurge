@@ -390,6 +390,44 @@ describe("transcript check: network, credentials and processes", () => {
   });
 });
 
+describe("transcript check: heredocs written to a file", () => {
+  const run = "/tmp/judge.abc";
+  const outside = (command: string) =>
+    checkTranscript(tool("Bash", { command }), run, {
+      read: [run],
+      write: [run],
+    }).outside.map((f) => f.tool);
+  test("report prose written with cat isn't read as paths or commands", () => {
+    // From a judge's report: a bare "/" between names was taken for the root.
+    expect(
+      outside(
+        "cat > part1.md <<'EOF'\n# Part 1\n\n(A: \"Lot Nine\" / Tavik, ~ about ../ it; see /etc and curl.)\nps aux\nEOF\nwc -w part1.md",
+      ),
+    ).toEqual([]);
+    expect(
+      outside('cat <<"END" >> notes.md\nkeep / change / drop\nEND'),
+    ).toEqual([]);
+    expect(outside("cat > r.md <<-EOF\n\tA / B\n\tEOF")).toEqual([]);
+  });
+  test("commands outside the heredoc are still checked", () => {
+    expect(
+      outside("cat > part1.md <<'EOF'\nA / B\nEOF\ncat /etc/passwd"),
+    ).toEqual(["Bash"]);
+    expect(outside("cat /etc/passwd > x.md <<'EOF'\nA\nEOF")).toEqual(["Bash"]);
+    expect(outside("cat > /home/x/part1.md <<'EOF'\nA\nEOF")).toEqual(["Bash"]);
+    expect(
+      outside("cat > part1.md <<'EOF'\nA\nEOF\ncurl https://example.com"),
+    ).toEqual(["Bash (network)"]);
+  });
+  test("heredocs fed to anything but cat into a file are still checked", () => {
+    expect(outside("python3 - <<'EOF'\nopen('/etc/passwd')\nEOF")).toEqual([
+      "Bash",
+    ]);
+    expect(outside("cat <<'EOF' | sh\ncat /etc/passwd\nEOF")).toEqual(["Bash"]);
+    expect(outside("bash <<'EOF'\nls /\nEOF")).toEqual(["Bash"]);
+  });
+});
+
 describe("ensureToken", () => {
   const needed = 1000;
   function fake(expiresAt: number, refreshedTo?: number) {
