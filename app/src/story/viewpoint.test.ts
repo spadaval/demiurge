@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { applyStoryCommand, type StoryCommand } from "./commands";
 import { storyContradictions } from "./contradictions";
-import { viewpointGap } from "./learning";
+import { type ViewpointGap, viewpointGap } from "./learning";
 import { renderStory } from "./render";
 import { scenesTouching } from "./scenes";
 import { newStory, parseStory, type Story, serializeStory } from "./story";
@@ -324,7 +324,7 @@ describe("what the story shows the viewpoint", () => {
         since: "wreck",
       },
     );
-    const gap = {
+    const gap: ViewpointGap = {
       later: false,
       believes: [{ kind: "version", id: "storm" }],
     };
