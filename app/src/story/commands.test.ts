@@ -4,7 +4,13 @@ import {
   applyTimelineCommandKeepingProblems,
 } from "../time/commands";
 import { applyStoryCommand, type StoryCommand } from "./commands";
-import { newStory, type Ref, type Story, serializeStory } from "./story";
+import {
+  newStory,
+  parseStory,
+  type Ref,
+  type Story,
+  serializeStory,
+} from "./story";
 
 /** Applies each command in turn; a refusal fails the test. */
 function run(story: Story, ...commands: StoryCommand[]): Story {
@@ -394,6 +400,7 @@ describe("applyStoryCommand refuses", () => {
     { type: "answerOpenQuestion", id: "x", candidateId: "cargo" },
     { type: "answerOpenQuestion", id: "why", candidateId: "x" },
     { type: "unanswerOpenQuestion", id: "x" },
+    { type: "setOpenQuestionWorking", id: "x", working: true },
     { type: "describeEvent", id: "x", label: "" },
     { type: "removeEvent", id: "x" },
     position("x", 0),
@@ -880,5 +887,30 @@ describe("answering an open question", () => {
     );
     expect(story.drives[1]?.origins).toEqual(["discovery"]);
     expect(story.openQuestions[0]?.answer).toBe("cargo");
+  });
+});
+
+describe("marking an open question as working", () => {
+  const why = (story: Story) => story.openQuestions.find((q) => q.id === "why");
+
+  test("sets the mark, changes nothing else, and clears it again", () => {
+    const working = run(linked, {
+      type: "setOpenQuestionWorking",
+      id: "why",
+      working: true,
+    });
+    expect(why(working)?.working).toBe(true);
+    const { working: _, ...question } = why(working) ?? {};
+    expect(question).toEqual(why(linked) ?? {});
+    const parsed = parseStory(serializeStory(working))._unsafeUnwrap();
+    expect(why(parsed)?.working).toBe(true);
+
+    const cleared = run(working, {
+      type: "setOpenQuestionWorking",
+      id: "why",
+      working: false,
+    });
+    expect(serializeStory(cleared)).toBe(serializeStory(linked));
+    expect(serializeStory(cleared)).not.toContain("working");
   });
 });

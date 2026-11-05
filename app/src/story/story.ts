@@ -87,6 +87,12 @@ export type OpenQuestion = {
   /** The chosen candidate's ID. */
   answer?: string;
   conflict: boolean;
+  /**
+   * Its candidates are being weighed: the readable form shows the question
+   * in one line and leaves them out. Absent when not, so files written
+   * before the field existed read the same.
+   */
+  working?: true;
 };
 
 export type RefKind =
@@ -426,8 +432,13 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     "candidates",
     "answer",
     "conflict",
+    "working",
   ]);
   if (known.isErr()) return err(known.error);
+  const working: Check<boolean> =
+    v.working === undefined || typeof v.working === "boolean"
+      ? ok(v.working === true)
+      : err(`${at}.working must be true or false`);
   const conflict: Check<boolean> =
     typeof v.conflict === "boolean"
       ? ok(v.conflict)
@@ -439,13 +450,15 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     checkIdentified(v.candidates, `${at}.candidates`, checkCandidate),
     checkOptionalString(v.answer, `${at}.answer`),
     conflict,
-  ]).map(([id, question, about, candidates, answer, conflict]) => ({
+    working,
+  ]).map(([id, question, about, candidates, answer, conflict, working]) => ({
     id,
     question,
     about,
     candidates,
     ...(answer === undefined ? {} : { answer }),
     conflict,
+    ...(working ? { working: true as const } : {}),
   }));
 }
 
@@ -696,6 +709,7 @@ const KEY_ORDER = [
   "answer",
   "touches",
   "conflict",
+  "working",
 ];
 
 const keyRank = (key: string) => {

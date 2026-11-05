@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { wordCount } from "../src/story/render";
 import { parseStory, type Story } from "../src/story/story";
 import { EDITS, READS } from "./story";
 
@@ -158,13 +159,44 @@ describe("story CLI", () => {
     const rendered = ok("render");
     expect(rendered).toContain("Expose what the tribe carried");
     expect(rendered).toContain(
-      "## Decided\n\n- Why did Joel leave? Concerns Joel; Joel leaves the tribe.\n  - He found what the caravans carried.\n",
+      "## Decided\n\n- Why did Joel leave? He found what the caravans carried.\n",
     );
     expect(rendered).not.toContain("He wanted adventure");
     expect(rendered).toMatch(/\(\d+ words\)\n$/);
     for (const id of ["joel", "belong", "exile", "why-leave", "cargo"]) {
       expect(rendered).not.toContain(id);
     }
+  });
+
+  test("a question being weighed renders in one line, and the word count is the render's", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-open-question", "who", "Who wrote it?");
+    ok("add-candidate", "who", "ferry", "The ferryman, who saw the wreck");
+    ok("add-candidate", "who", "keeper", "The old keeper, before he died");
+    const words = (out: string) => {
+      const [, count] = out.match(/\((\d+) words\)\n$/) ?? [];
+      return {
+        count: Number(count),
+        text: out.replace(/\(\d+ words\)\n$/, ""),
+      };
+    };
+
+    const open = words(ok("render"));
+    expect(open.text).toContain("The ferryman, who saw the wreck.");
+    expect(open.count).toBe(wordCount(open.text));
+
+    ok("set-open-question-working", "who");
+    expect(ok("show", "open-question:who")).toContain("working: yes");
+    const weighed = words(ok("render"));
+    expect(weighed.text).toContain("- Who wrote it? (being weighed)\n");
+    expect(weighed.text).not.toContain("ferryman");
+    expect(weighed.count).toBe(wordCount(weighed.text));
+    expect(weighed.count).toBeLessThan(open.count);
+    expect(saved().openQuestions[0]?.candidates).toHaveLength(2);
+
+    ok("set-open-question-working", "who", "--stop");
+    expect(saved().openQuestions[0]?.working).toBeUndefined();
+    expect(words(ok("render")).count).toBe(open.count);
   });
 
   test("a refused edit leaves the file alone and exits non-zero", () => {

@@ -870,6 +870,21 @@ export const EDITS: EditSpecs = {
     example: ["unanswer-open-question", "who-wrote"],
     build: (a) => ({ type: "unanswerOpenQuestion", id: a.arg("question-id") }),
   },
+  setOpenQuestionWorking: {
+    group: "Open questions: what isn't decided yet",
+    args: ["question-id"],
+    flags: {
+      stop: { bool: true, help: "stop weighing, so render shows them again" },
+    },
+    summary:
+      "Mark the question as being weighed: render shows it in one line and leaves out its candidates, which stay in the file.",
+    example: ["set-open-question-working", "who-wrote"],
+    build: (a) => ({
+      type: "setOpenQuestionWorking",
+      id: a.arg("question-id"),
+      working: a.bool("stop") !== true,
+    }),
+  },
 };
 
 const kebab = (type: string) =>
@@ -1139,6 +1154,7 @@ function showRecord(story: Story, ref: Ref): string[] {
         ...head,
         `question: ${q.question}`,
         ...(q.conflict ? ["conflict: yes"] : []),
+        ...(q.working === true ? ["working: yes"] : []),
         ...refs("about", q.about),
         ...(q.candidates.length === 0 ? ["candidates: none"] : ["candidates:"]),
         ...q.candidates.map(
@@ -1214,7 +1230,7 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
     case "open-question":
       return story.openQuestions.map(
         (q) =>
-          `${line({ kind: "openQuestion", id: q.id })}${q.answer === undefined ? "" : " (answered)"}${q.conflict ? " (conflict)" : ""}`,
+          `${line({ kind: "openQuestion", id: q.id })}${q.answer === undefined ? "" : " (answered)"}${q.conflict ? " (conflict)" : ""}${q.working === true ? " (working)" : ""}`,
       );
     case "candidate":
       return story.openQuestions.flatMap((q) =>

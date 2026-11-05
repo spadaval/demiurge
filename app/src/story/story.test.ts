@@ -787,3 +787,47 @@ describe("timeline events have summaries", () => {
     expect(timeline.events).toEqual([{ id: "e", label: "E", summary: "" }]);
   });
 });
+
+describe("open questions can be marked as working", () => {
+  const file = (working?: JsonValue) =>
+    JSON.stringify({
+      version: 1,
+      premise: "P",
+      actors: [],
+      drives: [],
+      facts: [],
+      readerQuestions: [],
+      scenes: [],
+      openQuestions: [
+        {
+          id: "q",
+          question: "Why?",
+          about: [],
+          candidates: [],
+          conflict: false,
+          ...(working === undefined ? {} : { working }),
+        },
+      ],
+      timeline: emptyTimeline,
+    });
+
+  test("a file written before the mark existed parses, and writes back unchanged", () => {
+    const old = file();
+    const story = parseStory(old)._unsafeUnwrap();
+    expect(story.openQuestions[0]?.working).toBeUndefined();
+    expect(serializeStory(story)).not.toContain("working");
+    expect(JSON.parse(serializeStory(story))).toEqual(JSON.parse(old));
+  });
+
+  test("the mark is kept, false is the same as no mark, and a malformed one is rejected", () => {
+    expect(
+      parseStory(file(true))._unsafeUnwrap().openQuestions[0]?.working,
+    ).toBe(true);
+    expect(
+      serializeStory(parseStory(file(false))._unsafeUnwrap()),
+    ).not.toContain("working");
+    expect(parseStory(file("yes"))._unsafeUnwrapErr().message).toContain(
+      "openQuestions[0].working",
+    );
+  });
+});

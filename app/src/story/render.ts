@@ -2,11 +2,20 @@
  * A whole story as text a person can read, with no IDs: names, wants and
  * questions stand in for the records they belong to. It's how a sketch is
  * read and how its length is judged, so it says only what the story holds,
- * in the order a reader would want it.
+ * in the order a reader would want it, and says each thing once: a sketch's
+ * length should measure the story, not its links. So a want is printed in
+ * full only under its actor and named in a few words elsewhere, a relation is
+ * printed once, a constraint the positions already satisfy is left out, and
+ * so are rejected candidates and the candidates of a question being weighed.
  */
 
-import { compareEvents, compileChronology } from "../time/chronology";
-import type { Constraint, Position } from "../time/timeline";
+import {
+  type Chronology,
+  compareEvents,
+  compileChronology,
+  type PointOrder,
+} from "../time/chronology";
+import type { Constraint, Position, Timeline } from "../time/timeline";
 import { storyContradictions } from "./contradictions";
 import { isAnswered, type Ref, type Story } from "./story";
 
@@ -61,18 +70,57 @@ function eventLabel(story: Story, id: string): string {
   return named(story.timeline.events.find((event) => event.id === id)?.label);
 }
 
-/** "Joel's want to leave the tribe", or the want alone if nobody holds it. */
+/** The fewest words a reference to a want or a record's text starts with. */
+const SHORT_WORDS = 5;
+/** The most words such a reference uses. */
+const MAX_SHORT_WORDS = 8;
+
+/** The first `count` words of `text`, with "…" if any were left out. */
+function firstWords(text: string, count: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= count) return text.trim().replace(/[.!?…:;,]+$/, "");
+  return `${words
+    .slice(0, count)
+    .join(" ")
+    .replace(/[.!?…:;,]+$/, "")}…`;
+}
+
+/** A drive's want in the fewest words, from five up to eight, that tell it apart. */
+function wantWords(story: Story, id: string): string {
+  const drive = story.drives.find((d) => d.id === id);
+  if (drive === undefined) return UNNAMED;
+  const want = named(drive.want);
+  const rivals = story.drives
+    .filter((d) => d.id !== id && d.actorId === drive.actorId)
+    .map((d) => named(d.want));
+  for (let count = SHORT_WORDS; count < MAX_SHORT_WORDS; count++) {
+    const short = firstWords(want, count);
+    if (rivals.every((other) => firstWords(other, count) !== short)) {
+      return short;
+    }
+  }
+  return firstWords(want, MAX_SHORT_WORDS);
+}
+
+/**
+ * A drive named by its actor and the first words of its want, `Joel: "Find
+ * where he belongs"`: the want is printed in full only under its actor.
+ */
 function driveName(story: Story, id: string): string {
   const drive = story.drives.find((d) => d.id === id);
   if (drive === undefined) return UNNAMED;
   const owner = actorName(story, drive.actorId);
-  const want = named(drive.want);
-  return owner === undefined ? `the want "${want}"` : `${owner}: "${want}"`;
+  const want = `"${wantWords(story, id)}"`;
+  return owner === undefined ? want : `${owner}: ${want}`;
 }
 
 function sceneTitle(story: Story, id: string): string {
   return named(story.scenes.find((scene) => scene.id === id)?.title);
 }
+
+/** Text printed in full elsewhere, in its first few words. */
+const shortText = (text: string | undefined) =>
+  firstWords(named(text), MAX_SHORT_WORDS);
 
 /** What a reference names, in words. */
 function refName(story: Story, ref: Ref): string {
@@ -82,9 +130,9 @@ function refName(story: Story, ref: Ref): string {
     case "drive":
       return driveName(story, ref.id);
     case "fact":
-      return named(story.facts.find((f) => f.id === ref.id)?.text);
+      return shortText(story.facts.find((f) => f.id === ref.id)?.text);
     case "readerQuestion":
-      return named(
+      return shortText(
         story.readerQuestions.find((q) => q.id === ref.id)?.question,
       );
     case "event":
@@ -92,9 +140,11 @@ function refName(story: Story, ref: Ref): string {
     case "scene":
       return `the scene "${sceneTitle(story, ref.id)}"`;
     case "openQuestion":
-      return named(story.openQuestions.find((q) => q.id === ref.id)?.question);
+      return shortText(
+        story.openQuestions.find((q) => q.id === ref.id)?.question,
+      );
     case "candidate":
-      return named(
+      return shortText(
         story.openQuestions
           .find((q) => q.id === ref.questionId)
           ?.candidates.find((c) => c.id === ref.id)?.answer,
@@ -103,9 +153,9 @@ function refName(story: Story, ref: Ref): string {
 }
 
 const RELATION_WORDS = {
-  opposes: ["Opposes", "Opposed by"],
-  allies: ["Allied with", "Allied with"],
-  competes: ["Competes with", "Competes with"],
+  opposes: "Opposes",
+  allies: "Allied with",
+  competes: "Competes with",
 } as const;
 
 /** The drive's want, then its details, each prefixed. */
@@ -131,19 +181,11 @@ function driveLines(
       `${sub}Comes from: ${drive.origins.map((e) => eventLabel(story, e)).join("; ")}.`,
     );
   }
+  // Printed once, under the drive that holds it.
   for (const relation of drive.relations) {
     lines.push(
-      `${sub}${RELATION_WORDS[relation.type][0]} ${driveName(story, relation.to)}.`,
+      `${sub}${RELATION_WORDS[relation.type]} ${driveName(story, relation.to)}.`,
     );
-  }
-  for (const other of story.drives) {
-    for (const relation of other.relations) {
-      if (relation.to === id) {
-        lines.push(
-          `${sub}${RELATION_WORDS[relation.type][1]} ${driveName(story, other.id)}.`,
-        );
-      }
-    }
   }
   return lines;
 }
@@ -219,15 +261,87 @@ function eventLines(story: Story): string[] {
         (worldPosition(b.id)?.start ?? Number.POSITIVE_INFINITY) ||
       named(a.label).localeCompare(named(b.label)),
   );
+  const placed = positionsOnly(story.timeline);
   return ordered.map((event) => {
     const stated = constraints
-      .filter((c) => c.a === event.id && c.b !== event.id)
+      .filter(
+        (c) => c.a === event.id && c.b !== event.id && !satisfiedBy(placed, c),
+      )
       .map((c) => constraintText(story, c));
     const when = stated.length === 0 ? "" : ` [${stated.join("; ")}]`;
     const summary =
       event.summary.trim() === "" ? "" : `: ${sentence(event.summary)}`;
     return `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}`;
   });
+}
+
+/** The order the timeline's positions alone give, without its constraints. */
+function positionsOnly(timeline: Timeline): Chronology {
+  return compileChronology(
+    { ...timeline, constraints: [], placements: [] },
+    [],
+  );
+}
+
+/** A duration without a tolerance is as precise as its unit: half a unit. */
+const DEFAULT_TOLERANCE = 0.5;
+
+/**
+ * Whether positions alone already give what the constraint says, so printing
+ * it would say the same thing twice. One they don't settle, or that they
+ * contradict, isn't satisfied.
+ *
+ * A gap is settled when the positions put it within the stated amount, give
+ * or take its tolerance. Two events placed with equal precision (two points,
+ * or two whole years) are that far apart when their starts are: 1203 and 1213
+ * are ten years apart. Otherwise every gap their positions allow must fit.
+ */
+function satisfiedBy(placed: Chronology, c: Constraint): boolean {
+  const point = (event: string, end: "start" | "end") =>
+    placed.point(event, end);
+  const aStart = point(c.a, "start");
+  const aEnd = point(c.a, "end");
+  const bStart = point(c.b, "start");
+  const bEnd = point(c.b, "end");
+  if (
+    aStart === undefined ||
+    aEnd === undefined ||
+    bStart === undefined ||
+    bEnd === undefined
+  ) {
+    return false;
+  }
+  const notAfter = (order: PointOrder) =>
+    order === "before" || order === "same_or_before" || order === "same";
+  switch (c.relation) {
+    case "during":
+      return (
+        notAfter(placed.comparePoints(bStart, aStart)) &&
+        notAfter(placed.comparePoints(aEnd, bEnd))
+      );
+    case "simultaneous":
+      return (
+        placed.comparePoints(aStart, bStart) === "same" &&
+        placed.comparePoints(aEnd, bEnd) === "same"
+      );
+    case "before":
+    case "after": {
+      if (compareEvents(placed, c.a, c.b) !== c.relation) return false;
+      const { duration } = c;
+      if (duration === null) return true;
+      const [earlier, later] =
+        c.relation === "before" ? [c.a, c.b] : [c.b, c.a];
+      const from = placed.interval(earlier, duration.frame);
+      const to = placed.interval(later, duration.frame);
+      if (from === undefined || to === undefined) return false;
+      const tolerance = duration.tolerance ?? DEFAULT_TOLERANCE;
+      const fits = (gap: number) =>
+        Math.abs(gap - duration.amount) <= tolerance + 1e-9;
+      return from.end - from.start === to.end - to.start
+        ? fits(to.start - from.start)
+        : fits(to.start - from.end) && fits(to.end - from.start);
+    }
+  }
 }
 
 function sceneLines(story: Story): string[] {
@@ -241,7 +355,7 @@ function sceneLines(story: Story): string[] {
         : `Shows: ${scene.depicts.map((e) => eventLabel(story, e)).join("; ")}.`,
       scene.pressures.length === 0
         ? undefined
-        : `Puts pressure on ${scene.pressures.map((d) => driveName(story, d)).join("; ")}.`,
+        : `Pressure on ${scene.pressures.map((d) => driveName(story, d)).join("; ")}.`,
     ];
     const summary =
       scene.summary.trim() === "" ? "" : ` ${sentence(scene.summary)}`;
@@ -267,35 +381,36 @@ function readerLines(story: Story): string[] {
   });
 }
 
-/** Unanswered questions, each with every candidate answer. */
+/**
+ * Unanswered questions, each with its candidates in a line apiece; what a
+ * candidate touches stays in the file. A question being weighed is one line,
+ * without its candidates, so weighing them costs no words.
+ */
 function openQuestionLines(story: Story): string[] {
   return story.openQuestions
     .filter((q) => !isAnswered(q))
     .flatMap((q) => {
       const marker = q.conflict ? " (a contradiction to resolve)" : "";
+      if (q.working === true) {
+        return [`- ${q.question}${marker} (being weighed)`];
+      }
       return [
         `- ${q.question}${marker}${concerns(story, q.about)}`,
-        ...q.candidates.map((c) => {
-          const touches =
-            c.touches.length === 0
-              ? ""
-              : ` Would touch ${c.touches.map((ref) => refName(story, ref)).join("; ")}.`;
-          return `  - ${sentence(named(c.answer))}${touches}`;
-        }),
+        ...q.candidates.map((c) => `  - ${sentence(named(c.answer))}`),
       ];
     });
 }
 
-/** Answered questions with the chosen answer only; rejected ones are left out. */
+/**
+ * Answered questions with the chosen answer only. Rejected candidates, and
+ * what the question concerns, stay in the file.
+ */
 function decidedLines(story: Story): string[] {
   return story.openQuestions.flatMap((q) => {
     const chosen = q.candidates.find((c) => c.id === q.answer);
     return chosen === undefined
       ? []
-      : [
-          `- ${q.question}${concerns(story, q.about)}`,
-          `  - ${sentence(named(chosen.answer))}`,
-        ];
+      : [`- ${q.question} ${sentence(named(chosen.answer))}`];
   });
 }
 

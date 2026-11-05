@@ -137,6 +137,11 @@ export type StoryCommand =
    */
   | { type: "answerOpenQuestion"; id: string; candidateId: string }
   | { type: "unanswerOpenQuestion"; id: string }
+  /**
+   * Whether the question's candidates are being weighed. The readable form
+   * then shows the question in one line, without them.
+   */
+  | { type: "setOpenQuestionWorking"; id: string; working: boolean }
   | { type: "addEvent"; id: EventId; label: string; summary: string }
   | { type: "describeEvent"; id: EventId; label?: string; summary?: string }
   /** Also removes the event's positions, constraints and correspondences. */
@@ -736,6 +741,13 @@ export function applyStoryCommand(
     case "unanswerOpenQuestion":
       return question(command.id).andThen(() =>
         withQuestion(command.id, ({ answer: _, ...q }) => q),
+      );
+
+    case "setOpenQuestionWorking":
+      return question(command.id).andThen(() =>
+        withQuestion(command.id, ({ working: _, ...q }) =>
+          command.working ? { ...q, working: true } : q,
+        ),
       );
 
     case "addEvent": {

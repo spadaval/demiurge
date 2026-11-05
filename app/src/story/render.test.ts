@@ -67,12 +67,59 @@ describe("renderStory", () => {
     }
     expect(text).toContain("- **Mara**.\n  Wants: Learn who wrote it.");
     expect(text).toContain("Comes from: The letter.");
-    expect(text).toContain('Opposed by the want "Keep the wreck quiet".');
-    expect(text).toContain("## Wants nobody holds yet");
-    expect(text).toContain('Puts pressure on Mara: "Learn who wrote it".');
     expect(text).toContain(
-      '  - The ferryman. Would touch the want "Keep the wreck quiet".',
+      '## Wants nobody holds yet\n\n- Wants: Keep the wreck quiet.\n    Opposes Mara: "Learn who wrote it".\n',
     );
+    expect(text).toContain('Pressure on Mara: "Learn who wrote it".');
+  });
+
+  test("prints a relation once, under the drive that holds it", () => {
+    const text = renderStory(sketch);
+    expect(text.match(/Oppos/g)).toHaveLength(1);
+    expect(text.match(/Keep the wreck quiet/g)).toHaveLength(1);
+  });
+
+  test("prints each want once, and names it elsewhere by its actor and first words", () => {
+    const story = run(
+      sketch,
+      {
+        type: "addDrive",
+        id: "d-long",
+        actorId: "a1",
+        want: "Find out what her father saw the night the light failed",
+        stakes: "",
+        method: "",
+      },
+      {
+        type: "addDrive",
+        id: "d-long-2",
+        actorId: "a1",
+        want: "Find out what her father hid from the harbour office",
+        stakes: "",
+        method: "",
+      },
+      {
+        type: "relateDrives",
+        from: "d-hide",
+        to: "d-long",
+        relation: "opposes",
+      },
+      {
+        type: "setScenePressures",
+        id: "s1",
+        pressures: ["d-find", "d-long", "d-long-2"],
+      },
+    );
+    const text = renderStory(story);
+    expect(text.match(/Find out what her father saw the night/g)).toHaveLength(
+      1,
+    );
+    // Five words would tell the two wants apart only as "Find out what her
+    // father", so the reference grows until it does.
+    expect(text).toContain(
+      'Pressure on Mara: "Learn who wrote it"; Mara: "Find out what her father saw…"; Mara: "Find out what her father hid…".',
+    );
+    expect(text).toContain('Opposes Mara: "Find out what her father saw…".');
   });
 
   test("gives an answered question its chosen answer only", () => {
@@ -95,9 +142,7 @@ describe("renderStory", () => {
       },
     );
     const text = renderStory(answered);
-    expect(text).toContain(
-      "## Decided\n\n- Who wrote it?\n  - The old keeper.\n",
-    );
+    expect(text).toContain("## Decided\n\n- Who wrote it? The old keeper.\n");
     expect(text).toContain("## Not decided yet\n\n- Why now?\n");
     expect(text).not.toContain("The ferryman");
     expect(text).not.toContain("chosen");
@@ -124,10 +169,342 @@ describe("renderStory", () => {
     );
   });
 
+  test("prints an open question's candidates in a line each, without what they touch", () => {
+    const text = renderStory(sketch);
+    expect(text).toContain(
+      "## Not decided yet\n\n- Who wrote it?\n  - The ferryman.\n",
+    );
+    expect(text).not.toContain("Would touch");
+  });
+
+  test("shows a question being weighed in one line, without its candidates", () => {
+    const working = run(sketch, {
+      type: "setOpenQuestionWorking",
+      id: "who",
+      working: true,
+    });
+    const text = renderStory(working);
+    expect(text).toContain(
+      "## Not decided yet\n\n- Who wrote it? (being weighed)\n",
+    );
+    expect(text).not.toContain("ferryman");
+    // The candidates are still in the file, and come back when it's done.
+    expect(working.openQuestions[0]?.candidates).toHaveLength(1);
+    const done = run(working, {
+      type: "setOpenQuestionWorking",
+      id: "who",
+      working: false,
+    });
+    expect(renderStory(done)).toBe(renderStory(sketch));
+  });
+
+  test("a decided question leaves out its rejected candidates and what it concerns", () => {
+    const decided = run(
+      sketch,
+      {
+        type: "updateOpenQuestion",
+        id: "who",
+        about: [{ kind: "drive", id: "d-hide" }],
+      },
+      {
+        type: "addCandidate",
+        questionId: "who",
+        id: "keeper",
+        answer: "The old keeper",
+        touches: [{ kind: "event", id: "z-wreck" }],
+      },
+      { type: "answerOpenQuestion", id: "who", candidateId: "keeper" },
+    );
+    const text = renderStory(decided);
+    expect(text).toContain("- Who wrote it? The old keeper.\n");
+    expect(text).not.toContain("ferryman");
+    expect(text).not.toContain("Concerns");
+    expect(text.match(/Keep the wreck quiet/g)).toHaveLength(1);
+  });
+
   test("leaves out empty sections", () => {
     expect(renderStory(newStory("Just a premise."))).toBe(
       "## Premise\n\nJust a premise.\n",
     );
+  });
+});
+
+const at = (event: string, start: number, end = start): StoryCommand => ({
+  type: "setPosition",
+  event,
+  frame: "world",
+  position: { start, end },
+});
+
+describe("constraints in the render", () => {
+  const events = run(
+    newStory("P"),
+    { type: "addEvent", id: "a", label: "The flood", summary: "" },
+    { type: "addEvent", id: "b", label: "The famine", summary: "" },
+  );
+  /** What the render says about the flood's order, if anything. */
+  const stated = (...commands: StoryCommand[]) =>
+    renderStory(run(events, ...commands)).match(
+      /\*\*The flood\*\*[^\n]*\[([^\]]*)\]/,
+    )?.[1];
+  const ten = { amount: 10, frame: "world" };
+
+  test("leaves out a constraint the positions already satisfy", () => {
+    const before: StoryCommand = {
+      type: "constrain",
+      id: "c",
+      a: "a",
+      relation: "before",
+      b: "b",
+    };
+    expect(
+      stated(at("a", 1203, 1204), at("b", 1213, 1214), before),
+    ).toBeUndefined();
+    expect(stated(at("a", 3), at("b", 4), before)).toBeUndefined();
+    // Two whole years are as far apart as their starts.
+    expect(
+      stated(at("a", 1203, 1204), at("b", 1213, 1214), {
+        ...before,
+        duration: ten,
+      }),
+    ).toBeUndefined();
+    expect(
+      stated(at("a", 3), at("b", 3), {
+        type: "constrain",
+        id: "c",
+        a: "a",
+        relation: "during",
+        b: "b",
+      }),
+    ).toBeUndefined();
+    expect(
+      stated(at("a", 3), at("b", 3), {
+        type: "constrain",
+        id: "c",
+        a: "a",
+        relation: "simultaneous",
+        b: "b",
+      }),
+    ).toBeUndefined();
+    expect(
+      stated(at("a", 9), at("b", 3), {
+        type: "constrain",
+        id: "c",
+        a: "a",
+        relation: "after",
+        b: "b",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("prints one the positions don't settle", () => {
+    const before: StoryCommand = {
+      type: "constrain",
+      id: "c",
+      a: "a",
+      relation: "before",
+      b: "b",
+    };
+    expect(stated(before)).toBe("before The famine");
+    expect(stated(at("a", 1203), before)).toBe("before The famine");
+    // The same years, but positions as wide as a decade don't settle the gap.
+    expect(
+      stated(at("a", 1200, 1210), at("b", 1213, 1214), {
+        ...before,
+        duration: ten,
+      }),
+    ).toBe("10 years before The famine");
+    // A position is somewhere within its span, so a year inside a decade
+    // isn't known to fall during an event placed in that decade.
+    expect(
+      stated(at("a", 3, 5), at("b", 1, 10), {
+        type: "constrain",
+        id: "c",
+        a: "a",
+        relation: "during",
+        b: "b",
+      }),
+    ).toBe("during The famine");
+    // Overlapping years don't settle the order.
+    expect(stated(at("a", 1203, 1205), at("b", 1204, 1206), before)).toBe(
+      "before The famine",
+    );
+  });
+
+  test("prints a violated constraint", () => {
+    const before: StoryCommand = {
+      type: "constrain",
+      id: "c",
+      a: "a",
+      relation: "before",
+      b: "b",
+    };
+    const text = renderStory(run(events, at("a", 1213), at("b", 1203), before));
+    expect(text).toContain("- **The flood** (year 1213) [before The famine]");
+    expect(text).toContain("can't all happen in the order given");
+    // The order holds but the gap doesn't.
+    expect(
+      stated(at("a", 1203, 1204), at("b", 1206, 1207), {
+        ...before,
+        duration: ten,
+      }),
+    ).toBe("10 years before The famine");
+    expect(
+      stated(at("a", 3), at("b", 4), {
+        type: "constrain",
+        id: "c",
+        a: "a",
+        relation: "simultaneous",
+        b: "b",
+      }),
+    ).toBe("at the same time as The famine");
+  });
+});
+
+/**
+ * A sketch with no links at all, then the links a comparison session made:
+ * origins, relations, scenes' actors, events and pressures, questions'
+ * concerns, and ordering constraints the positions already satisfy.
+ */
+const people = ["Ruth", "Ines", "Dee", "Noreen", "Dani", "Velan"];
+const WANTS = [
+  "Keep the light burning through the winter so the boats come home",
+  "Bring her sister back from the Titan program before the fusion takes",
+  "Prove to the tribe that he can belong without paying for it",
+  "Hide what the caravans carried for the Titan program from everyone",
+  "Find the man who sank the ferry and make him say it aloud",
+  "Leave the island without anyone learning why she was sent there",
+];
+const LABELS = [
+  "The wreck",
+  "Ruth's light goes out",
+  "The caravan burns",
+  "Ines leaves home",
+  "The fusion",
+  "The ferry sinks",
+  "Dee's father calls",
+  "The winter storm",
+];
+const bare = run(
+  newStory("A keeper holds a light through a winter that won't end."),
+  ...people.flatMap((name, i): StoryCommand[] => [
+    { type: "addActor", id: `p${i}`, name, kind: "person", notes: "" },
+    {
+      type: "addDrive",
+      id: `d${i}`,
+      actorId: `p${i}`,
+      want: WANTS[i] ?? "",
+      stakes: "",
+      method: "",
+    },
+  ]),
+  ...LABELS.flatMap((label, i): StoryCommand[] => [
+    { type: "addEvent", id: `e${i}`, label, summary: "" },
+    at(`e${i}`, 1200 + 3 * i, 1201 + 3 * i),
+  ]),
+  ...[0, 1, 2, 3, 4].map(
+    (i): StoryCommand => ({
+      type: "addScene",
+      id: `s${i}`,
+      title: `Scene ${i + 1}`,
+      summary: "Something happens",
+    }),
+  ),
+  {
+    type: "addOpenQuestion",
+    id: "q",
+    question: "Who sank the ferry?",
+    about: [],
+    conflict: false,
+  },
+);
+
+/** Each link as a command that adds just that one link to what came before. */
+function linkCommands(): StoryCommand[] {
+  const growing = <T>(items: T[], make: (sofar: T[]) => StoryCommand) =>
+    items.map((_, i) => make(items.slice(0, i + 1)));
+  return [
+    ...[0, 1, 2, 3, 4, 5].flatMap((d) =>
+      growing([`e${d}`, `e${d + 2}`], (origins) => ({
+        type: "setDriveOrigins",
+        id: `d${d}`,
+        origins,
+      })),
+    ),
+    ...(
+      [
+        [0, 3, "opposes"],
+        [1, 3, "opposes"],
+        [2, 4, "allies"],
+        [5, 0, "competes"],
+        [4, 3, "opposes"],
+        [1, 2, "allies"],
+      ] as const
+    ).map(
+      ([from, to, relation]): StoryCommand => ({
+        type: "relateDrives",
+        from: `d${from}`,
+        to: `d${to}`,
+        relation,
+      }),
+    ),
+    ...[0, 1, 2, 3, 4].flatMap((s) => [
+      ...growing([`p${s}`, `p${s + 1}`], (actors) => ({
+        type: "setSceneActors",
+        id: `s${s}`,
+        actors,
+      })),
+      ...growing([`e${s}`, `e${s + 1}`], (depicts) => ({
+        type: "setSceneEvents",
+        id: `s${s}`,
+        depicts,
+      })),
+      ...growing([`d${s}`, `d${s + 1}`], (pressures) => ({
+        type: "setScenePressures",
+        id: `s${s}`,
+        pressures,
+      })),
+    ]),
+    ...growing(
+      [
+        { kind: "drive", id: "d4" },
+        { kind: "event", id: "e5" },
+        { kind: "actor", id: "p3" },
+      ] as const,
+      (about) => ({ type: "updateOpenQuestion", id: "q", about: [...about] }),
+    ),
+  ];
+}
+
+/** Constraints the positions above already satisfy, some with gaps. */
+const satisfiedConstraints: StoryCommand[] = [0, 1, 2, 3, 4, 5, 6].map((i) => ({
+  type: "constrain",
+  id: `c${i}`,
+  a: `e${i}`,
+  relation: "before",
+  b: `e${i + 1}`,
+  ...(i % 2 === 0 ? { duration: { amount: 3, frame: "world" } } : {}),
+}));
+
+describe("the render's length measures the story, not its links", () => {
+  test("each link adds at most eight words, and a satisfied constraint none", () => {
+    let story = bare;
+    let words = wordCount(renderStory(story));
+    const added: { command: string; words: number }[] = [];
+    for (const command of linkCommands()) {
+      story = run(story, command);
+      const now = wordCount(renderStory(story));
+      added.push({ command: JSON.stringify(command), words: now - words });
+      words = now;
+    }
+    expect(added.filter(({ words }) => words > 8)).toEqual([]);
+    expect(added.length).toBeGreaterThan(50);
+    for (const command of satisfiedConstraints) {
+      const next = run(story, command);
+      expect(renderStory(next)).toBe(renderStory(story));
+      story = next;
+    }
+    expect(wordCount(renderStory(story))).toBe(words);
   });
 });
 
