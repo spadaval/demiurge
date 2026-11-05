@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:02.394770763+00:00"
 id: "worldcrafter-wefn"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-wefn
 priority: "P1"
 relationships:
   blocks: []
@@ -17,9 +20,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Make gap reports advisory"
-updated_at: "2026-11-05T07:01:29.602462567+00:00"
+updated_at: "2026-11-05T07:01:29.676446869+00:00"
 ---
 
 ## Goal
