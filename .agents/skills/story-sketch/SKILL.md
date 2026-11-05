@@ -82,7 +82,7 @@ Ask the bible what the reader knows by then, rather than trusting memory:
   scenes before it have told the reader, with when it happened and how long
   before the scene, and what they have held back.
 - `show` each event the scene depicts, and `span <event> <event>` for any
-  time the prose states ("twenty-six days since").
+  time the prose states ("three days since").
 - `show count:<id>` for any number the prose states.
 
 After writing it, set its links, and after changing a record read what the
@@ -153,7 +153,7 @@ edit prints (see `trace` below).
   "at the helm"` records who did it, who saw it, or which object was used
   (`object:knife --role "the weapon"`). There is no membership record, so
   when someone joins or leaves a group, add an event for it with them as a
-  participant (`--role "leaves the Gallery"`), and `show actor:` lists it.
+  participant (`--role "leaves the crew"`), and `show actor:` lists it.
 - **A drive's life.** A want can end or change: `add-drive-turn find-sender
   satisfied --at letter`, `renounced`, `replaced --into <drive>` (a new want
   takes its place) or `flipped --into <drive>` (it turns into its opposite).
@@ -170,8 +170,8 @@ edit prints (see `trace` below).
   year. `span <event> <event>` gives the time between two placed events in
   calendar days. Knowledge `--since`/`--until` and turns `--at` name events,
   so they follow the events wherever they are placed.
-- **Counts.** A number the plot runs on, such as parts of a pact held or
-  soldiers left, is a count, not a fact: `add-count crew "Hands aboard"
+- **Counts.** A number the plot runs on, such as hands aboard or days of
+  food left, is a count, not a fact: `add-count crew "Hands aboard"
   --total 12 --direction falls`, then `set-count crew wreck 3 --note "Nine
   drowned"` at each event where it changes. A value holds until the next
   one in story order. A total that itself changes is another count (`--of

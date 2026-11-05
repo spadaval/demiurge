@@ -1,6 +1,6 @@
 /**
- * Counts: numbers that change at events, such as the parts of a pact one
- * power holds. A value holds from its event until the next value in story
+ * Counts: numbers that change at events, such as the hands left aboard a
+ * ship. A value holds from its event until the next value in story
  * order (`eventsInStoryOrder`), so a count reads as a running series.
  *
  * Only two rules are checked, since anything subtler is the writer's to

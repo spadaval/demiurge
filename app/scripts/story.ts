@@ -1045,7 +1045,7 @@ export const EDITS: EditSpecs = {
     args: ["id", "label"],
     flags: COUNT_FLAGS,
     summary:
-      "Add a number that changes at events: parts of a pact held, soldiers left, days of food. Set its values with set-count; show and render print them as a running series in story order, with the total and how far from the threshold each value is. contradictions reports a value above its total, and with --direction a value that moves the other way.",
+      "Add a number that changes at events: hands aboard, days of food, oil left in the lamp. Set its values with set-count; show and render print them as a running series in story order, with the total and how far from the threshold each value is. contradictions reports a value above its total, and with --direction a value that moves the other way.",
     example: [
       "add-count",
       "crew",

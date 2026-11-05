@@ -99,8 +99,8 @@ export const COUNT_DIRECTIONS = ["rises", "falls"] as const;
 export type CountDirection = (typeof COUNT_DIRECTIONS)[number];
 
 /**
- * A number that changes at events: parts of a pact held, soldiers left, days
- * of food. Each value holds from its event until the next one in story
+ * A number that changes at events: hands aboard, days of food, oil left
+ * in the lamp. Each value holds from its event until the next one in story
  * order. `total` is a fixed number it is out of, or `of` another count whose
  * value at the time is (a total that itself changes). `threshold` is a value
  * that matters, or more than half of the total. With `direction`, a value
