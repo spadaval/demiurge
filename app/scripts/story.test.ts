@@ -144,7 +144,7 @@ describe("story CLI", () => {
       relations: [{ to: "secret", type: "opposes" }],
     });
     expect(story.timeline.positions).toContainEqual(
-      expect.objectContaining({ event: "exile", start: 30, end: 30 }),
+      expect.objectContaining({ event: "exile", start: 30, end: 31 }),
     );
     expect(story.timeline.constraints.map(({ id }) => id)).toEqual([
       "exile-first",
@@ -751,10 +751,10 @@ describe("story CLI", () => {
       "2w",
     );
     expect(problem).toBe(
-      "Timeline problem (kept; see contradictions): constraint c3 puts 14 days give or take 3.5 days between wreck and letter, but their positions put -0.1 days to 0.9 days between them\n",
+      "Timeline problem (kept; see contradictions): constraint c3 puts 2 weeks give or take 3.5 days between wreck and letter, but their positions put -3 hours to 21 hours between them\n",
     );
     expect(ok("contradictions")).toContain(
-      "- constraint c3 puts 14 days give or take 3.5 days between wreck and letter",
+      "- constraint c3 puts 2 weeks give or take 3.5 days between wreck and letter",
     );
     // Finding otbw: a gap off by days on a year still reads as off.
     ok("add-event", "far", "Far");
@@ -772,7 +772,7 @@ describe("story CLI", () => {
         "1d",
       ),
     ).toBe(
-      "Timeline problem (kept; see contradictions): constraint c5 puts 365.2 days give or take 1 day between wreck and far, but their positions put 378.3 days to 380.3 days between them\n",
+      "Timeline problem (kept; see contradictions): constraint c5 puts 1 year (12 months) give or take 1 day between wreck and far, but their positions put 12.4 months to 12.5 months between them\n",
     );
     ok("remove-constraint", "c5");
     expect(ok("show", "event:wreck")).toContain(
@@ -1010,12 +1010,11 @@ describe("story CLI", () => {
         '  event:e3 ("Night 3") at 12 October 1954: 11, 39 short of 50',
         '  event:e4 ("Night 4") at 13 October 1954: 80, reaching 50',
         '  event:e5 ("Night 5") at 14 October 1954: 90',
-        "below the threshold at: event:e3 (11)",
         "",
       ].join("\n"),
     );
-    expect(ok("render", "--section", "counts")).toContain(
-      "  Below the threshold at: Night 3 (11).\n",
+    expect(ok("render", "--section", "counts")).not.toContain(
+      "Below the threshold",
     );
     // More than half of a total of zero is no threshold.
     ok("set-count", "oil", "e5", "0");
@@ -1365,6 +1364,89 @@ describe("story CLI", () => {
     expect(ok("trace", "event:letter")).toContain(
       "linked: an event that caused it",
     );
+  });
+
+  test("a year is its span: events in one year can be ordered, and span gives a range", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-event", "vow", "The vow");
+    ok("add-event", "bound", "The binding");
+    ok("set-position", "vow", "1103");
+    ok("set-position", "bound", "1103");
+    // Ordered within the year, even a day apart: no contradiction.
+    expect(ok("constrain", "c1", "vow", "before", "bound")).toBe("");
+    expect(ok("constrain", "c2", "vow", "before", "bound", "--gap", "1d")).toBe(
+      "",
+    );
+    expect(ok("contradictions")).toBe("No contradictions.\n");
+    expect(ok("show", "event:vow")).toContain("position: year 1103\n");
+    expect(ok("span", "vow", "bound")).toBe(
+      'From event:vow ("The vow") at year 1103 to event:bound ("The binding") at year 1103: in the same year, either way round (a year without a date may be any part of it).\n',
+    );
+    ok("add-event", "birth", "The birth");
+    ok("set-position", "birth", "1106-04-10");
+    ok("add-event", "razed", "The razing");
+    ok("set-position", "razed", "1118");
+    expect(ok("span", "birth", "razed")).toBe(
+      'From event:birth ("The birth") at 10 April 1106 to event:razed ("The razing") at year 1118: 11.7 to 12.7 years (a year without a date may be any part of it).\n',
+    );
+    // A year as --end is where the span stops, as before.
+    ok("set-position", "razed", "1118", "--end", "1120");
+    expect(
+      saved().timeline.positions.find((p) => p.event === "razed"),
+    ).toMatchObject({
+      start: 1118,
+      end: 1120,
+    });
+    // And a scene's told list says the same range.
+    ok("add-scene", "hearth", "Hearth");
+    ok("set-scene-events", "hearth", "birth");
+    ok("add-scene", "after", "After");
+    ok("set-scene-events", "after", "razed");
+    ok("set-position", "razed", "1118-06-01");
+    ok("set-position", "birth", "1106");
+    expect(ok("reader-order", "--before", "after")).toContain(
+      '- event:birth ("The birth") at year 1106, 11.4 to 12.4 years before: shown in 1\n',
+    );
+  });
+
+  test("a count at an event lasting days says from when; no short of at zero; a kept contradiction isn't reprinted", () => {
+    ok("init", "A keeper keeps the light.");
+    ok("add-event", "walk", "The walk");
+    ok("set-position", "walk", "1131-06-08", "--end", "1131-06-18");
+    ok("add-event", "day", "The day");
+    ok("set-position", "day", "1131-06-20");
+    ok(
+      "add-count",
+      "seats",
+      "Seats",
+      "--total",
+      "118",
+      "--threshold",
+      "more-than-half",
+    );
+    ok("set-count", "seats", "walk", "70");
+    ok("set-count", "seats", "day", "0");
+    expect(ok("show", "count:seats")).toContain(
+      [
+        "values, in story order:",
+        '  event:walk ("The walk") at 8 to 18 June 1131, from 8 June 1131: 70 of 118, reaching more than half (60)',
+        '  event:day ("The day") at 20 June 1131: 0 of 118',
+        "",
+      ].join("\n"),
+    );
+    expect(ok("render", "--section", "counts")).toContain(
+      "  - The walk (8 to 18 June 1131, from 8 June 1131): 70 of 118, reaching more than half (60).\n",
+    );
+
+    // An existing contradiction, grown by a new constraint, isn't new.
+    ok("add-event", "a", "A");
+    ok("add-event", "b", "B");
+    ok("set-position", "a", "1103.5");
+    ok("set-position", "b", "1103.5");
+    expect(ok("constrain", "c1", "a", "before", "b")).toContain(
+      "cannot be ordered",
+    );
+    expect(ok("constrain", "c2", "a", "before", "b")).toBe("");
   });
 
   test("--help lists every command with an example, and every example runs", () => {

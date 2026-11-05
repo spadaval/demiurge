@@ -180,17 +180,18 @@ since"). Then set the scene's links, and read what each edit prints.
   life.
 - **Time.** `set-position` takes a year (`1954`) or a date: `1954-10`,
   `1954-10-12` or `"1954-10-12 21:00"`, each the span it names, and `--end`
-  makes a range. Two events on one day can be ordered with `constrain ...
-  before`; `--gap` takes a unit (`3d`, `2w`, `6h`, `4mo`), give or take half
+  makes a range. Two events in one year or on one day can be ordered with
+  `constrain ... before`; `--gap` takes a unit (`3d`, `2w`, `6h`, `4mo`), give or take half
   that unit without `--tolerance`. `span <event> <event>` gives the time
-  between two placed events in calendar days. Knowledge and membership
+  between two placed events in calendar days, or the range it may be when
+  one is placed only by its year. Knowledge and membership
   `--since`/`--until` and turns `--at` name events, so they follow the
   events wherever they are placed.
 - **Counts.** A number the plot runs on, such as hands aboard or days of
   food left, is a count, not a fact: `add-count crew "Hands aboard"
   --total 12 --direction falls`, then `set-count crew wreck 3 --note "Nine
-  drowned"` at each event where it changes. A value holds until the next
-  one in story order. A total that itself changes is another count (`--of
+  drowned"` at each event where it changes. A value holds from the start of
+  its event until the next one in story order. A total that itself changes is another count (`--of
   <count>`), and `--threshold 6` or `more-than-half` marks the value that
   matters. After setting a count's series, read `show count:crew` once and
   check each value, and how far it is from the threshold, against what

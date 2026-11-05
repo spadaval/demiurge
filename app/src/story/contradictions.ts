@@ -46,7 +46,7 @@ export type Contradiction =
 
 /**
  * A timeline problem's message, with a duration in a year-based story said
- * in units (`2 weeks give or take 84 hours`) rather than fractional years,
+ * in units (`2 weeks give or take 3.5 days`) rather than fractional years,
  * fine enough that the mismatch it reports shows (`describeMismatch`).
  */
 export function timelineProblemMessage(

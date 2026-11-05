@@ -6,7 +6,9 @@
  * A date is a span in the Gregorian calendar: `1954-10` is that month,
  * `1954-10-12` that day and `1954-10-12 21:00` that minute, each the half-open
  * interval it covers. Two events placed on the same day can then be ordered
- * with `before`. A plain number is a year, as it always was.
+ * with `before`. A whole number is that year, `[1954, 1955)`, the same way;
+ * a fractional one (`1954.8`) is a moment in years, as it always was. Older
+ * files stored a whole year as the moment it starts, and still read so.
  */
 
 import { err, ok, type Result } from "neverthrow";
@@ -42,13 +44,15 @@ export type Span = { start: number; end: number };
 const DATE = /^(-?\d{1,6})-(\d{1,2})(?:-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?)?$/;
 
 /**
- * `1954` (a year, exactly at its start, as a number always was),
- * `1954.8`, `1954-10`, `1954-10-12` or `1954-10-12 21:00`.
+ * `1954` (that year), `1954.8` (that moment, in years), `1954-10`,
+ * `1954-10-12` or `1954-10-12 21:00`.
  */
 export function parseWhen(text: string): Result<Span, string> {
   const trimmed = text.trim();
   const n = Number(trimmed);
-  if (trimmed !== "" && Number.isFinite(n)) return ok({ start: n, end: n });
+  if (trimmed !== "" && Number.isFinite(n)) {
+    return ok({ start: n, end: Number.isInteger(n) ? n + 1 : n });
+  }
   const match = DATE.exec(trimmed);
   if (match === null) {
     return err(
@@ -137,6 +141,10 @@ export function describeSpan({ start, end }: Span): string | undefined {
   return undefined;
 }
 
+/** Whether the span is one whole year, as `parseWhen` gives `1954`. */
+export const isYear = ({ start, end }: Span): boolean =>
+  Number.isInteger(start) && end === start + 1;
+
 /** A number of years without float noise: `612.8`, not `612.8000000000001`. */
 const yearNumber = (years: number) => String(Number(years.toFixed(6)));
 
@@ -163,6 +171,7 @@ export function describeWhen(span: Span): string {
   const exact = describeSpan(span);
   if (exact !== undefined) return exact;
   const { start, end } = span;
+  if (isYear(span)) return `year ${start}`;
   const inYears =
     start === end
       ? `year ${yearNumber(start)}`
@@ -274,15 +283,25 @@ export function describeYears(years: number): string {
   return unit === undefined ? `${years} years` : inUnit(years, unit);
 }
 
+/** The largest unit `years` is a whole number of, if any. */
+const wholeUnit = (years: number) =>
+  UNITS.findIndex(({ years: size }) => {
+    const count = years / size;
+    const whole = Math.round(count);
+    return whole !== 0 && Math.abs(count - whole) < 1e-6;
+  });
+
 /**
  * A stated duration (`amount` give or take `tolerance`) and the range of
  * time positions put between the same events (`min` to `max`), all in
- * years, in words that keep a mismatch between them visible. All four are
- * said in one unit, to one decimal: the largest unit, no larger than the
- * largest the tolerance reaches (or, with none, the amount), in which
- * rounding can't close the gap between the two ranges. So 379 days is never
- * said `1 year` beside `1 year give or take 1 day`. `between` is one value
- * when its ends read the same.
+ * years, in words that keep a mismatch between them visible. The amount is
+ * said in its own unit, whole where it is (`2 weeks`), and in the range's
+ * unit beside it where rounding made that smaller; the tolerance in the
+ * largest unit it reaches. The range is said to one decimal in a unit no
+ * larger than the amount's in which rounding can't close the gap between
+ * the two ranges, and no larger than it reaches. So 379 days is never said
+ * `1 year` beside `1 year give or take 1 day`. `between` is one value when
+ * its ends read the same.
  */
 export function describeMismatch(
   amount: number,
@@ -292,25 +311,93 @@ export function describeMismatch(
 ): { amount: string; tolerance: string; between: string } {
   const range = (a: string, b: string) => (a === b ? a : `${a} to ${b}`);
   const gap = Math.max(min - (amount + tolerance), amount - tolerance - max);
-  const scale = Math.abs(tolerance > 0 ? tolerance : amount);
-  const found = UNITS.findIndex(({ years }) => scale >= years);
-  const largest = found === -1 ? UNITS.length - 1 : found;
-  const unit =
-    UNITS.slice(largest).find(
-      ({ years }) => gap <= 0 || 0.05 * years <= gap / 2,
-    ) ?? UNITS[UNITS.length - 1];
-  if (unit === undefined) {
+  const index = (years: number) => {
+    const found = UNITS.findIndex(({ years: size }) => Math.abs(years) >= size);
+    return found === -1 ? UNITS.length - 1 : found;
+  };
+  const whole = wholeUnit(Math.abs(amount));
+  const own = whole === -1 ? index(amount) : whole;
+  const visible = UNITS.findIndex(
+    ({ years }, i) => i >= own && (gap <= 0 || 0.05 * years <= gap / 2),
+  );
+  const largest = Math.max(
+    abs(min, max) === 0 ? 0 : index(abs(min, max)),
+    visible === -1 ? UNITS.length - 1 : visible,
+  );
+  const unit = UNITS[largest];
+  const amountUnit = UNITS[whole === -1 ? largest : whole];
+  const toleranceUnit = UNITS[index(tolerance)];
+  if (
+    unit === undefined ||
+    amountUnit === undefined ||
+    toleranceUnit === undefined
+  ) {
     return {
       amount: `${amount} years`,
       tolerance: `${tolerance} years`,
       between: range(`${min} years`, `${max} years`),
     };
   }
+  // Where rounding pushed the range into a smaller unit, the amount is
+  // said in it too, so the two can be compared: `1 year (12 months)`.
+  const both =
+    visible > own && amountUnit !== unit
+      ? `${inUnit(amount, amountUnit)} (${inUnit(amount, unit)})`
+      : inUnit(amount, amountUnit);
   return {
-    amount: inUnit(amount, unit),
-    tolerance: inUnit(tolerance, unit),
+    amount: both,
+    tolerance: inUnit(tolerance, tolerance === 0 ? amountUnit : toleranceUnit),
     between: range(inUnit(min, unit), inUnit(max, unit)),
   };
+}
+
+/** The larger of two magnitudes. */
+const abs = (a: number, b: number) => Math.max(Math.abs(a), Math.abs(b));
+
+/**
+ * The time from somewhere in `from` to somewhere in `to`, in years, when
+ * either is a whole year (`isYear`): a year end counts as all of it, any
+ * other end as its start. Undefined when neither is a year, so the caller
+ * measures start to start.
+ */
+export function yearRange(
+  from: Span,
+  to: Span,
+): { min: number; max: number } | undefined {
+  if (!isYear(from) && !isYear(to)) return undefined;
+  const last = (span: Span) => (isYear(span) ? span.end : span.start);
+  return { min: to.start - last(from), max: last(to) - from.start };
+}
+
+/**
+ * `11.7 to 12.7 years`, a `yearRange` in the unit its larger end reaches,
+ * its sign dropped; undefined when it runs both ways (the two can fall
+ * either way round within the year).
+ */
+export function describeYearRange({
+  min,
+  max,
+}: {
+  min: number;
+  max: number;
+}): string | undefined {
+  if (min < 0 && max > 0) return undefined;
+  const [lo, hi] = min < 0 ? [-max, -min] : [min, max];
+  const unit = reached(hi) ?? UNITS[UNITS.length - 1];
+  if (unit === undefined) return `${lo} to ${hi} years`;
+  const n = (years: number) => Number((years / unit.years).toFixed(1));
+  return `${n(lo)} to ${inUnit(hi, unit)}`;
+}
+
+/**
+ * The moment `at` as a date (`8 June 1131`, with `, 21:00` off midnight),
+ * else in years (`year 1954.8`).
+ */
+export function describeMoment(at: number): string {
+  const d = wholeMinute(at);
+  return d === undefined
+    ? `year ${yearNumber(at)}`
+    : dateText(d, !isMidnight(d));
 }
 
 /** Days from fractional year `from` to `to`, on the calendar: negative if `to` is earlier. */

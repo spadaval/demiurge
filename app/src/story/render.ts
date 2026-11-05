@@ -20,9 +20,14 @@ import {
   type PointOrder,
 } from "../time/chronology";
 import type { Constraint, Position, Timeline } from "../time/timeline";
-import { describeWhen, describeYears } from "./calendar";
+import {
+  daysBetween,
+  describeMoment,
+  describeWhen,
+  describeYears,
+} from "./calendar";
 import { storyContradictions } from "./contradictions";
-import { belowThreshold, countSeries, seriesTexts, stepText } from "./counts";
+import { countSeries, seriesTexts } from "./counts";
 import { eventsInStoryOrder, membershipsInStoryOrder } from "./order";
 import {
   type DriveTurn,
@@ -462,6 +467,25 @@ export function eventTime(story: Story, id: string): string | undefined {
   return text === "" ? undefined : text.slice(2, -1);
 }
 
+/**
+ * When an event is, for a count value at it: `eventTime`, with when the
+ * value takes effect (its start) for an event longer than a day, since a
+ * value holds from its event's start: `8 to 18 June 1131, from 8 June 1131`.
+ */
+export function countTime(story: Story, id: string): string | undefined {
+  const when = eventTime(story, id);
+  const position = worldPositionOf(story, id);
+  if (
+    when === undefined ||
+    position === undefined ||
+    story.timeline.worldUnit !== "year" ||
+    daysBetween(position.start, position.end) <= 1 + 1e-6
+  ) {
+    return when;
+  }
+  return `${when}, from ${describeMoment(position.start)}`;
+}
+
 /** Each count, then its values in story order, a line apiece. */
 function countLines(story: Story): string[] {
   return story.counts.flatMap((count) => {
@@ -472,18 +496,12 @@ function countLines(story: Story): string[] {
     ]);
     const series = countSeries(story, count);
     const texts = seriesTexts(count, series);
-    const below = belowThreshold(series);
     return [
       head,
       ...series.map((step, i) => {
-        const when = eventTime(story, step.at);
+        const when = countTime(story, step.at);
         return `  - ${eventLabel(story, step.at)}${when === undefined ? "" : ` (${when})`}: ${sentence(joined([texts[i], step.note.trim() === "" ? undefined : `(${step.note.trim()})`]))}`;
       }),
-      ...(below.length === 0
-        ? []
-        : [
-            `  Below the threshold at: ${below.map((step) => `${eventLabel(story, step.at)} (${stepText(count, step, false)})`).join("; ")}.`,
-          ]),
     ];
   });
 }

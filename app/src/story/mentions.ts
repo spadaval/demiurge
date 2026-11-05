@@ -11,7 +11,7 @@
 
 import { err, ok, type Result } from "neverthrow";
 import { WORLD_FRAME } from "../time/timeline";
-import { describeSpan } from "./calendar";
+import { describeSpan, isYear } from "./calendar";
 import { describeRef, type Ref, refExists, type Story } from "./story";
 import {
   refLabel,
@@ -416,7 +416,7 @@ export function terms(story: Story, ref: Ref, approximate = false): Term[] {
     const years =
       position === undefined
         ? []
-        : describeSpan(position) !== undefined
+        : describeSpan(position) !== undefined || isYear(position)
           ? [Math.floor(position.start)]
           : Number.isInteger(position.start) && Number.isInteger(position.end)
             ? [...new Set([position.start, position.end])]

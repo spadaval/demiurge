@@ -78,7 +78,7 @@ const reaches = (step: CountStep) =>
 /**
  * `488 of 992, 9 short of more than half (497)`: a step's value, with its
  * total and how it stands against the threshold. With `standing` false, the
- * threshold is left out.
+ * threshold is left out, as it is for a value of zero.
  */
 export function stepText(
   count: Count,
@@ -86,7 +86,10 @@ export function stepText(
   standing = true,
 ): string {
   const of = step.total === undefined ? "" : ` of ${step.total}`;
-  if (step.threshold === undefined || !standing) return `${step.value}${of}`;
+  // At zero, how far short is plain from the total and needs no saying.
+  if (step.threshold === undefined || !standing || step.value === 0) {
+    return `${step.value}${of}`;
+  }
   const mark = thresholdText(count, step.threshold);
   const short = step.threshold - step.value;
   return short > 0
@@ -108,16 +111,6 @@ export function seriesTexts(count: Count, series: CountStep[]): string[] {
       reaches(prev) !== reaches(step);
     return stepText(count, step, changed);
   });
-}
-
-/**
- * The steps below their threshold, to list once beside the series, when
- * the series has some at or past it too (a dip that matters); none when
- * every step is on one side.
- */
-export function belowThreshold(series: CountStep[]): CountStep[] {
-  const below = series.filter((step) => reaches(step) === false);
-  return series.some((step) => reaches(step) === true) ? below : [];
 }
 
 /**

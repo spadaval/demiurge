@@ -23,10 +23,13 @@ import { err, ok, Result } from "neverthrow";
 import {
   describeBetween,
   describeSpan,
+  describeYearRange,
   describeYears,
+  isYear,
   parseSpan,
   parseWhen,
   type Span,
+  yearRange,
 } from "../src/story/calendar";
 import {
   applyStoryCommand,
@@ -38,7 +41,6 @@ import {
   timelineProblemMessage,
 } from "../src/story/contradictions";
 import {
-  belowThreshold,
   type CountStep,
   countSeries,
   seriesTexts,
@@ -62,6 +64,7 @@ import {
 import { type Mention, whatMentions } from "../src/story/mentions";
 import { membershipsInStoryOrder } from "../src/story/order";
 import {
+  countTime,
   eventTime,
   RENDER_SECTION_NAMES,
   renderStory,
@@ -99,6 +102,11 @@ import {
   whatThisTouches,
 } from "../src/story/touches";
 import { type Prose, type Suspect, traceDependents } from "../src/story/trace";
+import {
+  compileChronology,
+  type TimelineProblem,
+} from "../src/time/chronology";
+import { timelineProblems } from "../src/time/commands";
 import { WORLD_FRAME } from "../src/time/timeline";
 
 // ---------------------------------------------------------------------------
@@ -405,6 +413,9 @@ const refList = (help: string) =>
 const orNone = (value: string): string | null =>
   value === "none" ? null : value;
 
+/** Where `--end` stops: a date at its end, a year at its start (1950 to 1960 is ten years). */
+const endOf = (span: Span) => (isYear(span) ? span.start : span.end);
+
 const COUNT_FLAGS = {
   notes: text,
   total: { value: "<number>", help: "a fixed total it is out of" },
@@ -653,12 +664,12 @@ export const EDITS: EditSpecs = {
     flags: {
       end: {
         value: "<year|date>",
-        help: "default: the start, or the end of a date",
+        help: "default: the end of the start's span; a date runs to its end, a year to its start (1950 --end 1960 is ten years)",
       },
       precision: { value: "<text>", help: 'such as "roughly"' },
     },
     summary:
-      'Place an event in story time: a year (1954, 1954.8) is that moment, as before; a date (1954-10, 1954-10-12, "1954-10-12 21:00") is that month, day or minute, so two events on one day can still be ordered with constrain. Start "none" unplaces it. A move that contradicts other events is kept and reported.',
+      'Place an event in story time: a year (1954), month (1954-10), day (1954-10-12) or minute ("1954-10-12 21:00") is all of that span, so two events in one year or on one day can still be ordered with constrain; a fractional year (1954.8) is that moment. Start "none" unplaces it. A move that contradicts other events is kept and reported.',
     example: ["set-position", "wreck", "17"],
     build: (a) => {
       const start = a.arg("start");
@@ -679,7 +690,7 @@ export const EDITS: EditSpecs = {
         frame: WORLD_FRAME,
         position: {
           start: from.start,
-          end: end === undefined ? from.end : a.when(end, "--end").end,
+          end: end === undefined ? from.end : endOf(a.when(end, "--end")),
           ...(precision === undefined ? {} : { precision }),
         },
       };
@@ -1188,7 +1199,7 @@ export const EDITS: EditSpecs = {
       },
     },
     summary:
-      'Set a count\'s value from an event on, until its next value in story order; setting it again at that event replaces it, and "none" removes it.',
+      'Set a count\'s value from an event on, until its next value in story order; setting it again at that event replaces it, and "none" removes it. The value takes effect at the start of its event: for one that lasts days, the counts say from when; to have it at the end, give it an event placed there.',
     example: [
       "set-count",
       "crew",
@@ -1777,7 +1788,7 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: ["from-event", "to-event"],
     summary:
-      "The time from one placed event to another, start to start: in days once it is a day or more, with years or months beside them past eight weeks, else in hours or minutes.",
+      "The time from one placed event to another, start to start: in days once it is a day or more, with years or months beside them past eight weeks, else in hours or minutes. When either is placed only by its year, the range it may be (11.7 to 12.7 years).",
     example: ["span", "wreck", "letter"],
   },
   trace: {
@@ -1895,12 +1906,13 @@ export function helpText(): string {
     "reader-order lists what the reader learns in telling order beside the",
     "order things happen.",
     "",
-    'Times are years (1954) or dates (1954-10-12, "1954-10-12 21:00"); span',
-    "gives the days between two events. Objects (add-object) are things scenes",
-    "plant and pay off; set-participant says who or what takes part in an",
-    "event; add-drive-turn says a want was satisfied, renounced, replaced or",
-    "flipped, and where. A count (add-count, set-count) is a number that",
-    "changes at events, shown as a running series against its total.",
+    'Times are years (1954) or dates (1954-10-12, "1954-10-12 21:00"), each',
+    "all of that span; span gives the days between two events. Objects",
+    "(add-object) are things scenes plant and pay off; set-participant says",
+    "who or what takes part in an event; add-drive-turn says a want was",
+    "satisfied, renounced, replaced or flipped, and where. A count",
+    "(add-count, set-count) is a number that changes at events, shown as a",
+    "running series against its total.",
     "reader-order --before <scene> lists, briefly, what the reader has been",
     "told before a scene and how long before it each thing happened. A scene",
     "told through someone's eyes (set-scene-viewpoint) marks what the reader",
@@ -2186,13 +2198,6 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...seriesTexts(count, series).map(
           (text, i) => `  ${countStepLine(story, series[i], text)}`,
         ),
-        ...listLine(
-          "below the threshold at",
-          belowThreshold(series).map(
-            (step) =>
-              `${formatRef({ kind: "event", id: step.at })} (${stepText(count, step, false)})`,
-          ),
-        ),
       ];
     }
     case "object": {
@@ -2291,7 +2296,7 @@ function countStepLine(
   text: string,
 ): string {
   if (step === undefined) return text;
-  const at = eventTime(story, step.at);
+  const at = countTime(story, step.at);
   return `${describe(story, { kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}: ${text}${step.note.trim() === "" ? "" : ` (${step.note})`}`;
 }
 
@@ -2532,16 +2537,47 @@ const startOf = (story: Story, id: string) =>
     (p) => p.event === id && p.frame === WORLD_FRAME,
   )?.start;
 
+/** The world position of an event, if it has one. */
+const positionOf = (story: Story, id: string) =>
+  story.timeline.positions.find(
+    (p) => p.event === id && p.frame === WORLD_FRAME,
+  );
+
+/**
+ * `11.7 to 12.7 years before`-style words for the time from one placed
+ * event to another when either is placed only by its year, else undefined.
+ * `back` and `on` say the two directions.
+ */
+function yearRangeText(
+  story: Story,
+  from: string,
+  to: string,
+  back: string,
+  on: string,
+): string | undefined {
+  const a = positionOf(story, from);
+  const b = positionOf(story, to);
+  if (a === undefined || b === undefined) return undefined;
+  const range = yearRange(a, b);
+  if (range === undefined) return undefined;
+  const said = describeYearRange(range);
+  return said === undefined
+    ? "in the same year, either way round"
+    : `${said}${range.max <= 0 ? back : on}`;
+}
+
 /** `From … to …: 27 days.`, saying which way it runs. */
 function spanLine(story: Story, from: string, to: string): string {
   const a = startOf(story, from) ?? 0;
   const b = startOf(story, to) ?? 0;
   const ranged = [from, to].some((id) => {
-    const p = story.timeline.positions.find(
-      (x) => x.event === id && x.frame === WORLD_FRAME,
-    );
+    const p = positionOf(story, id);
     return p !== undefined && describeSpan(p) === undefined && p.end > p.start;
   });
+  const years = yearRangeText(story, from, to, ", going back", "");
+  if (years !== undefined) {
+    return `From ${placedEvent(story, from)} to ${placedEvent(story, to)}: ${years} (a year without a date may be any part of it).`;
+  }
   const gap =
     a === b
       ? "they start at the same time"
@@ -2606,12 +2642,18 @@ function toldBeforeLines(story: Story, index: number): string[] {
     const event = eventOf(story, ref);
     const when = event === undefined ? undefined : eventTime(story, event);
     const then = event === undefined ? undefined : startOf(story, event);
+    const years =
+      event === undefined || anchor === undefined
+        ? undefined
+        : yearRangeText(story, event, anchor, " after", " before");
     const ago =
-      now === undefined || then === undefined
-        ? ""
-        : then === now
-          ? ", at the same time"
-          : `, ${describeBetween(then, now)} ${then < now ? "before" : "after"}`;
+      years !== undefined
+        ? `, ${years}`
+        : now === undefined || then === undefined
+          ? ""
+          : then === now
+            ? ", at the same time"
+            : `, ${describeBetween(then, now)} ${then < now ? "before" : "after"}`;
     return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${tellingsText(tellings)}${unawareText(ref)}`;
   };
   const viewpoint =
@@ -2659,7 +2701,7 @@ function countsBefore(story: Story, event: string | undefined): string[] {
   const lines = story.counts.flatMap((count) => {
     const step = stepAt(story, countSeries(story, count), event);
     if (step === undefined) return [];
-    const at = eventTime(story, step.at);
+    const at = countTime(story, step.at);
     return [
       `- ${shortDescribe(story, { kind: "count", id: count.id })}: ${stepText(count, step)}, since ${formatRef({ kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}`,
     ];
@@ -3224,6 +3266,28 @@ export function run(argv: readonly string[]): Result<Output, Failure> {
   return runEdit(EDITS[type], rest, path);
 }
 
+/**
+ * The messages of the timeline problems an edit added, each once, leaving
+ * out any that reads the same as a problem already there: a contradiction
+ * an edit grows counts as added, but says nothing new when its message is
+ * unchanged.
+ */
+function newTimelineMessages(
+  before: Story,
+  after: Story,
+  problems: readonly TimelineProblem[],
+): string[] {
+  if (problems.length === 0) return [];
+  const known = new Set(
+    timelineProblems(compileChronology(before.timeline, [])).map((p) =>
+      timelineProblemMessage(before, p),
+    ),
+  );
+  return [
+    ...new Set(problems.map((p) => timelineProblemMessage(after, p))),
+  ].filter((message) => !known.has(message));
+}
+
 function runEdit(
   spec: EditSpec<StoryCommand>,
   argv: readonly string[],
@@ -3240,9 +3304,9 @@ function runEdit(
           return {
             story: next,
             stdout: [
-              ...problems.map(
-                (p) =>
-                  `Timeline problem (kept; see contradictions): ${timelineProblemMessage(next, p)}`,
+              ...newTimelineMessages(story, next, problems).map(
+                (message) =>
+                  `Timeline problem (kept; see contradictions): ${message}`,
               ),
               ...addedProblems(story, next).map(
                 ({ source, message }) =>

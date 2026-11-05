@@ -1,23 +1,32 @@
 import { describe, expect, test } from "bun:test";
 import {
   describeMismatch,
+  describeMoment,
   describeSpan,
   describeWhen,
+  describeYearRange,
   describeYears,
+  isYear,
   parseSpan,
   parseWhen,
+  yearRange,
 } from "./calendar";
 
 describe("parseWhen", () => {
-  test("a number is a moment in years, as before", () => {
+  test("a whole number is that year, a fractional one a moment in years", () => {
     expect(parseWhen("1954")._unsafeUnwrap()).toEqual({
       start: 1954,
-      end: 1954,
+      end: 1955,
     });
+    expect(isYear(parseWhen("-300")._unsafeUnwrap())).toBe(true);
+    expect(describeWhen(parseWhen("1954")._unsafeUnwrap())).toBe("year 1954");
     expect(parseWhen("1954.8")._unsafeUnwrap()).toEqual({
       start: 1954.8,
       end: 1954.8,
     });
+    // An older file's whole year, stored as a moment, reads as before.
+    expect(describeWhen({ start: 1954, end: 1954 })).toBe("year 1954");
+    expect(describeWhen({ start: 1301, end: 1309 })).toBe("year 1301 to 1309");
   });
 
   test("a date is the month, day or minute it names", () => {
@@ -106,24 +115,67 @@ test("describeYears says a span whole in no unit in the largest it reaches", () 
 
 test("describeMismatch keeps a mismatch visible after rounding", () => {
   const day = 1 / 365.2425;
-  // Said in the tolerance's unit, the largest that keeps the mismatch.
-  expect(describeMismatch(14 * day, 3.5 * day, 1, 1)).toEqual({
-    amount: "14 days",
-    tolerance: "3.5 days",
-    between: "365.2 days",
+  // The amount in its own unit, the tolerance in its own.
+  expect(describeMismatch(3 * day, 0.5 * day, 5 * day, 5 * day)).toEqual({
+    amount: "3 days",
+    tolerance: "12 hours",
+    between: "5 days",
   });
-  // Off by thirteen days on a year: said in the tolerance's unit.
+  expect(describeMismatch(1, 0.5, 3, 3)).toEqual({
+    amount: "1 year",
+    tolerance: "6 months",
+    between: "3 years",
+  });
+  // A range shorter than the amount's unit is said in a unit it reaches.
+  expect(describeMismatch(14 * day, 3.5 * day, -0.1 * day, 0.9 * day)).toEqual({
+    amount: "2 weeks",
+    tolerance: "3.5 days",
+    between: "-2.4 hours to 21.6 hours",
+  });
+  expect(describeMismatch(day, 0.5 * day, 0, 0).between).toBe("0 days");
+  // Off by thirteen days on a year: rounding to years would hide it, so
+  // months, with the amount in months beside it.
   expect(describeMismatch(1, day, 378.3 * day, 380.3 * day)).toEqual({
-    amount: "365.2 days",
+    amount: "1 year (12 months)",
     tolerance: "1 day",
-    between: "378.3 days to 380.3 days",
+    between: "12.4 months to 12.5 months",
   });
   // Ends that read the same are one value.
-  expect(describeMismatch(10, 0.5, 1.0001, 1.0002).between).toBe("12 months");
-  // A tolerance of none: the amount's unit, smaller if the gap needs it.
+  expect(describeMismatch(10, 0.5, 1.0001, 1.0002).between).toBe("1 year");
+  // A tolerance of none: in the amount's unit.
   expect(describeMismatch(1, 0, 1 + 3 * day, 1 + 3 * day)).toEqual({
-    amount: "52.2 weeks",
-    tolerance: "0 weeks",
+    amount: "1 year (52.2 weeks)",
+    tolerance: "0 years",
     between: "52.6 weeks",
   });
+});
+
+test("yearRange gives the time between events placed by year as a range", () => {
+  const year = (n: number) => parseWhen(String(n))._unsafeUnwrap();
+  const day = parseWhen("1106-04-10")._unsafeUnwrap();
+  // Neither a year: start to start, as before.
+  expect(yearRange(day, day)).toBeUndefined();
+  const on = yearRange(day, year(1118));
+  expect(on === undefined ? undefined : describeYearRange(on)).toBe(
+    "11.7 to 12.7 years",
+  );
+  const back = yearRange(year(1118), day);
+  expect(back !== undefined && back.max <= 0).toBe(true);
+  expect(back === undefined ? undefined : describeYearRange(back)).toBe(
+    "11.7 to 12.7 years",
+  );
+  // Two events in one year can fall either way round.
+  const same = yearRange(year(1103), year(1103));
+  expect(same).toEqual({ min: -1, max: 1 });
+  expect(same === undefined ? "" : describeYearRange(same)).toBeUndefined();
+});
+
+test("describeMoment says a moment as a date when it can", () => {
+  expect(describeMoment(parseWhen("1131-06-08")._unsafeUnwrap().start)).toBe(
+    "8 June 1131",
+  );
+  expect(
+    describeMoment(parseWhen("1131-06-08 21:00")._unsafeUnwrap().start),
+  ).toBe("8 June 1131, 21:00");
+  expect(describeMoment(1954.800001)).toBe("year 1954.800001");
 });
