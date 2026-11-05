@@ -148,7 +148,6 @@ describe("what the viewpoint doesn't know", () => {
   test("marks a told record someone else knows, with what she believes instead", () => {
     expect(viewpointGap(story, "mara", wreck, "letter")).toEqual({
       later: true,
-      ended: false,
       believes: [{ kind: "version", id: "fog" }],
     });
     expect(viewpointGap(story, "ivo", wreck, "letter")).toBeUndefined();
@@ -160,7 +159,6 @@ describe("what the viewpoint doesn't know", () => {
     // Knowledge from an event holds after it, not at it.
     expect(viewpointGap(story, "mara", wreck, "wreck")).toEqual({
       later: true,
-      ended: false,
       believes: [],
     });
     expect(
@@ -168,7 +166,11 @@ describe("what the viewpoint doesn't know", () => {
     ).toBeUndefined();
     expect(
       viewpointGap(story, "mara", { kind: "fact", id: "lamp" }, "later"),
-    ).toEqual({ later: false, ended: true, believes: [] });
+    ).toEqual({ later: false, ended: "knows", believes: [] });
+    // A belief given up is one no longer believed.
+    expect(
+      viewpointGap(story, "mara", { kind: "version", id: "fog" }, "later"),
+    ).toEqual({ later: false, ended: "believes", believes: [] });
     // With no time for the scene, any knowledge of it counts.
     expect(viewpointGap(story, "mara", wreck, undefined)).toBeUndefined();
   });
@@ -186,6 +188,135 @@ describe("what the viewpoint doesn't know", () => {
         "letter",
       ),
     ).toBeUndefined();
+  });
+});
+
+describe("what the story shows the viewpoint", () => {
+  // Ivo knows the wreck, the fog version, and the oar; Mara has no
+  // knowledge records, so what she does and sees decides.
+  const story = run(
+    base,
+    {
+      type: "addVersion",
+      id: "fog",
+      event: "wreck",
+      text: "The fog took it",
+      by: ["mara"],
+    },
+    { type: "addObject", id: "oar", name: "The oar", notes: "" },
+    { type: "addFact", id: "lamp", text: "The lamp was out", about: [] },
+    ...(["wreck", "fog", "oar", "lamp"] as const).map(
+      (id, i): StoryCommand => ({
+        type: "addKnowledge",
+        id: `ivo-${i}`,
+        actor: "ivo",
+        how: "knows",
+        what: {
+          kind:
+            id === "wreck"
+              ? "event"
+              : id === "fog"
+                ? "version"
+                : id === "oar"
+                  ? "object"
+                  : "fact",
+          id,
+        },
+      }),
+    ),
+    {
+      type: "setParticipant",
+      event: "letter",
+      who: { kind: "object", id: "oar" },
+      role: "found",
+    },
+  );
+  const wreck = { kind: "event", id: "wreck" } as const;
+  const oar = { kind: "object", id: "oar" } as const;
+  const lamp = { kind: "fact", id: "lamp" } as const;
+  const fog = { kind: "version", id: "fog" } as const;
+  const part = (event: string): StoryCommand => ({
+    type: "setParticipant",
+    event,
+    who: { kind: "actor", id: "mara" },
+    role: "there",
+  });
+
+  test("an event she takes part in, and the objects in it, from then on", () => {
+    expect(viewpointGap(story, "mara", wreck, "letter")).toEqual({
+      later: false,
+      believes: [],
+    });
+    const there = run(story, part("wreck"), part("letter"));
+    expect(viewpointGap(there, "mara", wreck, "letter")).toBeUndefined();
+    expect(viewpointGap(there, "mara", wreck, "wreck")).toBeUndefined();
+    expect(viewpointGap(there, "mara", oar, "letter")).toBeUndefined();
+    expect(viewpointGap(there, "mara", oar, "wreck")).toEqual({
+      later: true,
+      believes: [],
+    });
+  });
+
+  test("a version she tells, from its event", () => {
+    expect(viewpointGap(story, "mara", fog, "letter")).toBeUndefined();
+    expect(viewpointGap(story, "mara", fog, "signs")).toEqual({
+      later: true,
+      believes: [],
+    });
+  });
+
+  test("what a scene through her eyes shows or reveals, after that scene's now", () => {
+    // night (scene 0) is at the wreck; post (scene 1) at the confession.
+    const seen = run(
+      story,
+      { type: "setSceneEvents", id: "night", depicts: ["wreck"] },
+      { type: "setSceneLinks", id: "night", how: "reveals", refs: [lamp] },
+      { type: "setSceneViewpoint", id: "night", actor: "mara" },
+      { type: "setSceneEvents", id: "post", depicts: ["confession"] },
+    );
+    expect(viewpointGap(seen, "mara", lamp, "confession", 1)).toBeUndefined();
+    expect(viewpointGap(seen, "mara", wreck, "confession", 1)).toBeUndefined();
+    // Not at the scene's own time: it tells her then.
+    expect(viewpointGap(seen, "mara", lamp, "wreck", 1)).toEqual({
+      later: true,
+      believes: [],
+    });
+    // The scene being written isn't counted.
+    expect(viewpointGap(seen, "mara", lamp, "confession", 0)).toEqual({
+      later: false,
+      believes: [],
+    });
+    // Through someone else's eyes, it tells her nothing.
+    const other = run(seen, {
+      type: "setSceneViewpoint",
+      id: "night",
+      actor: "ivo",
+    });
+    expect(viewpointGap(other, "mara", lamp, "confession", 1)).toEqual({
+      later: false,
+      believes: [],
+    });
+    // With no time for the scene, a scene through her eyes told before counts.
+    expect(viewpointGap(seen, "mara", lamp, undefined, 1)).toBeUndefined();
+    expect(viewpointGap(seen, "mara", lamp, undefined, 0)).toEqual({
+      later: false,
+      believes: [],
+    });
+  });
+
+  test("her own knowledge records decide over what she is shown", () => {
+    const recorded = run(story, part("wreck"), {
+      type: "addKnowledge",
+      id: "mara-late",
+      actor: "mara",
+      how: "knows",
+      what: wreck,
+      since: "confession",
+    });
+    expect(viewpointGap(recorded, "mara", wreck, "letter")).toEqual({
+      later: true,
+      believes: [],
+    });
   });
 });
 

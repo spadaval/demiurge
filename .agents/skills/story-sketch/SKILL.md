@@ -88,9 +88,11 @@ trusting memory:
   viewpoint, it marks what the reader has been told that the viewpoint
   character doesn't know (`Mara doesn't know yet, believes version:fog`):
   the dramatic irony the scene can play on. A record is marked only when
-  someone's knowledge of it is recorded and the viewpoint character holds
-  none at the scene's latest event, so record who knows each secret with
-  `add-knowledge`, or nothing is marked.
+  someone's knowledge of it is recorded and the viewpoint character doesn't
+  hold it at the scene's latest event: by their own knowledge records of
+  it, or, without any, by taking part in it, telling it, or being shown it
+  in a scene through their eyes set before this one. So record who knows
+  each secret with `add-knowledge`, or nothing is marked.
 - `show` each event the scene depicts.
 
 After drafting, and before you commit the draft, check every number and

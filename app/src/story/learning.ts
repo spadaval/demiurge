@@ -6,10 +6,11 @@
  * the event too, though perhaps not the truth of it.
  */
 
-import type { TimeEvent } from "../time/timeline";
+import { type TimeEvent, WORLD_FRAME } from "../time/timeline";
 import { eventsInStoryOrder } from "./order";
 import {
   type Knowledge,
+  type KnowledgeHow,
   type Ref,
   SCENE_LINK_KINDS,
   SCENE_LINK_WORDS,
@@ -150,14 +151,22 @@ export function knowledgeAlways(
     });
 }
 
-/** A record the reader has been told before a scene, and where first. */
-export type ToldSoFar = { ref: Ref; how: TellingHow; index: number };
+/** One way a scene told the reader of a record: `revealed in 24`. */
+export type Telling = { how: TellingHow; index: number };
+
+/**
+ * A record the reader has been told before a scene: the first scene that
+ * told it each way, in telling order (`planted in 10, revealed in 24`).
+ */
+export type ToldSoFar = { ref: Ref; tellings: Telling[] };
 
 /**
  * What the scenes before the one at `index`, in telling order, have put
  * before the reader: each record once, with the first scene that showed,
- * revealed, implied, planted or paid it off. `withheld` is what those scenes
- * held back and none of them has told yet.
+ * revealed, implied, planted or paid it off, each way it was told.
+ * `withheld` is what those scenes held back and none of them has told yet;
+ * a question counts as told once a scene reveals its chosen answer, and the
+ * chosen answer once a scene reveals the question.
  */
 export function toldBefore(
   story: Story,
@@ -165,49 +174,92 @@ export function toldBefore(
 ): { told: ToldSoFar[]; withheld: Ref[] } {
   const told: ToldSoFar[] = [];
   const withheld: Ref[] = [];
-  const seen = (list: readonly { ref: Ref }[], ref: Ref) =>
-    list.some((x) => sameRef(x.ref, ref));
   for (const step of tellingOrder(story).slice(0, Math.max(0, index))) {
     for (const { how, ref } of step.told) {
       if (LEARNING.includes(how)) {
-        if (!seen(told, ref)) told.push({ ref, how, index: step.index });
+        const known = told.find((x) => sameRef(x.ref, ref));
+        if (known === undefined) {
+          told.push({ ref, tellings: [{ how, index: step.index }] });
+        } else if (!known.tellings.some((t) => t.how === how)) {
+          known.tellings.push({ how, index: step.index });
+        }
       } else if (!withheld.some((r) => sameRef(r, ref))) {
         withheld.push(ref);
       }
     }
   }
+  const revealed = (ref: Ref) =>
+    told.some(
+      (x) => sameRef(x.ref, ref) && x.tellings.some((t) => t.how === "reveals"),
+    );
+  const answerRevealed = (ref: Ref) => {
+    const id = ref.kind === "candidate" ? ref.questionId : ref.id;
+    const answer = story.openQuestions.find((q) => q.id === id)?.answer;
+    if (answer === undefined) return false;
+    const chosen: Ref = { kind: "candidate", questionId: id, id: answer };
+    return ref.kind === "openQuestion"
+      ? revealed(chosen)
+      : ref.kind === "candidate" &&
+          sameRef(ref, chosen) &&
+          revealed({ kind: "openQuestion", id });
+  };
   return {
     told,
-    withheld: withheld.filter((ref) => !seen(told, ref)),
+    withheld: withheld.filter(
+      (ref) => !told.some((x) => sameRef(x.ref, ref)) && !answerRevealed(ref),
+    ),
   };
 }
 
 /**
+ * The scene's now: the latest placed event it shows, by its start. Earlier
+ * ones it shows are flashbacks.
+ */
+export function sceneNow(story: Story, scene: Scene): string | undefined {
+  const start = (id: string) =>
+    story.timeline.positions.find(
+      (p) => p.event === id && p.frame === WORLD_FRAME,
+    )?.start;
+  return scene.depicts
+    .filter((id) => start(id) !== undefined)
+    .sort((a, b) => (start(b) ?? 0) - (start(a) ?? 0))[0];
+}
+
+/**
  * How the viewpoint actor stands to a record the reader has been told: they
- * don't hold it now but will (`later`), held it once (`ended`), or never
- * do; `believes` are the versions of it, for an event, they hold instead.
+ * don't hold it now but will (`later`), held it once (`ended`, by how they
+ * last held it), or never do; `believes` are the versions of it, for an
+ * event, they hold instead.
  */
 export type ViewpointGap = {
   later: boolean;
-  ended: boolean;
+  ended?: KnowledgeHow;
   believes: Ref[];
 };
 
 /**
- * Whether `actor` doesn't know `ref` at event `at`, by the knowledge records:
- * a record counts only when the story says who knows it (someone holds
- * knowledge of it or, for an event, of one of its versions), so a story
- * that tracks no knowledge of a thing marks nothing. Knowing and believing
- * both count as holding it. Knowledge holds from after its `since` event
- * until its `until` event, in story order; with `at` undefined (a scene
- * that shows no placed event) time is left out and any knowledge of it
- * counts. Undefined when the actor holds it, or it isn't tracked.
+ * Whether `actor` doesn't know `ref` at event `at`, in the scene at
+ * `scene` in telling order. A record counts only when the story says who
+ * knows it (someone holds knowledge of it or, for an event, of one of its
+ * versions), so a story that tracks no knowledge of a thing marks nothing.
+ *
+ * The actor's own knowledge records of it decide, where there are any:
+ * knowing and believing both count as holding it, from after the `since`
+ * event until the `until` event, in story order. Without them, the actor
+ * holds it from what the story shows them doing: an event from the time
+ * they take part in it, and an object in it; a version they tell, from its
+ * event; and what a scene told through their eyes shows or reveals, from
+ * that scene's now (its latest event) on, the scene being written aside.
+ * With `at` undefined (a scene that shows no placed event) time is left
+ * out: any knowledge of it counts, and any scene through their eyes told
+ * before this one. Undefined when the actor holds it, or it isn't tracked.
  */
 export function viewpointGap(
   story: Story,
   actor: string,
   ref: Ref,
   at: string | undefined,
+  scene: number = story.scenes.length,
 ): ViewpointGap | undefined {
   if (ref.kind === "knowledge") {
     const own = story.knowledge.find((k) => k.id === ref.id);
@@ -234,12 +286,73 @@ export function viewpointGap(
   const holds = (k: Knowledge) => starts(k) && lasts(k);
   const theirs = story.knowledge.filter((k) => k.actor === actor);
   const of = theirs.filter((k) => sameRef(k.what, ref));
-  if (of.some(holds)) return undefined;
-  return {
-    later: of.some((k) => !starts(k)),
-    ended: of.some((k) => starts(k) && !lasts(k)),
-    believes: versions.filter((version) =>
-      theirs.some((k) => sameRef(k.what, version) && holds(k)),
-    ),
-  };
+  const believes = versions.filter((version) =>
+    theirs.some((k) => sameRef(k.what, version) && holds(k)),
+  );
+  if (of.length > 0) {
+    if (of.some(holds)) return undefined;
+    const ended = of.filter((k) => starts(k) && !lasts(k));
+    return {
+      later: of.some((k) => !starts(k)),
+      ...(ended.length === 0
+        ? {}
+        : {
+            ended: ended.some((k) => k.how === "knows") ? "knows" : "believes",
+          }),
+      believes,
+    };
+  }
+  // Story-order places from which the actor holds it, by what they do or see.
+  const from = shownFrom(story, actor, ref, scene, place, at);
+  if (from.some((p) => at === undefined || p <= place(at))) return undefined;
+  return { later: from.length > 0, believes };
+}
+
+/**
+ * Where in story order `actor` comes to hold `ref` by what the story shows:
+ * taking part, telling, or seeing it in a scene through their eyes.
+ * A scene's place is just after its now, so the scene at its own time
+ * hasn't yet told it; with no time, a scene told before `scene` comes first.
+ */
+function shownFrom(
+  story: Story,
+  actor: string,
+  ref: Ref,
+  scene: number,
+  place: (id: string) => number,
+  at: string | undefined,
+): number[] {
+  const takesPart = (event: string) =>
+    story.participants.some(
+      (p) => p.event === event && p.who.kind === "actor" && p.who.id === actor,
+    );
+  const parts =
+    ref.kind === "event"
+      ? takesPart(ref.id)
+        ? [place(ref.id)]
+        : []
+      : ref.kind === "object"
+        ? story.participants
+            .filter((p) => sameRef(p.who, ref) && takesPart(p.event))
+            .map((p) => place(p.event))
+        : [];
+  const tells =
+    ref.kind === "version"
+      ? story.versions
+          .filter((v) => v.id === ref.id && v.by.includes(actor))
+          .map((v) => place(v.event))
+      : [];
+  const seen = story.scenes.flatMap((s, i) => {
+    if (i === scene || s.viewpoint !== actor) return [];
+    const shown =
+      (ref.kind === "event" && s.depicts.includes(ref.id)) ||
+      s.reveals.some((r) => sameRef(r, ref));
+    if (!shown) return [];
+    const now = sceneNow(story, s);
+    if (at === undefined || now === undefined) {
+      return i < scene ? [Number.NEGATIVE_INFINITY] : [];
+    }
+    return [place(now) + 0.5];
+  });
+  return [...parts, ...tells, ...seen];
 }

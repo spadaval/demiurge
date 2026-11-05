@@ -1184,6 +1184,27 @@ describe("story CLI", () => {
     expect(ok("reader-order", "--before", "bake")).toBe(
       'Before 1. scene:bake ("Bakehouse"), at event:bakehouse ("The bakehouse") at 1 May 619 (the latest event it shows), the reader has been told:\n(nothing yet)\n',
     );
+
+    // Each way a record was told shows, and a question whose chosen answer
+    // a scene revealed is no longer held back.
+    ok("add-open-question", "who", "Who planned it?");
+    ok("add-candidate", "who", "baker", "The baker");
+    ok("answer-open-question", "who", "baker");
+    ok("set-scene-links", "bake", "withholds", "--add", "open-question:who");
+    ok("set-scene-links", "bake", "plants", "fact:rule");
+    ok("set-scene-links", "eye", "reveals", "candidate:who/baker");
+    ok("set-scene-links", "eye", "pays-off", "fact:rule");
+    ok("add-scene", "after", "After");
+    expect(ok("reader-order", "--before", "after")).toBe(
+      [
+        'Before 3. scene:after ("After"), the reader has been told:',
+        '- event:bakehouse ("The bakehouse") at 1 May 619: shown in 1',
+        '- fact:rule ("A pact passes to whoever holds more than half its parts, by…"): revealed and planted in 1, paid off in 2',
+        '- event:heist ("The heist") at 28 May 619, 23:00: shown in 2',
+        '- candidate:who/baker ("The baker"): revealed in 2',
+        "",
+      ].join("\n"),
+    );
   });
 
   test("set-count traces only a changed value, and finds text stating the old one, in words or rounded", () => {

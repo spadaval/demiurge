@@ -49,6 +49,8 @@ import { deliberateGaps, storyGaps } from "../src/story/gaps";
 import {
   type FirstTold,
   knowledgeAlways,
+  sceneNow,
+  type Telling,
   type TellingHow,
   type ToldSoFar,
   tellingOrder,
@@ -1764,7 +1766,7 @@ export const READS: Record<ReadName, Spec> = {
     flags: {
       before: {
         value: "<scene-id>",
-        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens and, if the scene has a viewpoint, whether that actor doesn't know it, then each count's value as of the scene",
+        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, each way it was told and where first (planted in 3, revealed in 7), and, if the scene has a viewpoint, whether that actor doesn't know it (by their knowledge records of it; without any, they know an event they take part in and the objects in it, a version they tell, and what a scene through their eyes shows or reveals, from that scene's latest event on); then what was held back and not yet told or answered; then each count's value as of the scene",
       },
     },
     summary:
@@ -1902,10 +1904,12 @@ export function helpText(): string {
     "reader-order --before <scene> lists, briefly, what the reader has been",
     "told before a scene and how long before it each thing happened. A scene",
     "told through someone's eyes (set-scene-viewpoint) marks what the reader",
-    "has been told that they don't know, by the knowledge records: a told",
-    "record is marked only when someone's knowledge of it is recorded. Who",
-    "belongs to a group, and from and until when, is a membership",
-    "(add-membership); show actor: lists it for the member and the group.",
+    "has been told that they don't know: a told record is marked only when",
+    "someone's knowledge of it is recorded, and they hold it by their own",
+    "knowledge records or, without any, by taking part in it, telling it or",
+    "being shown it in a scene through their eyes. Who belongs to a group,",
+    "and from and until when, is a membership (add-membership); show actor:",
+    "lists it for the member and the group.",
     "",
     "After an edit that changes a record, the CLI prints the top three",
     "suspects that may still state its old version, records and lines of",
@@ -2577,18 +2581,28 @@ const TOLD_WORDS: Record<TellingHow, string> = {
   paysOff: "paid off",
 };
 
+/** `planted in 10, revealed and paid off in 24`. */
+function tellingsText(tellings: readonly Telling[]): string {
+  const scenes = [...new Set(tellings.map((t) => t.index))];
+  return scenes
+    .map(
+      (at) =>
+        `${tellings
+          .filter((t) => t.index === at)
+          .map((t) => TOLD_WORDS[t.how])
+          .join(" and ")} in ${at + 1}`,
+    )
+    .join(", ");
+}
+
 /** `reader-order --before`: what the scenes before it have told, briefly. */
 function toldBeforeLines(story: Story, index: number): string[] {
   const scene = story.scenes[index];
   if (scene === undefined) return [];
-  // The scene's now is the latest placed event it shows; earlier ones it
-  // shows are flashbacks.
-  const anchor = scene.depicts
-    .filter((id) => startOf(story, id) !== undefined)
-    .sort((a, b) => (startOf(story, b) ?? 0) - (startOf(story, a) ?? 0))[0];
+  const anchor = sceneNow(story, scene);
   const now = anchor === undefined ? undefined : startOf(story, anchor);
   const { told, withheld } = toldBefore(story, index);
-  const line = ({ ref, how, index: at }: ToldSoFar) => {
+  const line = ({ ref, tellings }: ToldSoFar) => {
     const event = eventOf(story, ref);
     const when = event === undefined ? undefined : eventTime(story, event);
     const then = event === undefined ? undefined : startOf(story, event);
@@ -2598,7 +2612,7 @@ function toldBeforeLines(story: Story, index: number): string[] {
         : then === now
           ? ", at the same time"
           : `, ${describeBetween(then, now)} ${then < now ? "before" : "after"}`;
-    return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${TOLD_WORDS[how]} in ${at + 1}${unawareText(ref)}`;
+    return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${tellingsText(tellings)}${unawareText(ref)}`;
   };
   const viewpoint =
     scene.viewpoint === undefined
@@ -2613,13 +2627,13 @@ function toldBeforeLines(story: Story, index: number): string[] {
   /** `; Mara doesn't know yet`, from the knowledge records, or nothing. */
   const unawareText = (ref: Ref) => {
     if (viewpoint === undefined) return "";
-    const gap = viewpointGap(story, viewpoint.id, ref, anchor);
+    const gap = viewpointGap(story, viewpoint.id, ref, anchor, index);
     if (gap === undefined) return "";
     const how = gap.later
       ? "doesn't know yet"
-      : gap.ended
-        ? "no longer knows"
-        : "doesn't know";
+      : gap.ended === undefined
+        ? "doesn't know"
+        : `no longer ${gap.ended}`;
     const believes =
       gap.believes.length === 0
         ? ""
