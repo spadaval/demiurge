@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:35.404385689+00:00"
 id: "worldcrafter-ql1d"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-ql1d
 priority: "P1"
 relationships:
   blocks: []
@@ -22,7 +25,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Set up the exercise: rubric, writer runner, panel"
-updated_at: "2026-11-05T06:28:35.497487277+00:00"
+updated_at: "2026-11-05T06:59:04.190293472+00:00"
 ---
 
 ## Goal
