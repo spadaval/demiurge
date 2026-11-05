@@ -1,20 +1,23 @@
 import { describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { newStory, type Story } from "../../src/story/story";
+import { newStory, REF_KINDS, type Story } from "../../src/story/story";
 import {
   credentialsPath,
   SANDBOX_HOME,
   TOOL_MOUNT,
 } from "../comparison/sandbox";
 import { checkTranscript } from "../comparison/transcript";
+import { KIND_NAMES } from "../story";
 import {
   beatsOf,
   beatsText,
@@ -28,14 +31,17 @@ import {
   type Point,
   paths,
   pointsInOrder,
+  readRepoFile,
   recheck,
   resultText,
   type SessionRecord,
   STORY_MOUNT,
+  sandboxedGitLog,
   scenePrompt,
   seeded,
   sessionIds,
   soFarPrompt,
+  VOCAB_KINDS,
   vocabHits,
   WARLOCK_PREMISE,
   writerArgs,
@@ -373,5 +379,115 @@ describe("recheck", () => {
 
   test("the opening scene's story so far is a fixed line", () => {
     expect(OPENING_SO_FAR).toBe("Nothing yet: this scene opens the story.");
+  });
+});
+
+describe("host processes never run what the writer controls (worldcrafter-f9l3)", () => {
+  const git = (cwd: string, ...args: string[]) => {
+    const r = Bun.spawnSync(["git", ...args], {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (r.exitCode !== 0) throw new Error(r.stderr.toString());
+    return r.stdout.toString().trim();
+  };
+
+  test("the git log is read in a sandbox, so a planted gpg.program doesn't run on the host", () => {
+    const repo = mkdtempSync(join(tmpdir(), "round-git."));
+    const elsewhere = mkdtempSync(join(tmpdir(), "round-marker."));
+    try {
+      const marker = join(elsewhere, "ran");
+      git(repo, "init", "-q", "-b", "main");
+      // The reviewer's trick: a signed-looking commit, log.showSignature and
+      // a gpg.program that is the writer's own script.
+      const evil = join(repo, ".git", "evil.sh");
+      writeFileSync(evil, `#!/bin/sh\necho ran > ${marker}\nexit 1\n`, {
+        mode: 0o755,
+      });
+      git(repo, "config", "log.showSignature", "true");
+      git(repo, "config", "gpg.program", evil);
+      const tree = git(repo, "write-tree");
+      const commit = [
+        `tree ${tree}`,
+        "author b <b@b> 1700000000 +0000",
+        "committer b <b@b> 1700000000 +0000",
+        "gpgsig -----BEGIN PGP SIGNATURE-----",
+        " ",
+        " iQEzBAABCAAdFiEE",
+        " -----END PGP SIGNATURE-----",
+        "",
+        "The ferryman wrote the letter",
+        "",
+      ].join("\n");
+      const object = Bun.spawnSync(
+        ["git", "hash-object", "-t", "commit", "-w", "--stdin"],
+        {
+          cwd: repo,
+          stdin: new TextEncoder().encode(commit),
+          stdout: "pipe",
+        },
+      )
+        .stdout.toString()
+        .trim();
+      git(repo, "update-ref", "refs/heads/main", object);
+
+      // On the host, git log runs the script: the trick works.
+      Bun.spawnSync(["git", "log"], {
+        cwd: repo,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(existsSync(marker)).toBe(true);
+      rmSync(marker);
+
+      const log = sandboxedGitLog(repo);
+      expect(log).toContain("The ferryman wrote the letter");
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  test("readRepoFile never follows a symlink out of the repository", () => {
+    const repo = mkdtempSync(join(tmpdir(), "round-repo."));
+    const outside = mkdtempSync(join(tmpdir(), "round-outside."));
+    try {
+      writeFileSync(join(outside, "credentials.json"), "secret");
+      mkdirSync(join(repo, "scenes"));
+      writeFileSync(join(repo, "scenes", "plain.md"), "Prose.");
+      symlinkSync(
+        join(outside, "credentials.json"),
+        join(repo, "scenes", "link.md"),
+      );
+      symlinkSync(outside, join(repo, "linked-dir"));
+      symlinkSync("plain.md", join(repo, "scenes", "inside-link.md"));
+      expect(readRepoFile(repo, "scenes/plain.md")).toBe("Prose.");
+      expect(readRepoFile(repo, "scenes/link.md")).toBeUndefined();
+      expect(readRepoFile(repo, "scenes/inside-link.md")).toBeUndefined();
+      expect(readRepoFile(repo, "linked-dir/credentials.json")).toBeUndefined();
+      expect(readRepoFile(repo, "scenes/none.md")).toBeUndefined();
+      expect(readRepoFile(repo, "scenes")).toBeUndefined();
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the vocabulary check's kinds (worldcrafter-ts64)", () => {
+  test("cover every record kind the story model has, as the CLI spells it", () => {
+    for (const kind of [...REF_KINDS, "candidate" as const]) {
+      const name = KIND_NAMES[kind];
+      expect(VOCAB_KINDS).toContain(name);
+      expect(
+        vocabHits("f", `see ${name}:x-1 here`, []).map((h) => h.term),
+      ).toContain(`${name}:x-1`);
+    }
+    expect(VOCAB_KINDS).toContain("constraint");
+    expect(vocabHits("f", "candidate:who/ferryman", [])[0]?.term).toBe(
+      "candidate:who/ferryman",
+    );
   });
 });

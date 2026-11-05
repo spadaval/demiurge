@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -553,6 +554,19 @@ describe("post-session checks", () => {
     expect(check()).toEqual([
       "rubric.md changed during the session",
       "my-part1.md changed during the session",
+    ]);
+  });
+  test("never follows a report or input that is a symlink (worldcrafter-f9l3)", () => {
+    const secret = join(temp(), "secret.json");
+    write(secret, "VERDICT: keep\n");
+    const check = session("part2", (dir) => {
+      symlinkSync(secret, join(dir, "part2.md"));
+      rmSync(join(dir, "my-part1.md"));
+      symlinkSync(secret, join(dir, "my-part1.md"));
+    });
+    expect(check()).toEqual([
+      "my-part1.md changed during the session",
+      "part2.md is a symlink, not the report",
     ]);
   });
   test("flags a missing or empty report, and a missing verdict line", () => {

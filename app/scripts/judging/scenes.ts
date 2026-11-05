@@ -46,6 +46,7 @@ import {
   childPids,
   filesUnder,
   hostToken,
+  isLink,
   judgeSession,
   judgeTranscript,
   makeRunDir,
@@ -551,7 +552,7 @@ export function sessionProblems({
   }
   for (const [path, hash] of Object.entries(inputs)) {
     const now = join(filesDir, path);
-    if (!existsSync(now) || sha256(now) !== hash) {
+    if (!existsSync(now) || isLink(now) || sha256(now) !== hash) {
       problems.push(`${path} changed during the session`);
     }
   }

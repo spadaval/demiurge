@@ -124,6 +124,15 @@ pair of quote marks around the whole quote is dropped), `ignoring emphasis`
 (only once `*` and `_` are ignored) or `not in scene`. A quote is never
 corrected, and a missing one doesn't fail the run.
 
+### Files a session leaves
+
+The runners never follow a symlink a session leaves: an input replaced by a
+link counts as changed, and the comparison panel's report is refused if it
+is a link (it could point at the host's credentials and be copied into the
+output, or into a later session). The scene panel's judges have only a read
+tool and can't leave files; their report comes from the transcript. Copies
+of a run dir keep links as links.
+
 ### Memory
 
 Judges run in waves. Before each wave the runner reads MemAvailable and

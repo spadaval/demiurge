@@ -269,7 +269,7 @@ export type RefKind =
   | "version"
   | "knowledge";
 
-const REF_KINDS: readonly RefKind[] = [
+export const REF_KINDS: readonly RefKind[] = [
   "actor",
   "drive",
   "fact",

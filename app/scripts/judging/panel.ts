@@ -19,6 +19,7 @@ import {
   copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -89,6 +90,15 @@ function must(cmd: string[], cwd = REPO): string {
 
 const writeJson = (path: string, value: unknown) =>
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+
+/** Whether `path` is a symlink. A session could leave one pointing anywhere on the host. */
+export const isLink = (path: string) => {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
 
 export const sha256 = (path: string) =>
   createHash("sha256").update(readFileSync(path)).digest("hex");
@@ -717,12 +727,18 @@ export function postSessionProblems({
   }
   for (const [path, hash] of Object.entries(inputs)) {
     const now = join(filesDir, path);
-    if (!existsSync(now) || sha256(now) !== hash) {
+    if (!existsSync(now) || isLink(now) || sha256(now) !== hash) {
       problems.push(`${path} changed during the session`);
     }
   }
   const output = join(filesDir, OUTPUT[part]);
-  if (!existsSync(output) || readFileSync(output, "utf8").trim() === "") {
+  if (isLink(output)) {
+    // Never followed: it could point at the host's credentials.
+    problems.push(`${OUTPUT[part]} is a symlink, not the report`);
+  } else if (
+    !existsSync(output) ||
+    readFileSync(output, "utf8").trim() === ""
+  ) {
     problems.push(`${OUTPUT[part]} is missing or empty`);
   } else if (part === "part2") {
     try {
@@ -814,7 +830,9 @@ export async function runJudge(
         inputs: record.inputs,
       });
       const output = join(runDir, OUTPUT[part]);
-      if (existsSync(output)) copyFileSync(output, join(out, OUTPUT[part]));
+      if (existsSync(output) && !isLink(output)) {
+        copyFileSync(output, join(out, OUTPUT[part]));
+      }
     } finally {
       // A copy of everything the run directory held afterwards, for audit.
       cpSync(runDir, join(out, "files"), { recursive: true });

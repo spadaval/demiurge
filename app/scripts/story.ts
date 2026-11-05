@@ -56,7 +56,7 @@ import { WORLD_FRAME } from "../src/time/timeline";
 // ---------------------------------------------------------------------------
 // Refs as text: `drive:shut`, `candidate:why/ferryman`.
 
-const KIND_NAMES: Record<Ref["kind"], string> = {
+export const KIND_NAMES: Record<Ref["kind"], string> = {
   actor: "actor",
   drive: "drive",
   fact: "fact",
@@ -1247,7 +1247,7 @@ type ReadName =
   | "contradictions"
   | "render";
 
-const LIST_KINDS = [
+export const LIST_KINDS = [
   "actor",
   "drive",
   "event",

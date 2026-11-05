@@ -18,9 +18,9 @@
 
 import { randomUUID } from "node:crypto";
 import {
-  copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -28,12 +28,14 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseStory, type Story } from "../../src/story/story";
 import { buildTool } from "../comparison/comparison";
 import {
   BIN,
+  BWRAP,
   credentialsPath,
   ensureToken,
   SANDBOX_HOME,
@@ -55,6 +57,7 @@ import {
   persistedOutputs,
   sha256,
 } from "../judging/panel";
+import { KIND_NAMES, LIST_KINDS } from "../story";
 
 export const MODEL = "claude-opus-5-5";
 
@@ -206,9 +209,13 @@ export function readPoints(round: string): Point[] {
 
 /** The story file as it stands in the round's story repository. */
 export function readStory(round: string): Story {
-  const result = parseStory(
-    readFileSync(join(paths(round).work, STORY_FILE), "utf8"),
-  );
+  const text = readRepoFile(paths(round).work, STORY_FILE);
+  if (text === undefined) {
+    throw new Error(
+      `${STORY_FILE} is missing, or isn't a plain file in the story repository.`,
+    );
+  }
+  const result = parseStory(text);
   if (result.isErr()) {
     throw new Error(
       `${STORY_FILE} doesn't parse: ${JSON.stringify(result.error)}`,
@@ -442,8 +449,18 @@ const FIXED_TERMS = [
   "open-question",
   "reader-question",
 ];
-const REF =
-  /\b(?:actor|drive|fact|reader-question|event|scene|open-question|candidate|version|knowledge|constraint):[a-z0-9][a-z0-9/-]*/g;
+/**
+ * Every kind a ref or listing names, as the CLI spells it: every record kind
+ * (KIND_NAMES is typed over all of them, candidate included) and `list`'s
+ * kinds, which add constraint. A kind added to the story model is covered.
+ */
+export const VOCAB_KINDS: readonly string[] = [
+  ...new Set([...Object.values(KIND_NAMES), ...LIST_KINDS]),
+].sort();
+const REF = new RegExp(
+  `\\b(?:${VOCAB_KINDS.join("|")}):[a-z0-9][a-z0-9/-]*`,
+  "g",
+);
 
 /** The CLI's hyphenated command names, from its `--help`: `add-actor`, `reader-order`. */
 export function commandNames(help: string): string[] {
@@ -766,14 +783,111 @@ const writerCheck = (jsonl: string) =>
     write: [STORY_MOUNT],
   });
 
-/** Keeps the story repository as a session left it: its files and git log. */
-function snapshot(round: string, dir: string): void {
+/**
+ * Keeps the story repository as a session left it: its files (symlinks
+ * copied as links, never followed) and its git log, read in a sandbox.
+ */
+function snapshot(round: string, dir: string): string[] {
   const work = paths(round).work;
-  cpSync(work, join(dir, "work"), { recursive: true });
-  writeFileSync(
-    join(dir, "git-log.txt"),
-    sh(["git", "log", "--stat", "--format=%h %ad %s", "--date=iso"], work).out,
+  const problems: string[] = [];
+  try {
+    cpSync(work, join(dir, "work"), {
+      recursive: true,
+      verbatimSymlinks: true,
+    });
+  } catch (error) {
+    // A FIFO or socket the writer left can't be copied.
+    problems.push(
+      `the snapshot failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  writeFileSync(join(dir, "git-log.txt"), sandboxedGitLog(work));
+  return problems;
+}
+
+/**
+ * `git log --stat` of a repository the writer controls, run inside a
+ * sandbox: the writer can set anything in its .git/config (a gpg.program
+ * with log.showSignature, a textconv, an fsmonitor) that makes git run a
+ * program, so git never runs on the host there. The sandbox has the
+ * repository read-only at its own path, empty tmpfs /tmp and /home, no
+ * network and no credentials; whatever the config runs runs there and can
+ * write nothing that outlives it. Bounded by `timeout`.
+ */
+export function sandboxedGitLog(repo: string, timeoutSeconds = 120): string {
+  const real = realpathSync(repo);
+  const r = Bun.spawnSync(
+    [
+      "/usr/bin/timeout",
+      "--kill-after=10",
+      String(timeoutSeconds),
+      BWRAP,
+      "--unshare-all",
+      "--die-with-parent",
+      "--new-session",
+      "--ro-bind",
+      "/usr",
+      "/usr",
+      "--symlink",
+      "usr/bin",
+      "/bin",
+      "--symlink",
+      "usr/lib",
+      "/lib",
+      "--symlink",
+      "usr/lib64",
+      "/lib64",
+      "--ro-bind",
+      "/etc",
+      "/etc",
+      "--proc",
+      "/proc",
+      "--dev",
+      "/dev",
+      "--tmpfs",
+      "/tmp",
+      "--tmpfs",
+      "/home",
+      "--ro-bind",
+      real,
+      real,
+      "--chdir",
+      real,
+      "--clearenv",
+      "--setenv",
+      "HOME",
+      "/home/git",
+      "--setenv",
+      "PATH",
+      "/usr/bin:/bin",
+      "--setenv",
+      "GIT_CONFIG_GLOBAL",
+      "/dev/null",
+      "git",
+      "log",
+      "--stat",
+      "--format=%h %ad %s",
+      "--date=iso",
+    ],
+    { cwd: tmpdir(), env: {}, stdout: "pipe", stderr: "pipe" },
   );
+  return r.exitCode === 0
+    ? r.stdout.toString()
+    : `(git log failed in its sandbox, exit ${r.exitCode}: ${r.stderr.toString().trim().slice(0, 500)})\n`;
+}
+
+/**
+ * A file's text from a repository the writer controls, or undefined unless
+ * it is a plain file there: a symlink (to the host's credentials, say) is
+ * never followed, nor is a path through a symlinked directory.
+ */
+export function readRepoFile(repo: string, rel: string): string | undefined {
+  const root = realpathSync(repo);
+  const path = join(root, rel);
+  if (!existsSync(path)) return undefined;
+  if (!lstatSync(path).isFile()) return undefined;
+  if (realpathSync(path) !== path) return undefined;
+  return readFileSync(path, "utf8");
 }
 
 // ---------------------------------------------------------------------------
@@ -838,7 +952,7 @@ export async function outline(
     timeoutSeconds: TIMEOUTS.outline,
     check: writerCheck,
   });
-  if (!existsSync(join(p.work, STORY_FILE)))
+  if (readRepoFile(p.work, STORY_FILE) === undefined)
     session.problems.push(`${STORY_FILE} is missing`);
   else {
     try {
@@ -852,7 +966,7 @@ export async function outline(
       );
     }
   }
-  snapshot(round, dir);
+  session.problems.push(...snapshot(round, dir));
   writeJson(join(dir, "record.json"), session);
   record.sessions.push(session);
   saveRound(round, record);
@@ -913,13 +1027,15 @@ export async function scenes(
         `not the outline's session: the transcript names ${ids.join(", ") || "no session"}, not ${record.sessionId}`,
       );
     }
-    const prose = join(p.work, "scenes", `${point.sceneId}.md`);
-    if (!existsSync(prose) || readFileSync(prose, "utf8").trim() === "") {
-      session.problems.push(`scenes/${point.sceneId}.md is missing or empty`);
+    const prose = readRepoFile(p.work, join("scenes", `${point.sceneId}.md`));
+    if (prose === undefined || prose.trim() === "") {
+      session.problems.push(
+        `scenes/${point.sceneId}.md is missing, empty or not a plain file`,
+      );
     } else {
-      copyFileSync(prose, out);
+      writeFileSync(out, prose);
     }
-    snapshot(round, dir);
+    session.problems.push(...snapshot(round, dir));
     writeJson(join(dir, "record.json"), session);
     record.sessions.push(session);
     saveRound(round, record);

@@ -58,6 +58,32 @@ transcripts are checked like the comparison's: it may read `/story`, the
 tool and the files its own large tool results were saved to, and write only
 `/story`.
 
+## What the host never does with the writer's files
+
+The writer controls everything in `<round>/work/` and `<round>/writer-home/`,
+including `.git/config`, so no host process runs anything there that could
+execute their content (worldcrafter-f9l3):
+
+- **No host git in the story repository.** A writer's `.git/config` can make
+  `git log` run a program (`log.showSignature` with a `gpg.program`, a
+  textconv, an fsmonitor). The snapshot's git log runs in its own sandbox
+  (`sandboxedGitLog`): the repository read-only, empty tmpfs `/tmp` and
+  `/home`, no network, no credentials, `GIT_CONFIG_GLOBAL=/dev/null`.
+  A test plants the reviewer's trick in a scratch repository, shows host
+  `git log` runs it, and shows the sandboxed one doesn't reach the host. The
+  only host git in `work/` is `git init`, before the writer exists.
+- **No symlink is followed.** `story.json` and each `scenes/<id>.md` are read
+  only if they are plain files at their own real path (`readRepoFile`), so a
+  link to the host's credentials can't be copied into what the judges read.
+  The snapshot copies links as links.
+- **No writer file is run.** The host runs only the CLI it built into
+  `tool/` (made read-only, mounted read-only), on its own `--help`.
+- `writer-home/` is only ever mounted; the host reads nothing in it.
+
+The ended comparison harness (`../comparison/comparison.ts`, `runOne`) still
+runs host `git log` in its writer's repository; it has the same hole, and
+must not be reused as it stands.
+
 ## Timeouts
 
 | Phase | Seconds | Why |
