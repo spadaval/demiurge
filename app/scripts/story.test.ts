@@ -377,7 +377,7 @@ describe("story CLI", () => {
       .trimEnd()
       .split("\n");
     expect(lines[2]).toBe(
-      '- fact:vow ("Her vow to keep the light binds her"): text "keep the light" names it; text shares words: keep, light',
+      '- fact:vow ("Her vow to keep the light binds her"): text "keep the light" names it',
     );
     expect(lines.slice(3, 7).every((l) => l.includes("names its holder"))).toBe(
       true,
@@ -755,8 +755,8 @@ describe("story CLI", () => {
     expect(ok("trace", "event:wreck")).toBe(
       [
         'What may depend on event:wreck ("The wreck"), likeliest first:',
+        `- ${prose}:3 "Ten years since the boat went down.": "Ten years since" matches the 10 years between The wreck and The letter arrives; in a scene that depicts it`,
         '- fact:reef ("Nobody fishes the northern reef since the Alba sank"): text shares words: alba, northern, reef, sank',
-        `- ${prose}:3 "Ten years since the boat went down.": "Ten years since" matches the 10 years between The wreck and The letter arrives`,
         '- event:letter ("The letter arrives"): linked: an event it caused',
         '- scene:harbour ("The harbour"): linked: a scene that depicts it',
         `- ${prose}: the scene depicts it`,

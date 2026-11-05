@@ -102,9 +102,11 @@ describe("traceDependents on the fixed example", () => {
     expect(reasons("harbour.md:0")).toEqual(["the scene depicts it"]);
     expect(reasons("harbour.md:3")).toEqual([
       '"Ten years since" matches the 10 years between The wreck and The letter arrives',
+      "in a scene that depicts it",
     ]);
     expect(reasons("harbour.md:5")).toEqual([
       "prose shares words: northern, reef",
+      "in a scene that depicts it",
     ]);
   });
 
@@ -112,7 +114,9 @@ describe("traceDependents on the fixed example", () => {
     expect(found.some((s) => key(s) === "harbour.md:1")).toBe(false);
     // "storm" and "reef" in a scene that doesn't touch it still count.
     expect(reasons("market.md:1")).toEqual(["prose shares words: reef, storm"]);
-    expect(key(found[0] as Suspect)).toBe("fact:reef");
+    const rank = (k: string) => found.findIndex((s) => key(s) === k);
+    expect(rank("harbour.md:3")).toBe(0);
+    expect(rank("fact:reef")).toBeLessThan(rank("event:letter"));
   });
 
   test("after a change, looks only for what the change took away", () => {
@@ -143,6 +147,7 @@ describe("traceDependents on the fixed example", () => {
     })._unsafeUnwrap();
     expect(after.find((s) => key(s) === "harbour.md:3")?.reasons).toEqual([
       '"Ten years since" matches the 10 years between The wreck and The letter arrives',
+      "in a scene that depicts it",
     ]);
     expect(after.some((s) => key(s) === "fact:reef")).toBe(true);
   });
@@ -196,6 +201,82 @@ test("a re-answered question lists the scenes that reveal the replaced answer", 
   expect(found.find((s) => key(s) === "market.md:0")?.reasons).toContain(
     "the scene reveals ferry, an answer since replaced",
   );
+});
+
+describe("after an edit", () => {
+  const withMara = run(
+    story,
+    { type: "addScene", id: "kitchen", title: "The kitchen", summary: "" },
+    { type: "setSceneActors", id: "kitchen", actors: ["mara"] },
+    {
+      type: "updateActor",
+      id: "mara",
+      notes: "Keeps the lamp lit for her brother",
+    },
+  );
+  const kitchen = {
+    scene: "kitchen",
+    text: "Bread on the table.\n\nMara would not look at the lamp.\n",
+  };
+
+  test("a scene file is no evidence on its own: a change with nothing stale in its text flags nothing", () => {
+    const edited = run(withMara, {
+      type: "updateActor",
+      id: "mara",
+      notes: "Keeps the lamp lit, and the door locked",
+    });
+    const found = traceDependents(
+      edited,
+      { kind: "actor", id: "mara" },
+      { was: withMara, prose: [...prose, kitchen] },
+    )._unsafeUnwrap();
+    expect(found.filter((s) => s.inText)).toEqual([]);
+    // The whole file is still a suspect, for trace on demand.
+    expect(found.some((s) => key(s) === "kitchen.md:0" && !s.inText)).toBe(
+      true,
+    );
+  });
+
+  test("after a rename, prose using the old name comes before records only linked", () => {
+    const renamed = run(withMara, {
+      type: "updateActor",
+      id: "mara",
+      name: "Maren",
+    });
+    const found = traceDependents(
+      renamed,
+      { kind: "actor", id: "mara" },
+      { was: withMara, prose: [...prose, kitchen] },
+    )._unsafeUnwrap();
+    expect(found.slice(0, 2).map(key)).toEqual([
+      "kitchen.md:3",
+      "harbour.md:3",
+    ]);
+    const rank = (k: string) => found.findIndex((s) => key(s) === k);
+    expect(rank("scene:kitchen")).toBeGreaterThan(rank("harbour.md:3"));
+    expect(found[0]?.reasons).toEqual([
+      '"Mara" names it',
+      "in a scene that is in it",
+    ]);
+  });
+});
+
+test("common words don't count as shared", () => {
+  const common = run(story, {
+    type: "addFact",
+    id: "call",
+    text: "Mara would call and then stop, turn away, as if by accident",
+    about: [],
+  });
+  const found = traceDependents(
+    run(common, {
+      type: "describeEvent",
+      id: "wreck",
+      summary: "They call it an accident; turn away and stop asking",
+    }),
+    wreck,
+  )._unsafeUnwrap();
+  expect(found.find((s) => key(s) === "fact:call")?.reasons ?? []).toEqual([]);
 });
 
 test("contentStems keeps distinctive words, stemmed", () => {

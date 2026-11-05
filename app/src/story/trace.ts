@@ -63,6 +63,8 @@ export type Suspect = {
   reasons: string[];
   /** Whether a reason is in its text, not only in its links. */
   inText: boolean;
+  /** The part of `score` from reasons in its text. */
+  textScore: number;
 };
 
 const WEIGHT = {
@@ -76,14 +78,33 @@ const WEIGHT = {
 /** Shared words count only from this many. */
 const MIN_SHARED = 2;
 
+/**
+ * A word in more than this share of the story's texts (and more than
+ * `COMMON_FLOOR` of them) is too common to suggest a dependency.
+ */
+const COMMON_SHARE = 0.15;
+const COMMON_FLOOR = 3;
+
+/** Words too common in prose to suggest a dependency. */
 const STOPWORDS = new Set(
   (
-    "about after again against also among because been before being between " +
-    "both could does doing down during each even ever from have having into " +
-    "just like made make many more most much must never only other over same " +
-    "should since some such than that their them then there these they this " +
-    "those though through under until upon very want wants were what when " +
-    "where which while will with without would your yours"
+    "about above across after again against almost alone along already also " +
+    "although always among another anyone anything around away back because " +
+    "become been before behind being below best better between beyond both " +
+    "bring call came cannot come comes could didn does doesn doing done door " +
+    "down during each early either else enough even ever every face fact " +
+    "find first from front gave give goes going gone good great half hand " +
+    "hands hard have having head hear heard here herself high himself into " +
+    "itself just keep kept know known last later least left less like " +
+    "little long look looked looks made make many might more most much must " +
+    "myself near need never next night nothing once only open other others " +
+    "ours over part perhaps place quite rather really right said same seem " +
+    "seemed seen should side since small some something soon still stop " +
+    "such sure take taken tell than that their them themselves then there " +
+    "these they thing things think this those though thought through time " +
+    "told took toward turn turned under until upon very want wants wanted " +
+    "well went were what whatever when where whether which while whole " +
+    "will with within without word words would year years your yours"
   ).split(" "),
 );
 
@@ -104,7 +125,8 @@ export function contentStems(text: string): Set<string> {
     words
       .map((w) => w.replace(/['’]s?$/, ""))
       .filter((w) => w.length >= 4 && !STOPWORDS.has(w))
-      .map(stem),
+      .map(stem)
+      .filter((w) => !STOPWORDS.has(w)),
   );
 }
 
@@ -266,10 +288,18 @@ export function traceDependents(
     if (target.kind === "record" && sameRef(target.ref, ref)) return;
     const key = targetKey(target);
     const found = suspects.get(key);
+    const text = inText ? score : 0;
     if (found === undefined) {
-      suspects.set(key, { target, score, reasons: [reason], inText });
+      suspects.set(key, {
+        target,
+        score,
+        reasons: [reason],
+        inText,
+        textScore: text,
+      });
     } else if (!found.reasons.includes(reason)) {
       found.score += score;
+      found.textScore += text;
       found.reasons.push(reason);
       found.inText ||= inText;
     }
@@ -359,8 +389,14 @@ export function traceDependents(
   }
   const rarity = (s: string) =>
     Math.log((texts.length + 1) / ((documents.get(s) ?? 0) + 1)) + 1;
+  const common = (s: string) => {
+    const count = documents.get(s) ?? 0;
+    return count > COMMON_FLOOR && count > texts.length * COMMON_SHARE;
+  };
   for (const [i, t] of texts.entries()) {
-    const shared = [...(stemsOf[i] ?? [])].filter((s) => source.has(s));
+    const shared = [...(stemsOf[i] ?? [])].filter(
+      (s) => source.has(s) && !common(s),
+    );
     if (shared.length < MIN_SHARED) continue;
     const score = shared.reduce((sum, s) => sum + rarity(s), 0) / 2;
     suspect(
@@ -381,12 +417,14 @@ export function traceDependents(
   );
   for (const p of prose) {
     const how = touching.get(p.scene);
+    // The whole file is a suspect for what the scene does, but that is no
+    // evidence in its text: a paragraph that matched is.
     if (how !== undefined) {
       suspect(
         { kind: "prose", scene: p.scene, line: 0, text: "" },
         WEIGHT.scene,
         `the scene ${how.join("; ")}`,
-        true,
+        false,
       );
     }
     for (const para of paragraphs(p)) {
@@ -427,6 +465,17 @@ export function traceDependents(
     }
   }
 
+  // A paragraph with evidence in a scene that touches the record weighs as
+  // much as a linked record with the same evidence.
+  for (const found of suspects.values()) {
+    const { target } = found;
+    if (target.kind !== "prose" || target.line === 0) continue;
+    const how = touching.get(target.scene);
+    if (how === undefined) continue;
+    found.score += WEIGHT.direct;
+    found.reasons.push(`in a scene that ${how.join("; ")}`);
+  }
+
   // A scene that reveals an answer the question no longer has.
   const questionId =
     ref.kind === "openQuestion"
@@ -465,9 +514,11 @@ export function traceDependents(
     }
   }
 
+  // After a change, what states the old version in its text comes first.
   return ok(
     [...suspects.values()].sort(
       (a, b) =>
+        (was === undefined ? 0 : b.textScore - a.textScore) ||
         b.score - a.score ||
         targetKey(a.target).localeCompare(targetKey(b.target)),
     ),

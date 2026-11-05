@@ -171,7 +171,9 @@ prose (and the records) that may need rereading.
   what the change took away: the old name or year if those changed, words
   the old text had that the new lacks, and for a moved event spans such as
   "ten years since" (and says when the span matches the gap to another
-  event). `trace <ref>` on its own lists everything that may depend on a
+  event). A scene file is listed there only by a paragraph whose text
+  matched, never just because the scene touches the record. `trace <ref>`
+  on its own lists everything that may depend on a
   record, likeliest first: its declared links and one step on, consequences
   through causes, versions and knowledge of it, text naming it, free text
   and prose sharing its distinctive words, the prose of scenes that touch
