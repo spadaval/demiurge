@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Trace and span polish; --add on scene lists (Round 4 reading 4, 5, 6)"
-updated_at: "2026-11-05T16:59:55.999424360+00:00"
+updated_at: "2026-11-05T17:08:37.954880553+00:00"
 ---
 
 ## Goal
