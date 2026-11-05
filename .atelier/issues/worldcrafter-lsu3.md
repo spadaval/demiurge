@@ -25,7 +25,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Round 4"
-updated_at: "2026-11-05T15:31:13.548410112+00:00"
+updated_at: "2026-11-05T15:37:42.202739296+00:00"
 ---
 
 ## Goal
@@ -38,3 +38,7 @@ The fourth judged round, from scratch with a fresh writer on the same prompt, af
 - The reading checks whether set-count's kept note states an old value (finding worldcrafter-mugi).
 - docs/rounds/round-4.md holds the round log, including how the writer's use of the tool changed from Round 3.
 - The reading's fixes are recorded as their own increment, or the mission stops if the round shows no meaningful tool or skill issues.
+
+## Notes
+
+- 2026-11-05 [note] Failed attempt 1 (2026-11-05 15:31Z): the round runner (bun round.ts outline) was terminated by SIGTERM (exit 143) about 5 minutes into the outline phase, with no record written; cause not found (not the runner's own timeout). Its sandboxed writer kept running as an orphan and was stopped by the orchestrator. The partial directory is kept at /home/supadava/projects/demiurge-world/round-4-failed-1/ and is not used; the outline was rerun from scratch in round-4/. If it recurs, diagnose before a third attempt.
