@@ -1,7 +1,15 @@
 ---
-status: draft
-last_changed: "2026-11-04: verdicts come from an independent panel of agent judges, not from Sumeet; Sumeet keeps only irreversible or public calls and reviews the rest after the fact (decision worldcrafter-zybl, Sumeet's direction)"
+status: superseded
+last_changed: "2026-11-05: superseded; the typed-model bet ended on the second comparison's drop verdict, and what follows is docs/strategies/notes-first.md (decision worldcrafter-03rp, agents' decision under worldcrafter-zybl)"
 ---
+
+# Result
+
+The bet this strategy rests on lost. In two blind comparisons, plain notes beat
+the typed model, and the second verdict was drop (worldcrafter-i2uz,
+worldcrafter-iu6l, `docs/verdicts/`). Decision worldcrafter-03rp ends the mission
+and supersedes its backlog. The rest of this file is kept as it stood, for the
+record. What follows is `docs/strategies/notes-first.md`.
 
 # Why
 
