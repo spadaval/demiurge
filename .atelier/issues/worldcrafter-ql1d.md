@@ -23,9 +23,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T08:32:42.845556014+00:00"
+status: "done"
 title: "Set up the exercise: rubric, writer runner, panel"
-updated_at: "2026-11-05T06:59:04.190293472+00:00"
+updated_at: "2026-11-05T08:32:42.845556014+00:00"
 ---
 
 ## Goal
@@ -35,3 +36,7 @@ Everything a round needs, built and reviewed before Round 1: the rubric, a runne
 ## Done when
 
 - The three children are closed, each independently reviewed and merged locally.
+
+## Close Reason
+
+Rubric (blvm, docs/verdicts/world-demo-rubric.md), four-judge scene panel with sandboxed headless Grok (w716, app/scripts/judging/scenes.ts, grok.ts) and the round runner (x2ij, app/scripts/round/) are built, smoke-tested and independently reviewed (rubric-reviewer, approval midy). Security findings f9l3 (host git in writer repo) and rkqy (unbounded output) fixed; ptrace-based bypass of the output cap noted as theoretical, bounded by the 120 s timeout.
