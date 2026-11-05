@@ -27,7 +27,7 @@ A team can record that one event happened because of another, and see when a cha
 ## Done when
 
 - A command records and removes `causes` from one event to another. It refuses unknown IDs, a self-cause and a duplicate; it keeps a cycle and reports it, since contradiction is material.
-- `storyContradictions` reports an effect positioned before its cause, and a cycle, without refusing either; a test moves a cause after its effect and sees the contradiction, then moves it back and sees it leave.
+- `storyContradictions` reports an effect positioned strictly before its cause, and a cycle, without refusing either; a cause and effect at the same position aren't reported, since same-year ordering was the commonest false alarm in the logs; a test moves a cause after its effect and sees the contradiction, then moves it back and sees it leave.
 - `whatThisTouches` follows causes in both directions, and from an event reaches what its effects reach one step on; a test shows it.
 - The CLI has the commands, `render` says what happened because of what, and `--help` shows an example.
 - `bun run check` passes.

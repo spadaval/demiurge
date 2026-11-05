@@ -15,8 +15,6 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-h1be"
   - kind: "issue"
-    id: "worldcrafter-iu6l"
-  - kind: "issue"
     id: "worldcrafter-iyt9"
   - kind: "issue"
     id: "worldcrafter-qgom"
@@ -34,7 +32,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Change the tool from the verdict, then compare again on a fresh premise"
-updated_at: "2026-11-05T00:50:24.573100166+00:00"
+updated_at: "2026-11-05T00:56:08.754732967+00:00"
 ---
 
 ## Goal
@@ -45,7 +43,7 @@ The panel's verdict on the first comparison was change (worldcrafter-i2uz): ever
 
 - The children deliver the judges' changes in their order of priority: the readable form stops charging for structure; events can cause events; a change can reach what free text mentions; answers keep their history and a gap can be marked deliberate. Each child's proof passes and each is independently reviewed.
 - The second comparison runs on the changed tool, frozen, with the same harness and the same `craft.md`, on Thukker (tuned-on) and a fresh held-back premise chosen by an agent that builds nothing here and sealed until the freeze.
-- Its verdict is worldcrafter-i2uz's successor, a standalone validation decided by a judging panel (strategy, Verdicts), which the mission's next increment waits on.
+- Its verdict is worldcrafter-iu6l, a standalone validation that follows this increment, decided by a judging panel (strategy, Verdicts); the mission's next increment waits on it. As with worldcrafter-i2uz, it isn't a child, so this increment's reviewed code can merge before the panel runs.
 
 ## Unknowns
 
@@ -55,4 +53,9 @@ The panel's verdict on the first comparison was change (worldcrafter-i2uz): ever
 
 ## Background
 
-Verdict and reports: `docs/verdicts/comparison/` (verdict change: opus change, sonnet change, fable drop). What to change first, agreed by all three: the render's cost (wants quoted under every relation, constraints printed, settled questions and rejected candidates printed, so sessions deleted true structure to fit about 1,500 words), then a chain of causes, then reaching what text mentions, then history and the gap reports. Model-gaps logs: `/home/supadava/projects/demiurge-comparison/key/model-gaps/`. Keep specification light; the logs are the requirements' source.
+Verdict and reports: `docs/verdicts/comparison/` (verdict change: opus change, sonnet change, fable drop). What to change first, in the order Opus and Fable give (Sonnet puts cause links first and the render third): the render's cost (wants quoted under every relation, constraints printed, settled questions and rejected candidates printed, so sessions deleted true structure to fit about 1,500 words), then a chain of causes, then reaching what text mentions, then history and the gap reports. Model-gaps logs: `/home/supadava/projects/demiurge-comparison/key/model-gaps/`. Keep specification light; the logs are the requirements' source.
+
+## Notes
+
+- 2026-11-04 [decision] Deferred from the judges' asks, not in this increment: finer-than-year time units, flagging constraints whose gap went to zero after a move, and new types (plant and payoff, mirrors, drive outcomes, intended ambiguity, between-scene events)
+  Reason: Review finding worldcrafter-x2pm. The increment takes the judges' top priorities only, so the second comparison tests them without more change; same-position cause and effect isn't reported (h1be), which removes the commonest false alarm. The rest is for the verdict after this one to choose.

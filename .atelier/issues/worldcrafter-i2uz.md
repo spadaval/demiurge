@@ -27,7 +27,7 @@ schema_version: 2
 closed_at: "2026-11-05T00:50:48.300420425+00:00"
 status: "done"
 title: "Verdict: a judging panel reads the comparison, then keep, change or drop"
-updated_at: "2026-11-05T00:50:48.300420425+00:00"
+updated_at: "2026-11-05T00:56:08.772319237+00:00"
 ---
 
 ## Goal
@@ -61,6 +61,7 @@ The packets are in `/home/supadava/projects/demiurge-comparison/packets/`. The k
 - 2026-11-04 [decision] Verdict: change. This replaces the earlier note 'Verdict: drop the tool as built'
   Reason: Opus change, Sonnet change (first run, which counts per d2401a0), Fable drop (dissent). The uncounted Sonnet replacement called drop. Every judge preferred the notes arm in all four pairs, so the tool as built lost; change means build on it only after named changes. The judges agree on what to change first: (1) render cost: the readable form's word budget made sessions delete structure, so keep links, settled questions and rejected candidates out of the count; (2) cause links between events, checked on moves; (3) a way to reach what free text mentions, such as moved dates and changed motives; (4) history: superseded answers. Opus: if the changes don't give at least an even result on a fresh held-back premise, the next verdict should be drop.
 - 2026-11-04 [note] Path map after 7b8aa90 (finding worldcrafter-3k5e): evidence worldcrafter-t2uj (drop) recorded the uncounted Sonnet replacement, now at docs/verdicts/comparison/sonnet-part2-replacement-uncounted.md; docs/verdicts/comparison/sonnet-part2.md now holds the counted first run (change), formerly failed/sonnet-part2-failed-1.md, with its first STATUS in sonnet-part2.STATUS.original. Evidence worldcrafter-tshh (drop) described the verdict.md of 0ab62e8; verdict.md now says change (evidence worldcrafter-enlh). t2uj was superseded by worldcrafter-bzev rather than amended.
+- 2026-11-04 [note] Open items at close (review finding worldcrafter-u4so): deferred runner findings are in worldcrafter-1wrn; Sumeet is told the verdict flipped from drop to change, and why, in the orchestrator's handoff of 2026-11-04; the records can't show that the decider of d2401a0 was independent of the panel's operator (same git author), only that it was a separate agent session; backlog items worldcrafter-4t98 and worldcrafter-iaoc wait on the next verdict through their parents or links (iaoc via frqk, 4t98 is deferred to the app's storage work).
 
 ## Close Reason
 

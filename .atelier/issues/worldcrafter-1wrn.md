@@ -17,18 +17,22 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
-title: "Panel runner: record interrupted runs fully in run.json"
-updated_at: "2026-11-05T00:47:47.810716135+00:00"
+status: "todo"
+title: "Panel runner fixes before the second panel"
+updated_at: "2026-11-05T00:56:08.734976854+00:00"
 ---
 
 ## Goal
 
-An interrupted judge run's run.json shows the interruption, so nobody reading it alone sees a clean run.
+The panel runner is ready for the second comparison's panel (worldcrafter-iu6l), with the gaps the first panel's reviews deferred closed.
 
 ## Done when
 
-- On SIGINT/SIGTERM, panel.ts writes the problem and exit state into run.json as well as STATUS, and keeps the run dir's files/ copy before removing it; a test covers it; `bun run check` passes.
+- `panel.ts` takes the rubric path and the comparison root as arguments instead of hard-coding the first rubric.
+- `verdict` counts, for each judge, the run the flag rule selects (d2401a0 on worldcrafter-i2uz), and records which run counted, instead of always reading `<judge>/part2` (finding worldcrafter-g0qj).
+- The transcript check flags `cd ..` forms, brace expansion and IFS tricks (worldcrafter-jf70), and skips a quoted cat heredoc only when the cat is top-level (worldcrafter-aaj0).
+- An interrupted run's run.json records the interruption and keeps its files/ copy (worldcrafter-vidi).
+- Each has a test; `bun run check` passes; the change is independently reviewed.
 
 ## Notes
 

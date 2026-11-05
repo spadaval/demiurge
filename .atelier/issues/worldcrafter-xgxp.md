@@ -23,8 +23,9 @@ The readable form says each thing once, so a sketch's length measures the story 
 
 ## Done when
 
-- `renderStory` prints each drive's want once, under its actor, and elsewhere refers to a drive by a short name, not by quoting the want again. A relation is printed once, not under both drives.
+- `renderStory` prints each drive's want once, under its actor. Elsewhere it refers to a drive by its actor's name and the want's first words, at most eight, not by quoting the want again. A relation is printed once, not under both drives.
+- An open question's candidates print one short line each, without their `touches`. A command marks an open question as working, and the render leaves a working question and its candidates out, so candidates can be weighed in the file without costing words (the held-back run that weighed options "in my head" did it to save words).
 - A constraint that the events' positions already satisfy isn't printed. One that positions don't settle, or that is violated, still is.
 - A decided question prints only its chosen answer; rejected candidates and superseded answers stay in the file and out of the render.
-- A test over a fixture with many links shows that adding the links, relations and satisfied constraints adds at most a few words per link; another shows a violated constraint still shows; `render`'s word count reflects the result.
+- A test over a fixture with many links shows that adding the links, relations and satisfied constraints adds at most eight words per link; another shows a violated constraint still shows; `render`'s word count reflects the result.
 - `bun run check` passes.
