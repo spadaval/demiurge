@@ -3,6 +3,9 @@ created_at: "2026-11-05T11:33:23.606043357+00:00"
 id: "worldcrafter-ulpg"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-ulpg
 priority: "P1"
 relationships:
   blocks: []
@@ -26,7 +29,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 2 fixes: numbers checked, traces precise, viewpoint and membership"
-updated_at: "2026-11-05T11:33:23.796183305+00:00"
+updated_at: "2026-11-05T11:37:27.497139735+00:00"
 ---
 
 ## Goal

@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round runner: story so far to length"
-updated_at: "2026-11-05T11:33:23.758213756+00:00"
+updated_at: "2026-11-05T11:37:31.002191653+00:00"
 ---
 
 ## Goal

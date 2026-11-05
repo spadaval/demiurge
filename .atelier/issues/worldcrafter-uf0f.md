@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Counts in reader context, and count display (Round 2 reading 1, 4, 6, 8)"
-updated_at: "2026-11-05T11:33:23.643059758+00:00"
+updated_at: "2026-11-05T11:37:27.497140756+00:00"
 ---
 
 ## Goal
