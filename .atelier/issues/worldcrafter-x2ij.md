@@ -14,9 +14,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Writer and story-so-far runner"
-updated_at: "2026-11-05T06:47:53.458076513+00:00"
+updated_at: "2026-11-05T07:44:18.712654262+00:00"
 ---
 
 ## Goal
