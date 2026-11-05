@@ -22,7 +22,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 2"
-updated_at: "2026-11-05T09:28:58.638479742+00:00"
+updated_at: "2026-11-05T10:24:43.909350497+00:00"
 ---
 
 ## Goal
@@ -35,3 +35,7 @@ The second judged round, from scratch with a fresh writer on the same prompt, af
 - The round's reading checks whether the deferred Round 1 issues (point of view, presence and place; group membership over time; reading issue 12) come back.
 - docs/rounds/round-2.md holds the round log, including how the writer's use of the tool changed from Round 1.
 - The reading's fixes are recorded as their own increment, or the mission stops if the round shows no meaningful tool or skill issues.
+
+## Notes
+
+- 2026-11-05 [note] From review finding worldcrafter-5b6m: duration problems now print one unit finer than typed (e.g. '72 hours give or take 12 hours' for --gap 3d). The reading checks whether the writer misreads them.
