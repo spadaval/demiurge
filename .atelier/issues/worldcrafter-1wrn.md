@@ -19,7 +19,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Panel runner: record interrupted runs fully in run.json"
-updated_at: "2026-11-05T00:29:09.219488392+00:00"
+updated_at: "2026-11-05T00:47:47.810716135+00:00"
 ---
 
 ## Goal
@@ -33,3 +33,5 @@ An interrupted judge run's run.json shows the interruption, so nobody reading it
 ## Notes
 
 - 2026-11-04 [note] Also from review finding worldcrafter-aaj0: skip a quoted cat heredoc body only when the cat line is top-level (not inside bash <<X or a multi-line string), with the two probes as tests.
+- 2026-11-04 [note] Also from review finding worldcrafter-jf70 (see review record).
+- 2026-11-04 [note] Also from review finding worldcrafter-g0qj (see review record).
