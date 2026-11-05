@@ -96,7 +96,7 @@ These are what the tools reason about.
 - **Events**: what happens, with a summary, placed in story time. An event can be recorded as the cause of another; an effect placed before its cause, or a circle of causes, is reported as a contradiction and kept.
 - **Scenes**: units of the telling, where drives collide and questions move. A scene records which actors are in it.
 - **World facts**: as in `story-time.md`, changing at events.
-- **Deliberate gaps**: a gap the team has judged fine, such as a drive that comes from temperament and no event, marked on its record with a reason, so the gap report stops listing it.
+- **Deliberate gaps**: a gap the team has judged fine, such as a drive that comes from temperament and no event, or a story-wide one such as having no reader question yet. Each mark names the gap, the record it's about (or the whole story) and a reason, and the story keeps the marks in one list of their own; the gap report stops listing a marked gap.
 
 ## Lenses
 
