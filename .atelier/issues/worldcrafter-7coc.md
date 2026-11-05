@@ -39,5 +39,5 @@ Fix the story CLI (app/scripts/story.ts, app/src/story/) and its skill (.agents/
 
 ## Done when
 
-- The six child fixes are each independently reviewed and merged into local master, in order.
+- Sumeet's six fixes (wtiz, r26d, wefn, 6m2v, j6z1, s2mz) are each independently reviewed and merged into local master, in order, after the docs task b37f, which is housekeeping and not one of the six.
 - The skill no longer says it is frozen and describes the tool as it now is.

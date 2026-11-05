@@ -8,7 +8,10 @@ relationships:
   blocks: []
   children: []
   attachments: []
-  relates: []
+  relates:
+  - kind: "issue"
+    id: "worldcrafter-blvm"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
 status: "todo"
@@ -23,7 +26,7 @@ Run four isolated judges, Opus 5.5, Sonnet 5.5, Fable 5.1 and Grok 4.7, each on 
 ## Done when
 
 - Extends or reuses app/scripts/judging/ and the sandbox: each judge sees only its scene, its story so far and the judge-facing rubric, is told nothing about Demiurge or the process, and its transcript is checked for reads beyond that.
-- Grok runs through /home/supadava/.grok/bin/grok headless in the same sandbox with its credentials mounted read-only and never written from inside; if that can't work, the runner documents why and the orchestrator uses T3 delegate_task (providerInstanceId grok, model grok-4.7) with the same inputs and records that.
+- Grok runs through /home/supadava/.grok/bin/grok headless in the same sandbox with its credentials mounted read-only and never written from inside; if that can't work, the runner documents why and the orchestrator uses T3 delegate_task (providerInstanceId grok, model grok-4.7) with the same inputs and records that. That fallback judge runs in a fresh directory holding only its scene, its story so far and the judge-facing rubric, is told to read nothing else, and its transcript or tool log is checked for reads beyond those files, as for the sandboxed judges.
 - Judges run four at once only if free -g shows more than 5 GB available, otherwise fewer.
 - Output: each report, a scores table per scene per judge with the quoted evidence, and the best and worst moments.
-- Tests; bun run check passes; a smoke on a throwaway scene with each model; independently reviewed and merged locally.
+- Tests; bun run check passes; a smoke on a throwaway scene with each model, using the reviewed rubric (blvm); independently reviewed and merged locally.

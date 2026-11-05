@@ -24,7 +24,7 @@ A fresh writer agent, using Demiurge (the story CLI and skill), builds a rich wo
 
 ## Success criteria
 
-- Round 0's six fixes are each independently reviewed and merged locally.
+- Round 0's six fixes (not counting its docs housekeeping task) are each independently reviewed and merged locally.
 - The rubric is written and reviewed before any judge reads anything.
 - Each round's four scenes, story-so-far texts, point choices, judge reports and round log are recorded.
 - The mission ends after five rounds or after a round with no meaningful tool or skill issues.
