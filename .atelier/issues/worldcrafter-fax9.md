@@ -21,9 +21,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Update the skill for the changed tool"
-updated_at: "2026-11-05T01:11:49.036017797+00:00"
+updated_at: "2026-11-05T02:00:11.480674188+00:00"
 ---
 
 ## Goal
