@@ -142,7 +142,9 @@ describe("renderStory", () => {
       },
     );
     const text = renderStory(answered);
-    expect(text).toContain("## Decided\n\n- Who wrote it? The old keeper.\n");
+    expect(text).toContain(
+      "## Decided\n\n- Who wrote it? The old keeper. Not revealed yet.\n",
+    );
     expect(text).toContain("## Not decided yet\n\n- Why now?\n");
     expect(text).not.toContain("The ferryman");
     expect(text).not.toContain("chosen");
@@ -169,7 +171,9 @@ describe("renderStory", () => {
     );
     expect(reworked.openQuestions[0]?.superseded).toHaveLength(1);
     const text = renderStory(reworked);
-    expect(text).toContain("## Decided\n\n- Who wrote it? The old keeper.\n");
+    expect(text).toContain(
+      "## Decided\n\n- Who wrote it? The old keeper. Not revealed yet.\n",
+    );
     expect(text).not.toContain("ferryman");
     expect(text).not.toMatch(/supersed|replaced/i);
     const withoutHistory = {
@@ -293,28 +297,57 @@ describe("renderStory", () => {
     expect(text).not.toContain("Would touch");
   });
 
-  test("shows a question being weighed in one line, without its candidates", () => {
-    const working = run(sketch, {
-      type: "setOpenQuestionWorking",
-      id: "who",
-      working: true,
-    });
-    const text = renderStory(working);
-    expect(text).toContain(
-      "## Not decided yet\n\n- Who wrote it? (being weighed)\n",
+  test("groups questions by where they stand, with what was ruled out and why", () => {
+    const story = run(
+      sketch,
+      {
+        type: "addCandidate",
+        questionId: "who",
+        id: "keeper",
+        answer: "The old keeper",
+        touches: [],
+      },
+      {
+        type: "rejectCandidate",
+        questionId: "who",
+        id: "keeper",
+        reason: "He died before the wreck",
+      },
     );
-    expect(text).not.toContain("ferryman");
-    // The candidates are still in the file, and come back when it's done.
-    expect(working.openQuestions[0]?.candidates).toHaveLength(1);
-    const done = run(working, {
-      type: "setOpenQuestionWorking",
+    expect(renderStory(story)).toContain(
+      "## Not decided yet\n\n- Who wrote it?\n  - The ferryman.\n  - Ruled out: The old keeper. He died before the wreck.\n",
+    );
+    const decided = run(story, {
+      type: "answerOpenQuestion",
       id: "who",
-      working: false,
+      candidateId: "ferry",
     });
-    expect(renderStory(done)).toBe(renderStory(sketch));
+    expect(renderStory(decided)).toContain(
+      "## Decided\n\n- Who wrote it? The ferryman. Not revealed yet.\n  - Ruled out: The old keeper. He died before the wreck.\n",
+    );
+    const scene = decided.scenes[0]?.id ?? "";
+    const revealed = run(decided, {
+      type: "setSceneLinks",
+      id: scene,
+      how: "reveals",
+      refs: [{ kind: "openQuestion", id: "who" }],
+    });
+    expect(renderStory(revealed)).toMatch(
+      /- Who wrote it\? The ferryman\. Revealed in "[^"]+"\.\n/,
+    );
+    const left = run(decided, {
+      type: "leaveForReader",
+      id: "who",
+      reason: "The reader should never be sure",
+    });
+    const text = renderStory(left);
+    expect(text).toContain(
+      "## Left open for the reader\n\n- Who wrote it? The author's answer: The ferryman. The reader should never be sure.\n",
+    );
+    expect(text).not.toContain("## Decided");
   });
 
-  test("a decided question leaves out its rejected candidates and what it concerns", () => {
+  test("a decided question leaves out the candidates not chosen, unless ruled out, and what it concerns", () => {
     const decided = run(
       sketch,
       {
@@ -332,7 +365,9 @@ describe("renderStory", () => {
       { type: "answerOpenQuestion", id: "who", candidateId: "keeper" },
     );
     const text = renderStory(decided);
-    expect(text).toContain("- Who wrote it? The old keeper.\n");
+    expect(text).toContain(
+      "- Who wrote it? The old keeper. Not revealed yet.\n",
+    );
     expect(text).not.toContain("ferryman");
     expect(text).not.toContain("Concerns");
     expect(text.match(/Keep the wreck quiet/g)).toHaveLength(1);

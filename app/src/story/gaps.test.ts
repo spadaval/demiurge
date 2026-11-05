@@ -164,19 +164,6 @@ const cases: [GapKind, StoryCommand[], Ref | null][] = [
     { kind: "readerQuestion", id: "late" },
   ],
   [
-    "reader_question_never_answered",
-    [
-      { type: "addReaderQuestion", id: "hanging", question: "" },
-      {
-        type: "setReaderQuestionScenes",
-        id: "hanging",
-        opensAt: "door",
-        answeredAt: null,
-      },
-    ],
-    { kind: "readerQuestion", id: "hanging" },
-  ],
-  [
     "open_question_without_candidates",
     [
       {
@@ -221,6 +208,28 @@ describe("storyGaps", () => {
     expect(
       gaps.filter((gap) => gap.kind === kind).map((gap) => gap.ref),
     ).toEqual([ref]);
+  });
+
+  test("a question left open for the reader, an unrevealed answer and an unanswered reader question are not gaps", () => {
+    const story = run(
+      woven,
+      {
+        type: "addOpenQuestion",
+        id: "how",
+        question: "",
+        about: [],
+        conflict: false,
+      },
+      { type: "leaveForReader", id: "how", reason: "The reader decides" },
+      { type: "addReaderQuestion", id: "hanging", question: "" },
+      {
+        type: "setReaderQuestionScenes",
+        id: "hanging",
+        opensAt: "door",
+        answeredAt: null,
+      },
+    );
+    expect(storyGaps(story)).toEqual([]);
   });
 
   test("the wording says what isn't woven in yet, not that something is wrong", () => {

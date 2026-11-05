@@ -22,10 +22,14 @@ import { type Mention, whatMentions } from "../src/story/mentions";
 import { renderStory, wordCount } from "../src/story/render";
 import { scenesTouching } from "../src/story/scenes";
 import {
+  type Candidate,
   GAP_KINDS,
   type GapKind,
   newStory,
+  type OpenQuestion,
   parseStory,
+  type QuestionState,
+  questionState,
   type Ref,
   type RefKind,
   refExists,
@@ -824,7 +828,7 @@ export const EDITS: EditSpecs = {
   },
 
   addOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["id", "question"],
     flags: {
       about: refList("what it's about"),
@@ -847,7 +851,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   updateOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["id"],
     flags: {
       question: text,
@@ -870,14 +874,14 @@ export const EDITS: EditSpecs = {
     },
   },
   removeOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["id"],
     summary: "Remove an open question and its candidates.",
     example: ["remove-open-question", "who-wrote"],
     build: (a) => ({ type: "removeOpenQuestion", id: a.arg("id") }),
   },
   addCandidate: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id", "answer"],
     flags: { touches: refList("what it would connect to") },
     summary:
@@ -899,7 +903,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   updateCandidate: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id"],
     flags: { answer: text, touches: refList("replaces what it would touch") },
     summary: "Change a candidate answer.",
@@ -923,7 +927,7 @@ export const EDITS: EditSpecs = {
     },
   },
   removeCandidate: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id"],
     summary: "Remove a candidate answer.",
     example: ["remove-candidate", "who-wrote", "ferryman"],
@@ -934,7 +938,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   answerOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "candidate-id"],
     summary:
       "Choose a candidate. An answer it replaces is kept as superseded, which show lists and render leaves out. Nothing else changes: make what it implies with other commands.",
@@ -946,26 +950,69 @@ export const EDITS: EditSpecs = {
     }),
   },
   unanswerOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id"],
     summary: "Make the question open again. The answer is kept as superseded.",
     example: ["unanswer-open-question", "who-wrote"],
     build: (a) => ({ type: "unanswerOpenQuestion", id: a.arg("question-id") }),
   },
-  setOpenQuestionWorking: {
-    group: "Open questions: what isn't decided yet",
-    args: ["question-id"],
+  rejectCandidate: {
+    group: "Open questions: undecided, decided, left open or revealed",
+    args: ["question-id", "candidate-id"],
     flags: {
-      stop: { bool: true, help: "stop weighing, so render shows them again" },
+      reason: { value: "<text>", help: "why it's ruled out" },
+      undo: { bool: true, help: "put it back in the running" },
     },
     summary:
-      "Mark the question as being weighed: render shows it in one line and leaves out its candidates, which stay in the file. Refused on an answered question; answering clears the mark.",
-    example: ["set-open-question-working", "who-wrote"],
-    build: (a) => ({
-      type: "setOpenQuestionWorking",
-      id: a.arg("question-id"),
-      working: a.bool("stop") !== true,
-    }),
+      "Rule a candidate out. It stays in the file with its reason, and show and render list it as ruled out. Refused on the chosen answer; answering with a ruled-out candidate puts it back.",
+    example: [
+      "reject-candidate",
+      "who-wrote",
+      "ferryman",
+      "--reason",
+      "He was at sea the night it was posted",
+    ],
+    build: (a) => {
+      const undo = a.bool("undo") === true;
+      const reason = a.text("reason");
+      if (undo === (reason !== undefined)) {
+        a.errors.push("give --reason <text> or --undo");
+      }
+      return {
+        type: "rejectCandidate",
+        questionId: a.arg("question-id"),
+        id: a.arg("candidate-id"),
+        reason: undo ? null : (reason ?? ""),
+      };
+    },
+  },
+  leaveForReader: {
+    group: "Open questions: undecided, decided, left open or revealed",
+    args: ["question-id"],
+    flags: {
+      reason: { value: "<text>", help: "why the story never answers it" },
+      undo: { bool: true, help: "take the mark off" },
+    },
+    summary:
+      "Leave the question open for the reader on purpose, answered by you or not. Until a scene reveals it, it is listed as left open, and gaps and contradictions don't report it.",
+    example: [
+      "leave-for-reader",
+      "who-wrote",
+      "--reason",
+      "The ending works only if the reader can't be sure",
+    ],
+    build: (a) => {
+      const undo = a.bool("undo") === true;
+      const reason = a.text("reason");
+      if (undo === (reason !== undefined)) {
+        a.errors.push("give --reason <text> or --undo");
+      }
+      return {
+        type: "leaveForReader",
+        id: a.arg("question-id"),
+        reason: undo ? null : (reason ?? ""),
+      };
+    },
   },
 
   markGapDeliberate: {
@@ -1331,12 +1378,17 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...head,
         `question: ${q.question}`,
         ...(q.conflict ? ["conflict: yes"] : []),
-        ...(q.working === true ? ["working: yes"] : []),
+        `state: ${stateText(questionState(story, q))}`,
+        ...(q.leftOpen === undefined
+          ? []
+          : [
+              `left open for the reader${q.leftOpen.trim() === "" ? "" : `: ${q.leftOpen}`}`,
+            ]),
         ...refs("about", q.about),
         ...(q.candidates.length === 0 ? ["candidates: none"] : ["candidates:"]),
         ...q.candidates.map(
           (c) =>
-            `  ${formatRef({ kind: "candidate", questionId: q.id, id: c.id })}${c.id === q.answer ? " (chosen)" : ""}: ${c.answer}`,
+            `  ${formatRef({ kind: "candidate", questionId: q.id, id: c.id })}${candidateMark(q, c)}: ${c.answer}`,
         ),
         ...((q.superseded ?? []).length === 0
           ? []
@@ -1356,10 +1408,33 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         `answer: ${c.answer}`,
         `question: ${describe(story, { kind: "openQuestion", id: q.id })}`,
         ...(c.id === q.answer ? ["chosen: yes"] : []),
+        ...(c.rejected === undefined ? [] : [`ruled out: ${c.rejected}`]),
         ...refs("touches", c.touches),
       ];
     }
   }
+}
+
+/** `revealed in scene:docks`, `left open for the reader`, and so on. */
+function stateText(state: QuestionState): string {
+  switch (state.state) {
+    case "undecided":
+      return "undecided";
+    case "decided":
+      return "decided, not revealed yet";
+    case "left_open":
+      return "left open for the reader";
+    case "revealed":
+      return `revealed in scene:${state.scene}`;
+  }
+}
+
+/** ` (chosen)`, ` (ruled out: reason)` or nothing. */
+function candidateMark(q: OpenQuestion, c: Candidate): string {
+  if (c.id === q.answer) return " (chosen)";
+  return c.rejected === undefined
+    ? ""
+    : ` (ruled out${c.rejected.trim() === "" ? "" : `: ${c.rejected}`})`;
 }
 
 /** The record's deliberate gaps, with their reasons. */
@@ -1421,13 +1496,13 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
     case "open-question":
       return story.openQuestions.map(
         (q) =>
-          `${line({ kind: "openQuestion", id: q.id })}${q.answer === undefined ? "" : " (answered)"}${q.conflict ? " (conflict)" : ""}${q.working === true ? " (working)" : ""}`,
+          `${line({ kind: "openQuestion", id: q.id })} (${stateText(questionState(story, q))})${q.conflict ? " (conflict)" : ""}`,
       );
     case "candidate":
       return story.openQuestions.flatMap((q) =>
         q.candidates.map(
           (c) =>
-            `${line({ kind: "candidate", questionId: q.id, id: c.id })}${c.id === q.answer ? " (chosen)" : ""}`,
+            `${line({ kind: "candidate", questionId: q.id, id: c.id })}${candidateMark(q, c)}`,
         ),
       );
   }

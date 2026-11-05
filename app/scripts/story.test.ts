@@ -160,7 +160,7 @@ describe("story CLI", () => {
     const rendered = ok("render");
     expect(rendered).toContain("Expose what the tribe carried");
     expect(rendered).toContain(
-      "## Decided\n\n- Why did Joel leave? He found what the caravans carried.\n",
+      "## Decided\n\n- Why did Joel leave? He found what the caravans carried. Not revealed yet.\n",
     );
     expect(rendered).not.toContain("He wanted adventure");
     // The bible carries no word budget.
@@ -170,36 +170,62 @@ describe("story CLI", () => {
     }
   });
 
-  test("a question being weighed renders in one line", () => {
+  test("an open question is undecided, decided, left open or revealed, and keeps what was ruled out", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-open-question", "who", "Who wrote it?");
     ok("add-candidate", "who", "ferry", "The ferryman, who saw the wreck");
     ok("add-candidate", "who", "keeper", "The old keeper, before he died");
-    const open = ok("render");
-    expect(open).toContain("The ferryman, who saw the wreck.");
+    ok("add-scene", "docks", "The docks");
+    const state = () =>
+      ok("show", "open-question:who")
+        .split("\n")
+        .find((line) => line.startsWith("state: "));
+    expect(state()).toBe("state: undecided");
 
-    ok("set-open-question-working", "who");
-    expect(ok("show", "open-question:who")).toContain("working: yes");
-    const weighed = ok("render");
-    expect(weighed).toContain("- Who wrote it? (being weighed)\n");
-    expect(weighed).not.toContain("ferryman");
-    expect(saved().openQuestions[0]?.candidates).toHaveLength(2);
+    ok("reject-candidate", "who", "keeper", "--reason", "He died first");
+    expect(ok("show", "open-question:who")).toContain(
+      "candidate:who/keeper (ruled out: He died first): The old keeper",
+    );
+    expect(ok("show", "candidate:who/keeper")).toContain(
+      "ruled out: He died first\n",
+    );
+    expect(ok("render")).toContain(
+      "  - Ruled out: The old keeper, before he died. He died first.\n",
+    );
+    const both = cli(file, "reject-candidate", "who", "ferry");
+    expect(both.code).toBe(2);
+    expect(both.stderr).toContain("give --reason <text> or --undo");
 
-    ok("set-open-question-working", "who", "--stop");
-    expect(saved().openQuestions[0]?.working).toBeUndefined();
-    expect(ok("render")).toBe(open);
-
-    // Answering clears the mark, and an answered question can't be weighed.
-    ok("set-open-question-working", "who");
     ok("answer-open-question", "who", "ferry");
-    expect(saved().openQuestions[0]?.working).toBeUndefined();
-    const before = readFileSync(file, "utf8");
-    const answered = cli(file, "set-open-question-working", "who");
-    expect(answered.code).toBe(1);
-    expect(answered.stderr).toContain("open question who is answered");
-    expect(readFileSync(file, "utf8")).toBe(before);
-    expect(cli("--help").stdout).toContain(
-      "Refused on an answered question; answering clears the mark.",
+    expect(state()).toBe("state: decided, not revealed yet");
+    const chosen = cli(
+      file,
+      "reject-candidate",
+      "who",
+      "ferry",
+      "--reason",
+      "x",
+    );
+    expect(chosen.code).toBe(1);
+    expect(chosen.stderr).toContain("is the chosen answer");
+
+    ok("leave-for-reader", "who", "--reason", "The reader should wonder");
+    expect(state()).toBe("state: left open for the reader");
+    expect(ok("list", "open-question")).toContain("(left open for the reader)");
+    expect(ok("render")).toContain("## Left open for the reader\n");
+    expect(ok("gaps")).not.toContain("open-question:who");
+
+    ok("set-scene-links", "docks", "reveals", "candidate:who/ferry");
+    expect(state()).toBe("state: revealed in scene:docks");
+    expect(ok("render")).toContain(
+      '- Who wrote it? The ferryman, who saw the wreck. Revealed in "The docks".\n',
+    );
+    ok("leave-for-reader", "who", "--undo");
+    ok("set-scene-links", "docks", "reveals", "none");
+    expect(state()).toBe("state: decided, not revealed yet");
+    ok("reject-candidate", "who", "keeper", "--undo");
+    expect(saved().openQuestions[0]?.candidates.map((c) => c.rejected)).toEqual(
+      [undefined, undefined],
     );
   });
 

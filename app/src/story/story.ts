@@ -84,7 +84,16 @@ export type Scene = {
   pressures: string[];
 } & Record<SceneLinkKind, Ref[]>;
 
-export type Candidate = { id: string; answer: string; touches: Ref[] };
+export type Candidate = {
+  id: string;
+  answer: string;
+  touches: Ref[];
+  /**
+   * Why the author ruled it out, kept so the reasoning isn't lost. Absent
+   * while it is still in the running or once chosen.
+   */
+  rejected?: string;
+};
 
 /**
  * An answer that was chosen and then replaced or withdrawn, oldest first.
@@ -113,14 +122,52 @@ export type OpenQuestion = {
   answer?: string;
   conflict: boolean;
   /**
-   * Its candidates are being weighed: the readable form shows the question
-   * in one line and leaves them out. Absent when not, so files written
-   * before the field existed read the same.
+   * Why the author leaves it open for the reader on purpose: the story never
+   * answers it, whether or not the author has. Absent when not.
    */
-  working?: true;
+  leftOpen?: string;
   /** Absent when empty, so files written before the field existed read the same. */
   superseded?: SupersededAnswer[];
 };
+
+/**
+ * Where an open question stands. Undecided is an author task; the others are
+ * normal places for a question to rest, and most of a story's questions may
+ * never be revealed.
+ *
+ * - `undecided`: no candidate chosen.
+ * - `decided`: answered, and no scene reveals the answer yet.
+ * - `left_open`: marked to stay open for the reader, answered or not, and no
+ *   scene reveals it.
+ * - `revealed`: answered, and `scene` is the first scene in telling order
+ *   that reveals the question or its chosen candidate.
+ */
+export type QuestionState =
+  | { state: "undecided" }
+  | { state: "decided" }
+  | { state: "left_open"; reason: string }
+  | { state: "revealed"; scene: string };
+
+export function questionState(story: Story, q: OpenQuestion): QuestionState {
+  if (isAnswered(q)) {
+    const revealing = story.scenes.find((scene) =>
+      scene.reveals.some(
+        (ref) =>
+          (ref.kind === "openQuestion" && ref.id === q.id) ||
+          (ref.kind === "candidate" &&
+            ref.questionId === q.id &&
+            ref.id === q.answer),
+      ),
+    );
+    if (revealing !== undefined) {
+      return { state: "revealed", scene: revealing.id };
+    }
+  }
+  if (q.leftOpen !== undefined) {
+    return { state: "left_open", reason: q.leftOpen };
+  }
+  return isAnswered(q) ? { state: "decided" } : { state: "undecided" };
+}
 
 /**
  * One event happened because of another. Stored on the story, not the
@@ -141,7 +188,6 @@ export const GAP_KINDS = [
   "fact_unconnected",
   "no_reader_question",
   "reader_question_never_opens",
-  "reader_question_never_answered",
   "open_question_without_candidates",
   "open_question_one_candidate",
 ] as const;
@@ -160,7 +206,6 @@ export const GAP_SUBJECTS: Record<GapKind, RefKind | null> = {
   fact_unconnected: "fact",
   no_reader_question: null,
   reader_question_never_opens: "readerQuestion",
-  reader_question_never_answered: "readerQuestion",
   open_question_without_candidates: "openQuestion",
   open_question_one_candidate: "openQuestion",
 };
@@ -521,13 +566,19 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
 }
 
 function checkCandidate(v: JsonRecord, at: string): Check<Candidate> {
-  const known = checkKeys(v, at, ["id", "answer", "touches"]);
+  const known = checkKeys(v, at, ["id", "answer", "touches", "rejected"]);
   if (known.isErr()) return err(known.error);
   return Result.combine([
     checkString(v.id, `${at}.id`),
     checkString(v.answer, `${at}.answer`),
     checkRecords(v.touches, `${at}.touches`, checkRef),
-  ]).map(([id, answer, touches]) => ({ id, answer, touches }));
+    checkOptionalString(v.rejected, `${at}.rejected`),
+  ]).map(([id, answer, touches, rejected]) => ({
+    id,
+    answer,
+    touches,
+    ...(rejected === undefined ? {} : { rejected }),
+  }));
 }
 
 function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
@@ -538,7 +589,10 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     "candidates",
     "answer",
     "conflict",
+    // Files from before question states may still mark a question as being
+    // weighed; that is just undecided now, so the mark is dropped.
     "working",
+    "leftOpen",
     "superseded",
   ]);
   if (known.isErr()) return err(known.error);
@@ -546,10 +600,6 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     v.superseded === undefined
       ? ok([])
       : checkRecords(v.superseded, `${at}.superseded`, checkSuperseded);
-  const working: Check<boolean> =
-    v.working === undefined || typeof v.working === "boolean"
-      ? ok(v.working === true)
-      : err(`${at}.working must be true or false`);
   const conflict: Check<boolean> =
     typeof v.conflict === "boolean"
       ? ok(v.conflict)
@@ -561,7 +611,7 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     checkIdentified(v.candidates, `${at}.candidates`, checkCandidate),
     checkOptionalString(v.answer, `${at}.answer`),
     conflict,
-    working,
+    checkOptionalString(v.leftOpen, `${at}.leftOpen`),
     superseded,
   ]).map(
     ([
@@ -571,7 +621,7 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
       candidates,
       answer,
       conflict,
-      working,
+      leftOpen,
       superseded,
     ]) => ({
       id,
@@ -580,7 +630,7 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
       candidates,
       ...(answer === undefined ? {} : { answer }),
       conflict,
-      ...(working ? { working: true as const } : {}),
+      ...(leftOpen === undefined ? {} : { leftOpen }),
       ...(superseded.length === 0 ? {} : { superseded }),
     }),
   );
@@ -937,8 +987,9 @@ const KEY_ORDER = [
   "candidate",
   "answer",
   "touches",
+  "rejected",
   "conflict",
-  "working",
+  "leftOpen",
   "cause",
   "effect",
   "superseded",

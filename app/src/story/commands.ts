@@ -143,7 +143,7 @@ export type StoryCommand =
    */
   | { type: "removeCandidate"; questionId: string; id: string }
   /**
-   * Records the chosen candidate, and clears the question's working mark, and
+   * Records the chosen candidate, clearing its rejection if it had one, and
    * changes nothing else: whoever answers makes what the answer implies as
    * commands of their own. A different answer already chosen is kept as
    * superseded, with what replaced it.
@@ -152,11 +152,20 @@ export type StoryCommand =
   /** The answer is kept as superseded, with nothing in its place. */
   | { type: "unanswerOpenQuestion"; id: string }
   /**
-   * Whether the question's candidates are being weighed. The readable form
-   * then shows the question in one line, without them. Refused for an
-   * answered question.
+   * Rules a candidate out, keeping it and the reason; `reason` null puts it
+   * back in the running. Refused for the chosen candidate.
    */
-  | { type: "setOpenQuestionWorking"; id: string; working: boolean }
+  | {
+      type: "rejectCandidate";
+      questionId: string;
+      id: string;
+      reason: string | null;
+    }
+  /**
+   * Leaves the question open for the reader on purpose, with why; `reason`
+   * null takes the mark off.
+   */
+  | { type: "leaveForReader"; id: string; reason: string | null }
   | { type: "addEvent"; id: EventId; label: string; summary: string }
   | { type: "describeEvent"; id: EventId; label?: string; summary?: string }
   /**
@@ -702,7 +711,15 @@ export function applyStoryCommand(
             ...story,
             scenes: replace(story.scenes, command.id, (scene) => ({
               ...scene,
-              [command.how]: command.refs,
+              // A ref given twice is linked once.
+              [command.how]: command.refs.filter(
+                (ref, i) =>
+                  command.refs.findIndex(
+                    (other) =>
+                      JSON.stringify(refKey(other)) ===
+                      JSON.stringify(refKey(ref)),
+                  ) === i,
+              ),
             })),
           }),
         );
@@ -817,11 +834,19 @@ export function applyStoryCommand(
         )
         .andThen(() =>
           withQuestion(command.id, (q) => {
-            const { working: _, ...rest } =
+            const answered =
               q.answer === command.candidateId
                 ? q
                 : superseding(q, command.candidateId);
-            return { ...rest, answer: command.candidateId };
+            return {
+              ...answered,
+              answer: command.candidateId,
+              candidates: answered.candidates.map(({ rejected, ...c }) =>
+                c.id === command.candidateId || rejected === undefined
+                  ? c
+                  : { ...c, rejected },
+              ),
+            };
           }),
         );
 
@@ -833,16 +858,34 @@ export function applyStoryCommand(
         }),
       );
 
-    case "setOpenQuestionWorking":
-      return question(command.id).andThen((q) =>
-        isAnswered(q)
-          ? refuse(
-              "invalid_command",
-              `open question ${q.id} is answered: unanswer it to weigh its candidates again`,
-            )
-          : withQuestion(command.id, ({ working: _, ...q }) =>
-              command.working ? { ...q, working: true } : q,
+    case "rejectCandidate": {
+      const { questionId, id, reason } = command;
+      return question(questionId)
+        .andThen((q) =>
+          existing("candidate", q.candidates, id).andThen(() =>
+            reason !== null && isAnswered(q) && q.answer === id
+              ? refuse(
+                  "invalid_command",
+                  `candidate ${id} is the chosen answer to ${questionId}: answer with another or unanswer it first`,
+                )
+              : ok(null),
+          ),
+        )
+        .andThen(() =>
+          withQuestion(questionId, (q) => ({
+            ...q,
+            candidates: replace(q.candidates, id, ({ rejected: _, ...c }) =>
+              reason === null ? c : { ...c, rejected: reason },
             ),
+          })),
+        );
+    }
+
+    case "leaveForReader":
+      return question(command.id).andThen(() =>
+        withQuestion(command.id, ({ leftOpen: _, ...q }) =>
+          command.reason === null ? q : { ...q, leftOpen: command.reason },
+        ),
       );
 
     case "addEvent": {
@@ -1018,6 +1061,12 @@ export function applyStoryCommand(
 
 const has = (items: readonly { id: string }[], id: string) =>
   items.some((item) => item.id === id);
+
+const refKey = (ref: Ref) => [
+  ref.kind,
+  ref.kind === "candidate" ? ref.questionId : "",
+  ref.id,
+];
 
 const without = (items: readonly string[], id: string) =>
   items.filter((item) => item !== id);

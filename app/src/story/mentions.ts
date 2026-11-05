@@ -185,13 +185,16 @@ function storyTexts(story: Story): Text[] {
     add({ kind: "readerQuestion", id: q.id }, { question: q.question });
   }
   for (const q of story.openQuestions) {
-    add({ kind: "openQuestion", id: q.id }, { question: q.question });
+    add(
+      { kind: "openQuestion", id: q.id },
+      { question: q.question, leftOpen: q.leftOpen ?? "" },
+    );
   }
   for (const q of story.openQuestions) {
     for (const c of q.candidates) {
       add(
         { kind: "candidate", questionId: q.id, id: c.id },
-        { answer: c.answer },
+        { answer: c.answer, rejected: c.rejected ?? "" },
       );
     }
   }

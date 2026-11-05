@@ -12,7 +12,7 @@ import {
 } from "../time/chronology";
 import { timelineProblems } from "../time/commands";
 import type { EventId } from "../time/timeline";
-import { isAnswered, type Ref, type Story } from "./story";
+import { questionState, type Ref, type Story } from "./story";
 import { refLabel } from "./touches";
 
 export type Contradiction =
@@ -45,7 +45,10 @@ export function storyContradictions(story: Story): Contradiction[] {
     }),
   );
   const conflicts = story.openQuestions
-    .filter((q) => q.conflict && !isAnswered(q))
+    .filter(
+      // One left open for the reader is a choice, not a problem.
+      (q) => q.conflict && questionState(story, q).state === "undecided",
+    )
     .map(
       (q): Contradiction => ({
         source: "openQuestion",

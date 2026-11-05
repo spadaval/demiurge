@@ -6,10 +6,11 @@
  *
  * It says each thing once, in the order an author would want it, so it stays
  * easy to read: a want is printed in full only under its actor and named in a
- * few words elsewhere, a relation is printed once, a constraint the positions
- * already satisfy is left out, and so are rejected candidates and the
- * candidates of a question being weighed. An event's causes are named after
- * it ("because of …"), and a scene's links after the scene.
+ * few words elsewhere, a relation is printed once, and a constraint the
+ * positions already satisfy is left out. Open questions are grouped by where
+ * they stand (`questionState`), with the candidates ruled out and why. An
+ * event's causes are named after it ("because of …"), and a scene's links
+ * after the scene.
  */
 
 import {
@@ -20,7 +21,13 @@ import {
 } from "../time/chronology";
 import type { Constraint, Position, Timeline } from "../time/timeline";
 import { storyContradictions } from "./contradictions";
-import { isAnswered, type Ref, SCENE_LINK_KINDS, type Story } from "./story";
+import {
+  type OpenQuestion,
+  questionState,
+  type Ref,
+  SCENE_LINK_KINDS,
+  type Story,
+} from "./story";
 
 /** The story as Markdown-like text. */
 export function renderStory(story: Story): string {
@@ -36,6 +43,7 @@ export function renderStory(story: Story): string {
     section("Scenes, in telling order", sceneLines(story)),
     section("What the reader is waiting to find out", readerLines(story)),
     section("Decided", decidedLines(story)),
+    section("Left open for the reader", leftOpenLines(story)),
     section("Not decided yet", openQuestionLines(story)),
     section("Where the story pulls against itself", contradictionLines(story)),
   ].filter((text) => text !== "");
@@ -448,36 +456,75 @@ function readerLines(story: Story): string[] {
   });
 }
 
+/** A question's ruled-out candidates, each with why, a line apiece. */
+function ruledOutLines(q: OpenQuestion): string[] {
+  return q.candidates.flatMap((c) =>
+    c.rejected === undefined || c.id === q.answer
+      ? []
+      : [
+          `  - ${joined([
+            sentence(`Ruled out: ${named(c.answer)}`),
+            c.rejected.trim() === "" ? undefined : sentence(c.rejected),
+          ])}`,
+        ],
+  );
+}
+
 /**
- * Unanswered questions, each with its candidates in a line apiece; what a
- * candidate touches stays in the file. A question being weighed is one line,
- * without its candidates, so weighing them costs no words.
+ * Undecided questions, each with its candidates still in the running and
+ * those ruled out, a line apiece; what a candidate touches stays in the file.
  */
 function openQuestionLines(story: Story): string[] {
   return story.openQuestions
-    .filter((q) => !isAnswered(q))
+    .filter((q) => questionState(story, q).state === "undecided")
     .flatMap((q) => {
       const marker = q.conflict ? " (a contradiction to resolve)" : "";
-      if (q.working === true) {
-        return [`- ${q.question}${marker} (being weighed)`];
-      }
       return [
         `- ${q.question}${marker}${concerns(story, q.about)}`,
-        ...q.candidates.map((c) => `  - ${sentence(named(c.answer))}`),
+        ...q.candidates
+          .filter((c) => c.rejected === undefined)
+          .map((c) => `  - ${sentence(named(c.answer))}`),
+        ...ruledOutLines(q),
       ];
     });
 }
 
 /**
- * Answered questions with the chosen answer only. Rejected candidates, and
- * what the question concerns, stay in the file.
+ * Answered questions with the chosen answer, where it is revealed, and the
+ * candidates ruled out. What the question concerns stays in the file.
  */
 function decidedLines(story: Story): string[] {
   return story.openQuestions.flatMap((q) => {
+    const state = questionState(story, q);
     const chosen = q.candidates.find((c) => c.id === q.answer);
-    return chosen === undefined
-      ? []
-      : [`- ${q.question} ${sentence(named(chosen.answer))}`];
+    if (chosen === undefined || state.state === "left_open") return [];
+    const where =
+      state.state === "revealed"
+        ? `Revealed in "${sceneTitle(story, state.scene)}".`
+        : "Not revealed yet.";
+    return [
+      `- ${q.question} ${sentence(named(chosen.answer))} ${where}`,
+      ...ruledOutLines(q),
+    ];
+  });
+}
+
+/** Questions the story leaves open for the reader, with why, and any answer. */
+function leftOpenLines(story: Story): string[] {
+  return story.openQuestions.flatMap((q) => {
+    const state = questionState(story, q);
+    if (state.state !== "left_open") return [];
+    const chosen = q.candidates.find((c) => c.id === q.answer);
+    return [
+      `- ${joined([
+        q.question,
+        chosen === undefined
+          ? undefined
+          : sentence(`The author's answer: ${named(chosen.answer)}`),
+        state.reason.trim() === "" ? undefined : sentence(state.reason),
+      ])}`,
+      ...ruledOutLines(q),
+    ];
   });
 }
 

@@ -71,11 +71,27 @@ reread.
   `--touches`, then **try it** with `touches candidate:<question>/<id>`.
   Choose an answer with `answer-open-question` once a satisfying one has
   emerged, then make what it implies with other commands.
-- **Weigh in the file, not in your head.** While you are still weighing a
-  question's candidates, mark it with `set-open-question-working who-wrote`.
-  `render` then shows the question in one line and leaves its candidates
-  out. Answering clears the mark; `--stop` clears it without answering. An answered question can't be
-  marked working: unanswer it first.
+- **Weigh in the file, not in your head.** When you rule a candidate out,
+  say why with `reject-candidate who-wrote keeper --reason "He died before
+  the wreck"` rather than removing it: the candidate and its reason stay in
+  the file, and `show` and `render` list it as ruled out. `--undo` puts it
+  back in the running, and choosing it as the answer does too.
+- **Where a question stands.** `show open-question:who-wrote` prints its
+  state, and `render` groups questions by it:
+  - *undecided*: no answer chosen yet. This is your task.
+  - *decided, not revealed yet*: you know the answer and no scene has told
+    the reader.
+  - *left open for the reader*: `leave-for-reader who-wrote --reason "..."`
+    says the story never answers it, whether or not you have; `--undo`
+    takes the mark off.
+  - *revealed in scene X*: the first scene, in telling order, whose
+    `set-scene-links ... reveals` names the question or its chosen
+    candidate.
+
+  Only undecided questions are prompts in `gaps`. A decided question no
+  scene reveals, or one left open, is a normal place to rest: a story leaves
+  most of its questions unanswered on the page, and nothing reports that as
+  a problem. The same goes for a reader question no scene answers.
 - **Re-answering keeps the history.** Choosing a different candidate, or
   `unanswer-open-question`, keeps the old answer as superseded, with what
   replaced it. `show open-question:who-wrote` lists that history, and

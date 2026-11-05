@@ -7,6 +7,7 @@ import { applyStoryCommand, type StoryCommand } from "./commands";
 import {
   newStory,
   parseStory,
+  questionState,
   type Ref,
   type Story,
   serializeStory,
@@ -400,7 +401,9 @@ describe("applyStoryCommand refuses", () => {
     { type: "answerOpenQuestion", id: "x", candidateId: "cargo" },
     { type: "answerOpenQuestion", id: "why", candidateId: "x" },
     { type: "unanswerOpenQuestion", id: "x" },
-    { type: "setOpenQuestionWorking", id: "x", working: true },
+    { type: "rejectCandidate", questionId: "x", id: "cargo", reason: "" },
+    { type: "rejectCandidate", questionId: "why", id: "x", reason: "" },
+    { type: "leaveForReader", id: "x", reason: "" },
     { type: "describeEvent", id: "x", label: "" },
     { type: "removeEvent", id: "x" },
     position("x", 0),
@@ -898,58 +901,108 @@ describe("answering an open question", () => {
   });
 });
 
-describe("marking an open question as working", () => {
+describe("where an open question stands", () => {
   const why = (story: Story) => story.openQuestions.find((q) => q.id === "why");
+  const state = (story: Story) => {
+    const q = why(story);
+    return q === undefined ? undefined : questionState(story, q);
+  };
+  const reject: StoryCommand = {
+    type: "rejectCandidate",
+    questionId: "why",
+    id: "cargo",
+    reason: "Too neat",
+  };
 
-  test("sets the mark, changes nothing else, and clears it again", () => {
-    const working = run(linked, {
-      type: "setOpenQuestionWorking",
-      id: "why",
-      working: true,
+  test("a ruled-out candidate keeps its reason in the file, and can be put back", () => {
+    const rejected = run(linked, reject);
+    expect(
+      why(rejected)?.candidates.find((c) => c.id === "cargo"),
+    ).toMatchObject({
+      rejected: "Too neat",
     });
-    expect(why(working)?.working).toBe(true);
-    const { working: _, ...question } = why(working) ?? {};
-    expect(question).toEqual(why(linked) ?? {});
-    const parsed = parseStory(serializeStory(working))._unsafeUnwrap();
-    expect(why(parsed)?.working).toBe(true);
-
-    const cleared = run(working, {
-      type: "setOpenQuestionWorking",
-      id: "why",
-      working: false,
-    });
-    expect(serializeStory(cleared)).toBe(serializeStory(linked));
-    expect(serializeStory(cleared)).not.toContain("working");
+    const parsed = parseStory(serializeStory(rejected))._unsafeUnwrap();
+    expect(serializeStory(parsed)).toBe(serializeStory(rejected));
+    const back = run(rejected, { ...reject, reason: null });
+    expect(serializeStory(back)).toBe(serializeStory(linked));
   });
 
-  test("answering clears the mark", () => {
-    const answered = run(
-      linked,
-      { type: "setOpenQuestionWorking", id: "why", working: true },
-      { type: "answerOpenQuestion", id: "why", candidateId: "cargo" },
-    );
-    expect(why(answered)?.answer).toBe("cargo");
-    expect(why(answered)?.working).toBeUndefined();
-  });
-
-  test("is refused for an answered question", () => {
+  test("the chosen answer can't be ruled out, and choosing a ruled-out one puts it back", () => {
     const answered = run(linked, {
       type: "answerOpenQuestion",
       id: "why",
       candidateId: "cargo",
     });
-    for (const working of [true, false]) {
-      expect(
-        refusal(answered, {
-          type: "setOpenQuestionWorking",
-          id: "why",
-          working,
-        }),
-      ).toMatchObject({
-        kind: "invalid_command",
-        command: "setOpenQuestionWorking",
-      });
-    }
+    expect(refusal(answered, reject)).toMatchObject({
+      kind: "invalid_command",
+      command: "rejectCandidate",
+    });
+    const chosen = run(linked, reject, {
+      type: "answerOpenQuestion",
+      id: "why",
+      candidateId: "cargo",
+    });
+    expect(
+      why(chosen)?.candidates.find((c) => c.id === "cargo")?.rejected,
+    ).toBeUndefined();
+  });
+
+  test("undecided, decided, left open, then revealed in the first scene that reveals the answer", () => {
+    expect(state(linked)).toEqual({ state: "undecided" });
+    const decided = run(linked, {
+      type: "answerOpenQuestion",
+      id: "why",
+      candidateId: "cargo",
+    });
+    expect(state(decided)).toEqual({ state: "decided" });
+    const left = run(decided, {
+      type: "leaveForReader",
+      id: "why",
+      reason: "Let them wonder",
+    });
+    expect(state(left)).toEqual({
+      state: "left_open",
+      reason: "Let them wonder",
+    });
+    expect(
+      state(run(linked, { type: "leaveForReader", id: "why", reason: "" })),
+    ).toEqual({ state: "left_open", reason: "" });
+    const scenes = linked.scenes.map((s) => s.id);
+    const revealed = run(
+      decided,
+      {
+        type: "setSceneLinks",
+        id: scenes[1] ?? "",
+        how: "reveals",
+        refs: [{ kind: "candidate", questionId: "why", id: "cargo" }],
+      },
+      {
+        type: "setSceneLinks",
+        id: scenes[0] ?? "",
+        how: "reveals",
+        refs: [{ kind: "openQuestion", id: "why" }],
+      },
+    );
+    expect(state(revealed)).toEqual({
+      state: "revealed",
+      scene: scenes[0] ?? "",
+    });
+    const unmarked = run(left, {
+      type: "leaveForReader",
+      id: "why",
+      reason: null,
+    });
+    expect(serializeStory(unmarked)).toBe(serializeStory(decided));
+  });
+
+  test("revealing a candidate that isn't the answer reveals nothing", () => {
+    const story = run(linked, {
+      type: "setSceneLinks",
+      id: linked.scenes[0]?.id ?? "",
+      how: "reveals",
+      refs: [{ kind: "candidate", questionId: "why", id: "cargo" }],
+    });
+    expect(state(story)).toEqual({ state: "undecided" });
   });
 });
 

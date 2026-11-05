@@ -12,7 +12,7 @@
 import {
   GAP_MARK_KEY,
   type GapKind,
-  isAnswered,
+  questionState,
   type Ref,
   refExists,
   type Story,
@@ -203,18 +203,6 @@ const GAP_RULES: readonly GapRule[] = [
         })),
   },
   {
-    kind: "reader_question_never_answered",
-    find: (story) =>
-      story.readerQuestions
-        .filter(
-          (q) => q.answeredAt === undefined || !has(story.scenes, q.answeredAt),
-        )
-        .map((q) => ({
-          ref: { kind: "readerQuestion", id: q.id },
-          message: `No scene answers the reader question "${refLabel(story, { kind: "readerQuestion", id: q.id })}" yet.`,
-        })),
-  },
-  {
     kind: "open_question_without_candidates",
     find: (story) =>
       unanswered(story)
@@ -236,8 +224,15 @@ const GAP_RULES: readonly GapRule[] = [
   },
 ];
 
+/**
+ * The questions that are still an author task. One left open for the reader
+ * isn't, and a decided question nobody has revealed rests where it is:
+ * unclosed threads are normal.
+ */
 const unanswered = (story: Story) =>
-  story.openQuestions.filter((q) => !isAnswered(q));
+  story.openQuestions.filter(
+    (q) => questionState(story, q).state === "undecided",
+  );
 
 /** Every gap found, marked deliberate or not, in `GAP_RULES` order. */
 function foundGaps(story: Story): Gap[] {
