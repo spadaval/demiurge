@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T01:33:59.175210035+00:00"
+status: "done"
 title: "Reach what free text mentions"
-updated_at: "2026-11-05T01:26:40.256074469+00:00"
+updated_at: "2026-11-05T01:33:59.175210035+00:00"
 ---
 
 ## Goal
@@ -35,3 +36,7 @@ After a change, a team can find the summaries, stakes, wants, facts and candidat
 
 - 2026-11-04 [decision] whatMentions takes the story before a change (was) for the names and years it looks for, and the CLI prompt after set-position, describe-event, update-drive and update-actor passes it
   Reason: Stale text states the old year, label or want, so searching for the new values would miss exactly what the issue asks for. A drive's text is reached through its holder's name as well as its want, since text states a motive in its own words (the stale-motive case). Spans and seasons are looked for in the event's own text and in what whatThisTouches reaches (direct and one step further), not the whole story, so an unrelated 'spring' isn't listed. The premise isn't a record and isn't searched. Matching is whole words, case-insensitive, with years as whole numbers, to keep 'Al' out of 'also' and 1203 out of 12030; it still lists coincidences, and it reads as a prompt.
+
+## Close Reason
+
+whatMentions(story, ref, was?) in mentions.ts: names/labels (and a drive's holder), an event's year as a whole number, and spans/seasons in the event's own and connected records' text, as 'may state when this happened'. CLI mentions <ref>, and after set-position, describe-event, update-drive and update-actor a prompt listing text that states the old values. Never edits text. Evidence worldcrafter-30o0. Premise not searched; the prompt may be chatty.

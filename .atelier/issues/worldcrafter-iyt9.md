@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T01:33:59.321187833+00:00"
+status: "done"
 title: "Keep answers' history, and let a gap be deliberate"
-updated_at: "2026-11-05T01:33:24.282776056+00:00"
+updated_at: "2026-11-05T01:33:59.321187833+00:00"
 ---
 
 ## Goal
@@ -34,3 +35,7 @@ A reworked answer keeps the old one on record, and a gap the team has judged fin
 
 - 2026-11-04 [decision] Answer history is a superseded list on the open question, oldest first, each entry {candidate, answer text, by?}; deliberate gaps are a top-level deliberateGaps list of {gap, ref or null, reason}, one per gap and record
   Reason: History on the question (not a mark on the candidate) survives a candidate being re-chosen, edited or removed, and keeping the answer's text means it still reads after the candidate changes. Removing the chosen candidate counts as unanswering, so it's kept too. Gap kinds moved to story.ts (GAP_KINDS, GAP_SUBJECTS) so the parser can check them without story.ts importing gaps.ts; a mark is refused for a missing record, a record of the wrong kind or a blank reason, and re-marking replaces the reason. A mark can be made before its gap appears. gaps still prints a one-line count of the marked gaps so they aren't invisible; storyGaps itself leaves them out. Both new fields are omitted when empty so older files read and write back byte for byte.
+
+## Close Reason
+
+Answer history: open question superseded list (candidate, answer text, by), added on re-answer, unanswer and removal of the chosen candidate; show lists it, render doesn't. Deliberate gaps: top-level deliberateGaps {gap, ref|null, reason}, mark-gap-deliberate / unmark-gap-deliberate; storyGaps leaves them out, deliberateGaps() lists them; removing a record removes its marks. Gap lines now end [kind ref] for pasting. Evidence worldcrafter-vapb.

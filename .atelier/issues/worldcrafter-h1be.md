@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T01:33:59.079806558+00:00"
+status: "done"
 title: "Events can cause events"
-updated_at: "2026-11-05T01:22:35.458558124+00:00"
+updated_at: "2026-11-05T01:33:59.079806558+00:00"
 ---
 
 ## Goal
@@ -36,3 +37,7 @@ A team can record that one event happened because of another, and see when a cha
 
 - 2026-11-04 [decision] Causes live on the story as a top-level causes list of {cause, effect} event IDs, not on the timeline's events, and the file leaves the key out when empty
   Reason: A cause says why, not when, so it stays out of src/time (no change there) and the timeline parser stays the app's. Leaving the empty list out keeps files written before causes byte for byte the same. 'Strictly before' uses compareEvents on the full chronology (positions and constraints), so same-position, overlapping or unordered pairs aren't reported. The CLI prints a cause problem only when an edit adds it, keyed by event IDs, like timeline problems. Further touches carry forward from a cause to its effects' direct links, not backward from an effect.
+
+## Close Reason
+
+Causes as a top-level story list {cause, effect}; add-cause/remove-cause (refuse unknown, self, duplicate; keep cycles). storyContradictions reports effect strictly before cause and cycles (same-position not reported); whatThisTouches follows causes both ways and one step through effects; render says 'because of'; gaps treat a cause link as woven in. Evidence worldcrafter-jiun. Choice: causes live on the story, not the timeline; removeEvent removes its causes.
