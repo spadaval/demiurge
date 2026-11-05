@@ -20,9 +20,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Skill guidance from Round 1 (reading 3, 5, 9, 11)"
-updated_at: "2026-11-05T09:13:32.818197304+00:00"
+updated_at: "2026-11-05T10:17:29.319465052+00:00"
 ---
 
 ## Goal
