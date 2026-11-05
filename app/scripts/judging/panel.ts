@@ -45,6 +45,11 @@ import {
   checkTranscript,
   type TranscriptSummary,
 } from "../comparison/transcript";
+import {
+  onTermination,
+  refuseIfSessionsRunning,
+  type Termination,
+} from "./terminate";
 
 export const JUDGES = {
   opus: "claude-opus-5-5",
@@ -611,7 +616,7 @@ export type RunRecord = {
   transcript?: TranscriptSummary;
   problems: string[];
   /** The signal that interrupted the runner during this session, if one did. */
-  interrupted?: "SIGINT" | "SIGTERM";
+  interrupted?: Termination;
 };
 
 export function readRun(dir: string): RunRecord {
@@ -934,34 +939,14 @@ export function recheck(
   return problems;
 }
 
-/** This process's children: each session's `timeout`, while it runs. */
-export function childPids(): number[] {
-  const tasks = `/proc/${process.pid}/task`;
-  return readdirSync(tasks).flatMap((tid) =>
-    readFileSync(join(tasks, tid, "children"), "utf8")
-      .split(/\s+/)
-      .filter((pid) => pid !== "")
-      .map(Number),
-  );
-}
-
 /**
- * If the runner is interrupted, stops every session under way (`timeout`
- * passes the signal on to bwrap, which takes claude with it) and records it
- * as failed, so none is left running, or looking as if it might still
- * finish.
+ * If the runner is interrupted, the sessions under way are stopped
+ * (`onTermination`) and each is recorded as failed, so none is left
+ * running, or looking as if it might still finish.
  */
-function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
-  for (const pid of childPids()) {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      // Already gone.
-    }
-  }
+const recordAll = (signal: Termination) => {
   for (const [out, record] of running) recordInterruption(out, record, signal);
-  process.exit(signal === "SIGINT" ? 130 : 143);
-}
+};
 
 /**
  * Records an interrupted session as a finished run would be: the problem in
@@ -971,7 +956,7 @@ function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
 export function recordInterruption(
   out: string,
   record: RunRecord,
-  signal: "SIGINT" | "SIGTERM",
+  signal: Termination,
 ): void {
   record.interrupted = signal;
   record.problems.push(`the runner was interrupted by ${signal}`);
@@ -1008,12 +993,12 @@ export async function runPart(
       checkSlot(root, judge, part, replacement),
     ] as const;
   });
+  refuseIfSessionsRunning();
   ensureToken((TIMEOUT_SECONDS + 600) * 1000, hostToken);
   for (const [dir, keep] of moves) {
     if (keep !== undefined) renameSync(dir, keep);
   }
-  process.on("SIGINT", onInterrupt);
-  process.on("SIGTERM", onInterrupt);
+  const stopHandling = onTermination(recordAll);
   try {
     const gib = availableGib();
     if (judges.length > 1 && gib > CONCURRENT_MIN_GIB) {
@@ -1028,8 +1013,7 @@ export async function runPart(
     }
     return records;
   } finally {
-    process.off("SIGINT", onInterrupt);
-    process.off("SIGTERM", onInterrupt);
+    stopHandling();
   }
 }
 

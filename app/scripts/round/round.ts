@@ -58,6 +58,11 @@ import {
   persistedOutputs,
   sha256,
 } from "../judging/panel";
+import {
+  onTermination,
+  refuseIfSessionsRunning,
+  type Termination,
+} from "../judging/terminate";
 import { KIND_NAMES, LIST_KINDS } from "../story";
 
 export const MODEL = "claude-opus-5-5";
@@ -166,6 +171,8 @@ export type SessionRecord = {
   transcript?: TranscriptSummary;
   /** What the exit, the transcript and the credentials show; `recheck` redoes these. */
   checkProblems: string[];
+  /** The signal that stopped the runner during this session, if one did. */
+  interrupted?: Termination;
   /** Everything wrong: `checkProblems` and what the phase's own checks found. */
   problems: string[];
 };
@@ -766,6 +773,7 @@ async function runSession({
   sandboxCwd,
   timeoutSeconds,
   check,
+  cleanup = [],
 }: {
   round: string;
   phase: string;
@@ -777,6 +785,8 @@ async function runSession({
   sandboxCwd: string;
   timeoutSeconds: number;
   check: (jsonl: string) => TranscriptSummary;
+  /** Temporary directories to remove if the runner is interrupted. */
+  cleanup?: string[];
 }): Promise<{ record: SessionRecord; jsonl: string; dir: string }> {
   const dir = join(paths(round).phases, phase);
   if (existsSync(dir)) {
@@ -799,12 +809,30 @@ async function runSession({
     problems: [],
   };
   console.log(`[${phase}] started ${record.startedAt}`);
+  // If the runner is told to stop, the session stops with it, and the
+  // phase is recorded as failed with the signal (worldcrafter-7b2r).
+  const stopHandling = onTermination((signal) => {
+    record.interrupted = signal;
+    record.problems.push(`the runner was interrupted by ${signal}`);
+    writeJson(join(dir, "record.json"), record);
+    const run = readRound(round);
+    run.sessions.push(record);
+    saveRound(round, run);
+    for (const path of cleanup) rmSync(path, { recursive: true, force: true });
+    console.log(
+      `[${phase}] interrupted by ${signal}; its session was stopped.`,
+    );
+  });
   const started = performance.now();
-  record.exitCode = await spawnSandboxed(sandbox, command, timeoutSeconds, {
-    cwd,
-    stdout: join(dir, "transcript.jsonl"),
-    stderr: join(dir, "stderr.txt"),
-  }).exited;
+  try {
+    record.exitCode = await spawnSandboxed(sandbox, command, timeoutSeconds, {
+      cwd,
+      stdout: join(dir, "transcript.jsonl"),
+      stderr: join(dir, "stderr.txt"),
+    }).exited;
+  } finally {
+    stopHandling();
+  }
   record.durationSeconds = Math.round((performance.now() - started) / 1000);
   record.credentials.after = sha256(credentialsPath());
   const jsonl = readFileSync(join(dir, "transcript.jsonl"), "utf8");
@@ -1009,6 +1037,7 @@ export async function outline(
     outlineSize = DEFAULT_OUTLINE_SIZE,
   }: { premise?: string | undefined; outlineSize?: string | undefined } = {},
 ): Promise<SessionRecord> {
+  refuseIfSessionsRunning();
   const round = resolve(roundArg);
   const p = paths(round);
   if (existsSync(p.run))
@@ -1091,6 +1120,7 @@ export async function scenes(
     sceneWords = DEFAULT_SCENE_WORDS,
   }: { sceneWords?: string | undefined } = {},
 ): Promise<SessionRecord[]> {
+  refuseIfSessionsRunning();
   const round = resolve(roundArg);
   const p = paths(round);
   const record = readRound(round);
@@ -1167,6 +1197,7 @@ export async function scenes(
 export const OPENING_SO_FAR = "Nothing yet: this scene opens the story.";
 
 export async function soFar(roundArg: string): Promise<SessionRecord[]> {
+  refuseIfSessionsRunning();
   const round = resolve(roundArg);
   const p = paths(round);
   const record = readRound(round);
@@ -1213,6 +1244,7 @@ export async function soFar(roundArg: string): Promise<SessionRecord[]> {
           sandboxCwd: runDir,
           timeoutSeconds: TIMEOUTS.soFar,
           check: (j) => judgeTranscript(j, runDir),
+          cleanup: [runDir, home],
         });
         const { record: rec, jsonl, dir } = result;
         writeFileSync(join(dir, "outline.md"), outlineText);

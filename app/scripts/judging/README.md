@@ -114,7 +114,7 @@ the same model replaces it (decision worldcrafter-zybl), up to `--attempts`
 runs (default 3) per judge and scene in one invocation. Running `judge`
 again skips runs that are ok and replaces failed ones. A run left `running`
 (the runner killed with SIGKILL) is refused until its STATUS is set to
-`failed` by hand. SIGINT or SIGTERM stops the sessions under way and records
+`failed` by hand. SIGINT, SIGTERM or SIGHUP stops the sessions under way and records
 each as failed.
 
 Every evidence quote and best or worst moment is checked against the scene
@@ -132,6 +132,15 @@ is a link (it could point at the host's credentials and be copied into the
 output, or into a later session). The scene panel's judges have only a read
 tool and can't leave files; their report comes from the transcript. Copies
 of a run dir keep links as links.
+
+### Stopping the runner
+
+SIGTERM, SIGINT or SIGHUP to `scenes.ts` or `panel.ts` stops every session
+under way (`terminate.ts`: SIGTERM to each session's `timeout`, which leads
+its own process group and passes it to bwrap; SIGKILL to the group after
+15 s), records each as failed with the signal, and exits 128 + its number.
+Neither runner starts while a sandboxed claude or grok session from an
+earlier run is still running.
 
 ### Memory
 
@@ -257,7 +266,7 @@ JSON, an input file changed (so `my-part1.md` must come out
 unchanged), the report is missing or empty, or Part 2's last line isn't
 `VERDICT: keep|change|drop`. Failed runs aren't rerun: `--replacement`
 moves the failed one to `<part>-failed-<n>`, once the OAuth token has been
-checked, and runs a fresh session. SIGINT or SIGTERM stops the sessions
+checked, and runs a fresh session. SIGINT, SIGTERM or SIGHUP stops the sessions
 under way and records each as failed, in run.json (`interrupted`) and
 STATUS, keeping a files/ copy of its run dir. A SIGKILL of the runner leaves
 `STATUS` at `running`; edit it to `failed` by hand before replacing that run.

@@ -43,7 +43,6 @@ import {
 } from "./grok";
 import {
   availableGib,
-  childPids,
   filesUnder,
   hostToken,
   isLink,
@@ -57,6 +56,11 @@ import {
   rubricFor,
   sha256,
 } from "./panel";
+import {
+  onTermination,
+  refuseIfSessionsRunning,
+  type Termination,
+} from "./terminate";
 
 export const SCENE_JUDGES = {
   opus: { kind: "claude", model: "claude-opus-5-5" },
@@ -427,7 +431,7 @@ export type SceneRun = {
   durationSeconds?: number;
   transcript?: TranscriptSummary | GrokSummary;
   problems: string[];
-  interrupted?: "SIGINT" | "SIGTERM";
+  interrupted?: Termination;
 };
 
 const writeJson = (path: string, value: unknown) =>
@@ -680,14 +684,8 @@ export async function runSceneJudge(
   return record;
 }
 
-function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
-  for (const pid of childPids()) {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      // Already gone.
-    }
-  }
+/** Records every session under way as failed: `onTermination` has stopped them. */
+function recordInterrupted(signal: Termination): void {
   for (const [out, record] of running) {
     record.interrupted = signal;
     record.problems.push(`the runner was interrupted by ${signal}`);
@@ -700,7 +698,6 @@ function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
     writeJson(join(out, "run.json"), record);
     writeStatus(out, record.problems);
   }
-  process.exit(signal === "SIGINT" ? 130 : 143);
 }
 
 export type Task = { scene: string; judge: SceneJudge; tries: number };
@@ -734,6 +731,7 @@ export async function judgeRound(
   for (const id of scenes ?? []) {
     if (!all.includes(id)) throw new Error(`The round has no scene ${id}.`);
   }
+  refuseIfSessionsRunning();
   const rubric = rubricAt(rubricPath, rubricRev);
   const copy = rubricFor(rubric, "part1");
   let queue: Task[] = (scenes ?? all).flatMap((scene) =>
@@ -752,8 +750,7 @@ export async function judgeRound(
   );
   const records: SceneRun[] = [];
   const incomplete: Task[] = [];
-  process.on("SIGINT", onInterrupt);
-  process.on("SIGTERM", onInterrupt);
+  const stopHandling = onTermination(recordInterrupted);
   try {
     while (queue.length > 0) {
       const gib = availableGib();
@@ -792,8 +789,7 @@ export async function judgeRound(
       }
     }
   } finally {
-    process.off("SIGINT", onInterrupt);
-    process.off("SIGTERM", onInterrupt);
+    stopHandling();
   }
   tabulate(round);
   return { records, incomplete };

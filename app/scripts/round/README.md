@@ -98,6 +98,28 @@ The ended comparison harness (`../comparison/comparison.ts`, `runOne`) still
 runs host `git log` in its writer's repository; it has the same hole, and
 must not be reused as it stands.
 
+## Stopping a runner
+
+Each session runs as runner → `timeout` → bwrap → claude. `timeout` leads a
+process group of its own and bwrap's `--die-with-parent` ties the session to
+bwrap, so before worldcrafter-7b2r a runner killed with SIGTERM (Round 4's
+first outline) left its credentialed writer running unsupervised. Now
+SIGTERM, SIGINT or SIGHUP to the runner (`../judging/terminate.ts`) sends
+SIGTERM to each `timeout`, which passes it to bwrap; whatever is still alive
+after 15 s gets SIGKILL, process group and all. The phase's `record.json`
+and `run.json` record it as failed with `interrupted` and "the runner was
+interrupted by <signal>", a story so far's temporary directories are
+removed, and the runner exits 128 + the signal number.
+
+Every phase (`outline`, `scenes`, `so-far`) refuses to start while any
+sandboxed claude or grok session (`bwrap --args 3 claude|grok`) is running
+on the host, from this round or any other: stop it first.
+
+Nothing in the runner signals itself: a runner stopped part-way was stopped
+from outside, most likely by a time limit on whatever launched it. Run the
+phases detached from any tool call's time limit (in the background, with
+the output to a log), since the outline alone may take two hours.
+
 ## Timeouts
 
 | Phase | Seconds | Why |
