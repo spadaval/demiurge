@@ -16,7 +16,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Give open questions distinct states"
-updated_at: "2026-11-05T06:28:02.365759326+00:00"
+updated_at: "2026-11-05T06:47:53.437213784+00:00"
 ---
 
 ## Goal
@@ -29,3 +29,7 @@ An open question is one of: undecided (an author task, with candidates and rejec
 - 'Revealed in scene X' ties to the scene links from the bible/prose split.
 - Nothing reports an unrevealed or reader-open question as a problem.
 - Tests; bun run check passes; independently reviewed and merged locally.
+
+## Notes
+
+- 2026-11-05 [note] From review finding worldcrafter-0m5a: dedupe refs in setSceneLinks (app/src/story/commands.ts ~697) so scenes doesn't print 'reveals it; reveals it'.

@@ -16,7 +16,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Writer and story-so-far runner"
-updated_at: "2026-11-05T06:28:35.465870799+00:00"
+updated_at: "2026-11-05T06:47:53.458076513+00:00"
 ---
 
 ## Goal
@@ -32,3 +32,7 @@ A script that runs one round: a fresh sandboxed Opus 5.5 writer session using th
 - The story-so-far agent sees the outline only up to its scene.
 - Outputs go under /home/supadava/projects/demiurge-world/round-<n>/ (outside the repo): transcripts, the model, scenes, story-so-far texts, run.json with model, Claude Code version and commit.
 - Tests for the non-session parts; bun run check passes; a cheap smoke on a throwaway premise; independently reviewed and merged locally.
+
+## Notes
+
+- 2026-11-05 [note] From review finding worldcrafter-8och: the comparison harness prompts (app/scripts/comparison/prompts.ts:60,64,70) tell the writer to keep render's readable form to ~1,500 words and comparison.ts:472 treats render as the story. The round runner must not reuse those prompts or packets; judges get only scene prose and the story so far.
