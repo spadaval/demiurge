@@ -586,9 +586,10 @@ describe("transcript check: heredocs written to a file", () => {
       "Bash",
     ]);
     expect(outside("cat <<-EOF >> f.md\n\t$(ls /)\n\tEOF")).toEqual(["Bash"]);
-    // Prose slashes in an unquoted heredoc are still reported: only a
-    // quoted delimiter makes the body plain text.
-    expect(outside("cat > f.md <<EOF\nA / B\nEOF")).toEqual(["Bash"]);
+    // A bare slash in its text is prose (worldcrafter-hdly), but a path
+    // there is still read, as are its substitutions above.
+    expect(outside("cat > f.md <<EOF\nA / B\nEOF")).toEqual([]);
+    expect(outside("cat > f.md <<EOF\nA /etc/shadow B\nEOF")).toEqual(["Bash"]);
   });
   test("a quoted heredoc after a leading cd is skipped too", () => {
     // The shape of a judge's Part 2 command (sonnet part2-failed-1), with
@@ -619,21 +620,30 @@ describe("transcript check: heredocs written to a file", () => {
     ).toEqual(["Bash"]);
   });
   test("but not unquoted, or after anything other than a cd", () => {
-    expect(outside("cd /tmp/judge.abc; cat > f.md <<EOF\nA / B\nEOF")).toEqual([
-      "Bash",
-    ]);
+    // Not skipped, so its body is read; a bare slash in it is prose
+    // (worldcrafter-hdly), and a path is still found.
+    expect(outside("cd /tmp/judge.abc; cat > f.md <<EOF\nA / B\nEOF")).toEqual(
+      [],
+    );
+    expect(
+      outside("cd /tmp/judge.abc; cat > f.md <<EOF\nA /etc/x B\nEOF"),
+    ).toEqual(["Bash"]);
     expect(
       outside("cd /tmp/judge.abc; cat > f.md <<EOF\n$(cat /etc/shadow)\nEOF"),
     ).toEqual(["Bash"]);
-    expect(outside("echo hi; cat > f.md <<'EOF'\nA / B\nEOF")).toEqual([
+    expect(outside("echo hi; cat > f.md <<'EOF'\nA / B\nEOF")).toEqual([]);
+    expect(outside("echo hi; cat > f.md <<'EOF'\nA /etc/x B\nEOF")).toEqual([
       "Bash",
     ]);
     expect(
       outside("cd /tmp/judge.abc; ls; cat > f.md <<'EOF'\nA / B\nEOF"),
+    ).toEqual([]);
+    expect(
+      outside("cd /tmp/judge.abc; ls; cat > f.md <<'EOF'\nA /etc/x B\nEOF"),
     ).toEqual(["Bash"]);
     expect(
       outside("cd /tmp/judge.abc | cat > f.md <<'EOF'\nA / B\nEOF"),
-    ).toEqual(["Bash"]);
+    ).toEqual([]);
   });
   test("heredocs fed to anything but cat into a file are still checked", () => {
     expect(outside("python3 - <<'EOF'\nopen('/etc/passwd')\nEOF")).toEqual([
@@ -808,6 +818,42 @@ describe("transcript check: sed and perl scripts aren't paths", () => {
     expect(shellWordValue("'a'`x`")).toBeUndefined();
     expect(shellWordValue(`'a'\\b`)).toBeUndefined();
     expect(shellWordValue(`'unclosed`)).toBeUndefined();
+  });
+  test("a bare slash in prose isn't the root (worldcrafter-hdly)", () => {
+    // From Round 5's outline: slashes as separators in a quoted --notes and
+    // a model-gaps heredoc.
+    const round5 = [
+      "cat >> model-gaps.md <<'EOF'",
+      '- A "bound to / owned by" relation would fit.',
+      "EOF",
+      'S add-object penny-rhyme "The Penny rhyme" --notes "\'Penny on the water, penny in the well, / one for the boatman, one for the bell, / skip for the drowned\'"',
+      "S add-fact x 'one / two' --about actor:kit",
+    ].join("\n");
+    expect(shellPaths(round5)).toEqual([]);
+    expect(outside(round5)).toEqual([]);
+    expect(outside('echo "a / b" "c // d"')).toEqual([]);
+    expect(outside("python3 - <<'EOF'\nx = 4 / 2\nEOF")).toEqual(["Bash"]);
+    // A path in a quoted string is still a path.
+    expect(outside('S add-fact x "see /etc/passwd / here"')).toEqual(["Bash"]);
+  });
+  test("a bare slash as an argument is still the root (worldcrafter-hdly)", () => {
+    for (const command of [
+      "ls /",
+      "find / -name x",
+      "cd / && ls",
+      'ls "/"',
+      "ls '/'",
+      "find '//' -name x",
+      "echo a,//",
+      "cat > f.md <<EOF\n$(ls /)\nEOF",
+      "sh -c 'ls / | head'",
+      'bash -lc "find / -name x"',
+      "python3 -c 'import os; os.listdir(\"/\")'",
+      "eval 'ls /'",
+      'echo "$X / y"',
+    ]) {
+      expect([command, outside(command)]).toEqual([command, ["Bash"]]);
+    }
   });
   test("a bare // elsewhere still counts as the root", () => {
     expect(shellPaths("ls //")).toEqual(["//"]);

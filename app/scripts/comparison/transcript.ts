@@ -586,14 +586,177 @@ function wordEnd(command: string, start: number): number {
 export function shellPaths(command: string): string[] {
   // Braces and commas bound a path too, as in `{/etc/shadow,x}`, and so
   // does the `}` of `${IFS}`.
-  const found = withoutInlineScripts(command).matchAll(
+  const text = withoutInlineScripts(command);
+  const context = quoteContext(text);
+  const found = text.matchAll(
     /(?:^|[\s'"=:(<>|;&{},])(\/[^\s'"`;|&<>(){},]*)/g,
   );
   return [...found]
-    .map((match) => match[1] ?? "")
-    .filter((path) => {
-      if (/^\/+$/.test(path)) return true;
+    .filter((match) => {
+      const path = match[1] ?? "";
+      if (/^\/+$/.test(path)) {
+        const at = (match.index ?? 0) + match[0].length - path.length;
+        return !bareSlashIsProse(text, at, context);
+      }
       const first = path.split("/").find((part) => part !== "") ?? "";
       return /[*?[{]/.test(first) || existsSync(`/${first}`);
-    });
+    })
+    .map((match) => match[1] ?? "");
+}
+
+export type QuoteContext = {
+  /** Inside '...' or "..." (the quote marks themselves included). */
+  quoted: boolean[];
+  /**
+   * Text in the body of a heredoc fed to `cat`: not commands, except for
+   * `$(...)` and backticks in a body whose delimiter isn't quoted, which
+   * bash runs.
+   */
+  body: boolean[];
+};
+
+/**
+ * Where a command's text is quoted, and where it is the text of a heredoc
+ * body, char by char. A heredoc's body runs from the line after its
+ * `<<WORD` to the line that is WORD (after leading tabs for `<<-`). Only a
+ * body fed to `cat` is text; one fed to a shell or an interpreter is code,
+ * so it isn't marked.
+ */
+export function quoteContext(command: string): QuoteContext {
+  const n = command.length;
+  const quoted = new Array<boolean>(n).fill(false);
+  const body = new Array<boolean>(n).fill(false);
+  /** Heredocs opened on the current line. */
+  let pending: {
+    word: string;
+    dash: boolean;
+    text: boolean;
+    expands: boolean;
+  }[] = [];
+  let lineStart = 0;
+  let i = 0;
+  while (i < n) {
+    const c = command[i];
+    if (c === "'" || c === '"') {
+      const close =
+        c === "'" ? command.indexOf("'", i + 1) : closingDouble(command, i);
+      const end = close === -1 ? n - 1 : close;
+      for (let k = i; k <= end; k++) quoted[k] = true;
+      i = end + 1;
+    } else if (c === "\\") {
+      i += 2;
+    } else if (
+      c === "<" &&
+      command.startsWith("<<", i) &&
+      command[i + 2] !== "<"
+    ) {
+      const m = /^<<(-?)\s*(?:'([^']+)'|"([^"]+)"|(\\?)([A-Za-z_][\w-]*))/.exec(
+        command.slice(i),
+      );
+      const word = m?.[2] ?? m?.[3] ?? m?.[5];
+      if (m !== null && word !== undefined) {
+        // The command the heredoc feeds: the last one on the line before it.
+        const before = command.slice(lineStart, i).split(/[;&|]/).pop() ?? "";
+        const first = before.trim().split(/\s+/)[0] ?? "";
+        pending.push({
+          word,
+          dash: m[1] === "-",
+          text: (first.split("/").pop() ?? "") === "cat",
+          expands: m[5] !== undefined && m[4] === "",
+        });
+        i += m[0].length;
+      } else {
+        i += 2;
+      }
+    } else if (c === "\n") {
+      i++;
+      for (const doc of pending) {
+        // The body: every line up to the one that is the delimiter.
+        while (i < n) {
+          const eol = command.indexOf("\n", i);
+          const end = eol === -1 ? n : eol;
+          const line = command.slice(i, end);
+          const done =
+            (doc.dash ? line.replace(/^\t+/, "") : line) === doc.word;
+          if (!done && doc.text) {
+            const runs = doc.expands ? substitutions(line) : [];
+            for (let k = i; k < end; k++) {
+              const at = k - i;
+              if (!runs.some(([a, b]) => at >= a && at < b)) body[k] = true;
+            }
+          }
+          i = end + 1;
+          if (done) break;
+        }
+      }
+      pending = [];
+      lineStart = i;
+    } else {
+      i++;
+    }
+  }
+  return { quoted, body };
+}
+
+/** The spans of `$(...)` and backtick substitutions in a line, as [start, end). */
+function substitutions(line: string): [number, number][] {
+  const spans: [number, number][] = [];
+  for (let i = 0; i < line.length; i++) {
+    if (line.startsWith("$(", i)) {
+      let depth = 0;
+      let j = i + 1;
+      for (; j < line.length; j++) {
+        if (line[j] === "(") depth++;
+        else if (line[j] === ")" && --depth === 0) break;
+      }
+      spans.push([i, j + 1]);
+      i = j;
+    } else if (line[i] === "`") {
+      const close = line.indexOf("`", i + 1);
+      const end = close === -1 ? line.length : close + 1;
+      spans.push([i, end]);
+      i = end - 1;
+    }
+  }
+  return spans;
+}
+
+function closingDouble(command: string, open: number): number {
+  let i = open + 1;
+  while (i < command.length && command[i] !== '"')
+    i += command[i] === "\\" ? 2 : 1;
+  return i < command.length ? i : -1;
+}
+
+/**
+ * Whether a bare `/` (or `//`) at `at` is prose rather than the root: in the
+ * text of a heredoc fed to cat, or inside quotes in a word whose value is
+ * more than slashes ("bound to / owned by"), unless that word is code given
+ * to a shell or interpreter (`sh -c '...'`, `python -c`, `perl -e`, `eval`).
+ * As a word of its own, quoted or not (`ls /`, `cd "/"`), or bare outside
+ * quotes (`echo a,//`), it is the root.
+ */
+function bareSlashIsProse(
+  command: string,
+  at: number,
+  context: QuoteContext,
+): boolean {
+  if (context.body[at]) return true;
+  if (!context.quoted[at]) return false;
+  const boundary = (k: number) =>
+    !context.quoted[k] && /[\s;&|()<>]/.test(command[k] ?? "");
+  let start = at;
+  while (start > 0 && !boundary(start - 1)) start--;
+  let end = at;
+  while (end < command.length && !boundary(end)) end++;
+  // The word before it: code given to `-c`, `-e` or `eval` is commands.
+  let p = start - 1;
+  while (p >= 0 && /[ \t]/.test(command[p] ?? "")) p--;
+  let q = p;
+  while (q >= 0 && !/[\s;&|()<>]/.test(command[q] ?? "")) q--;
+  const previous = command.slice(q + 1, p + 1);
+  if (/^-[A-Za-z]*[ce]$|^--eval$|^eval$/.test(previous)) return false;
+  const value = shellWordValue(command.slice(start, end));
+  // A word that could expand is read as it stands: the root, to be safe.
+  return value !== undefined && !/^\/+$/.test(value.trim());
 }
