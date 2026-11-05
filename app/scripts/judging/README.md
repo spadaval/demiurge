@@ -30,31 +30,42 @@ web, `--setting-sources project,local --strict-mcp-config
 `<root>/judging/<judge>/<part>/`, which no session mounts:
 
 - `prompt.md`, `transcript.jsonl`, `stderr.txt`;
-- `run.json`: model, rubric commit, the run dir, the sha256 of every file it
+- `run.json`: model, rubric commit, the sha256 of the rubric text the
+  session got and where it was cut, the run dir, the sha256 of every file it
   held before the session, the claude flags and bwrap options, exit,
   duration, the transcript summary and problems;
-- `STATUS`: `ok`, or `failed` and the problems;
+- `STATUS`: `running` during the session, then `ok`, or `failed` and the
+  problems. A runner error, SIGINT or SIGTERM writes `failed` with the
+  reason;
 - `part1.md` or `part2.md`, the report;
 - `files/`: everything the run dir held afterwards;
-- `RECORDED` (Part 1 only): the evidence ID, written by `mark-recorded`.
+- `RECORDED` (Part 1 only): JSON with the evidence ID and the sha256 of the
+  `part1.md` it recorded, written by `mark-recorded`. Part 2 refuses if
+  `part1.md` no longer matches it.
 
 Each run dir is a fresh `/tmp/judge.XXXXXX` holding exactly:
 
-- Part 1: `packets/*.md` and `rubric.md`;
-- Part 2: those, plus `my-part1.md` (that judge's own Part 1), `key.md`,
+- Part 1: `packets/*.md` and `rubric.md`, which holds only the rubric from
+  "## What you're judging" up to, not including, "## Part 2". The title and
+  preamble name the arms and the strategy; Part 2 names the arms and the
+  tuned-on premise;
+- Part 2: the packets, the whole rubric as `rubric.md`, plus `my-part1.md` (that judge's own Part 1), `key.md`,
   `model-gaps/` and `failures.md`. Not `key.json`, `raw/`, or any other
   judge's files.
 
-The rubric comes from `git show <commit>:docs/verdicts/comparison-rubric.md`,
-never the working tree.
+Both rubric copies come from
+`git show <commit>:docs/verdicts/comparison-rubric.md`, never the working
+tree.
 
 A run fails, in `STATUS`, if claude exits non-zero or times out, the
 transcript check finds anything outside the run dir, any model other than
 the judge's answered (including Claude Code's fallback when a model's
-safeguards refuse), an input file changed (so `my-part1.md` must come out
+safeguards refuse), any transcript line isn't JSON, an input file changed (so `my-part1.md` must come out
 unchanged), the report is missing or empty, or Part 2's last line isn't
 `VERDICT: keep|change|drop`. Failed runs aren't rerun: `--replacement`
-moves the failed one to `<part>-failed-<n>` and runs a fresh session.
+moves the failed one to `<part>-failed-<n>`, once the OAuth token has been
+checked, and runs a fresh session. A SIGKILL of the runner leaves `STATUS`
+at `running`; edit it to `failed` by hand before replacing that run.
 
 ## Commands
 

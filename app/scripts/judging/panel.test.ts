@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -22,12 +24,18 @@ import {
   makeRunDir,
   markRecorded,
   modelProblems,
+  PART1_FROM,
   type Part,
   parseVerdict,
   partDir,
+  postSessionProblems,
   prompt,
+  readRecorded,
   rubricAt,
+  rubricFor,
   runDirSources,
+  runJudge,
+  statusOf,
   verdict,
 } from "./panel";
 
@@ -46,6 +54,8 @@ const write = (path: string, text: string) => {
 };
 
 const RUBRIC = { commit: "c0ffee", text: "# Rubric\n" };
+const sha256Text = (text: string) =>
+  createHash("sha256").update(text).digest("hex");
 
 /** A material root: packets, a key with raw output, and model-gaps. */
 function material(): string {
@@ -140,7 +150,7 @@ describe("verdict line", () => {
 describe("run directories", () => {
   test("Part 1 holds exactly the packets and the rubric", () => {
     const root = material();
-    const dir = makeRunDir(RUBRIC, runDirSources(root, "sonnet", "part1"));
+    const dir = makeRunDir(RUBRIC.text, runDirSources(root, "sonnet", "part1"));
     temps.push(dir);
     expect(filesUnder(dir)).toEqual([
       "packets/x-pair-1-A.md",
@@ -157,7 +167,7 @@ describe("run directories", () => {
     const root = material();
     finished(root, "sonnet", "part1", "ok", "my report\n");
     finished(root, "opus", "part1", "ok", "another judge\n");
-    const dir = makeRunDir(RUBRIC, runDirSources(root, "sonnet", "part2"));
+    const dir = makeRunDir(RUBRIC.text, runDirSources(root, "sonnet", "part2"));
     temps.push(dir);
     expect(filesUnder(dir)).toEqual([
       "failures.md",
@@ -221,10 +231,23 @@ describe("Part 2's refusals", () => {
       "mark-recorded",
     );
     markRecorded(root, "sonnet", "worldcrafter-ab12");
-    expect(
-      readFileSync(join(partDir(root, "sonnet", "part1"), "RECORDED"), "utf8"),
-    ).toBe("worldcrafter-ab12\n");
+    expect(readRecorded(partDir(root, "sonnet", "part1"))).toEqual({
+      evidenceId: "worldcrafter-ab12",
+      part1Sha256: sha256Text("report\n"),
+    });
     expect(() => checkPart2Ready(root, "sonnet", RUBRIC.commit)).not.toThrow();
+  });
+  test("refuses a Part 1 changed since it was recorded", () => {
+    const root = material();
+    finished(root, "sonnet", "part1", "ok", "report\n");
+    markRecorded(root, "sonnet", "worldcrafter-ab12");
+    writeFileSync(
+      join(partDir(root, "sonnet", "part1"), "part1.md"),
+      "edited\n",
+    );
+    expect(() => checkPart2Ready(root, "sonnet", RUBRIC.commit)).toThrow(
+      "changed since it was recorded as worldcrafter-ab12",
+    );
   });
   test("refuses a different rubric commit from Part 1's", () => {
     const root = material();
@@ -324,7 +347,9 @@ describe("prompts", () => {
     expect(text).toContain("part1.md");
     expect(text).toContain("every one of its questions");
     expect(text).toContain("The key and Part 2 come later");
-    expect(text).not.toMatch(/\btool\b|\bnotes\b|markdown/i);
+    for (const word of ["tool", "notes", "held back", "tuned", "markdown"]) {
+      expect(text.toLowerCase()).not.toContain(word);
+    }
   });
   test("Part 2 asks for part2.md, no revision, and the verdict line", () => {
     const text = prompt("part2");
@@ -389,5 +414,139 @@ describe("model check", () => {
     expect(problems(jsonl("x", false).split("\n")[0] ?? "")).toEqual([
       "no assistant message",
     ]);
+  });
+});
+
+describe("Part 1's rubric", () => {
+  // The rubric as fixed for the panel; Part 1 must not see its title,
+  // preamble or Part 2, which name the arms and the tuned-on premise.
+  const pinned = rubricAt("314b20a");
+  test("stops before Part 2 and names neither arm nor the tuned-on premise", () => {
+    const copy = rubricFor(pinned, "part1");
+    expect(copy.text.startsWith(`${PART1_FROM}\n`)).toBe(true);
+    expect(copy.text).toContain("## Part 1: blind, for each pair");
+    expect(copy.text).not.toContain("## Part 2");
+    expect(copy.text).not.toContain("# Rubric");
+    for (const word of ["tool", "notes", "held back", "tuned", "markdown"]) {
+      expect(copy.text.toLowerCase()).not.toContain(word);
+    }
+    expect(copy.sha256).toBe(sha256Text(copy.text));
+    expect(copy.cut).toContain(pinned.commit);
+    expect(copy.cut).toContain('"## Part 2: with the key open"');
+  });
+  test("Part 2 gets the whole rubric", () => {
+    const copy = rubricFor(pinned, "part2");
+    expect(copy.text).toBe(pinned.text);
+    expect(copy.cut).toBe("the whole file");
+  });
+  test("refuses a rubric it can't cut", () => {
+    expect(() =>
+      rubricFor({ commit: "x", text: "# R\n## Part 2\n" }, "part1"),
+    ).toThrow("no");
+    expect(() =>
+      rubricFor(
+        { commit: "x", text: "## Part 2\n## What you're judging\n" },
+        "part1",
+      ),
+    ).toThrow("no");
+  });
+});
+
+describe("post-session checks", () => {
+  const model = "claude-sonnet-5-5";
+  const jsonl = [
+    JSON.stringify({ type: "system", subtype: "init", model }),
+    JSON.stringify({
+      type: "assistant",
+      message: { model, content: [{ type: "text", text: "done" }] },
+    }),
+  ].join("\n");
+  /** A run dir as a session left it, with the inputs hashed beforehand. */
+  const session = (part: Part, after: (dir: string) => void) => {
+    const runDir = temp();
+    write(join(runDir, "rubric.md"), "rubric\n");
+    write(join(runDir, "my-part1.md"), "mine\n");
+    const inputs = {
+      "rubric.md": sha256Text("rubric\n"),
+      "my-part1.md": sha256Text("mine\n"),
+    };
+    after(runDir);
+    return (text = jsonl, exitCode = 0) =>
+      postSessionProblems({
+        part,
+        model,
+        exitCode,
+        jsonl: text,
+        transcript: checkTranscript(text, runDir, {
+          read: [runDir],
+          write: [runDir],
+        }),
+        runDir,
+        inputs,
+      });
+  };
+  test("passes a clean session", () => {
+    const check = session("part2", (dir) =>
+      write(join(dir, "part2.md"), "Reasons.\nVERDICT: keep\n"),
+    );
+    expect(check()).toEqual([]);
+  });
+  test("flags a changed or removed input", () => {
+    const check = session("part2", (dir) => {
+      write(join(dir, "part2.md"), "VERDICT: keep\n");
+      write(join(dir, "my-part1.md"), "revised\n");
+      rmSync(join(dir, "rubric.md"));
+    });
+    expect(check()).toEqual([
+      "rubric.md changed during the session",
+      "my-part1.md changed during the session",
+    ]);
+  });
+  test("flags a missing or empty report, and a missing verdict line", () => {
+    expect(session("part1", () => {})()).toEqual([
+      "part1.md is missing or empty",
+    ]);
+    const empty = session("part1", (dir) => write(join(dir, "part1.md"), "\n"));
+    expect(empty()).toEqual(["part1.md is missing or empty"]);
+    const noVerdict = session("part2", (dir) =>
+      write(join(dir, "part2.md"), "Reasons.\n"),
+    );
+    expect(noVerdict()[0]).toContain("VERDICT");
+  });
+  test("flags a non-zero exit, a timeout and unparsed transcript lines", () => {
+    const check = session("part1", (dir) =>
+      write(join(dir, "part1.md"), "report\n"),
+    );
+    expect(check(jsonl, 1)).toEqual(["claude exited 1"]);
+    expect(check(jsonl, 124)).toEqual(["timed out after 3600s"]);
+    expect(check(`${jsonl}\nnot json`)).toEqual([
+      "1 transcript lines weren't JSON, so the transcript check couldn't read them",
+    ]);
+  });
+});
+
+const judgeDirs = () =>
+  readdirSync("/tmp").filter((name) => name.startsWith("judge.")).length;
+
+describe("a runner failure", () => {
+  test("marks the part failed with the error, and leaves no run dir", async () => {
+    const root = material();
+    finished(root, "sonnet", "part1", "ok", "report\n");
+    rmSync(join(root, "key/key.md"));
+    const before = judgeDirs();
+    const record = await runJudge(
+      root,
+      "sonnet",
+      "part2",
+      { commit: "c0ffee", text: "## What you're judging\n## Part 2\n" },
+      false,
+    );
+    const dir = partDir(root, "sonnet", "part2");
+    expect(statusOf(dir)).toBe("failed");
+    expect(readFileSync(join(dir, "STATUS"), "utf8")).toContain(
+      `the runner failed: ${join(root, "key/key.md")} is missing.`,
+    );
+    expect(record.problems).toHaveLength(1);
+    expect(judgeDirs()).toBe(before);
   });
 });

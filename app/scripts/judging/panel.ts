@@ -133,6 +133,40 @@ export function rubricAt(rev: string, repo = REPO): Rubric {
   };
 }
 
+/** Part 1 sees the rubric from this heading... */
+export const PART1_FROM = "## What you're judging";
+/** ...up to, not including, this one. */
+export const PART1_UNTIL = "## Part 2";
+
+/** The rubric text a part's session gets, and where it was cut. */
+export type RubricCopy = { text: string; sha256: string; cut: string };
+
+/**
+ * Part 2 gets the whole rubric. Part 1 gets only the span from "What you're
+ * judging" up to the Part 2 heading: the title and preamble name the arms
+ * and the strategy, and Part 2 names the arms and which premise was tuned on.
+ */
+export function rubricFor(rubric: Rubric, part: Part): RubricCopy {
+  const copy = (text: string, cut: string): RubricCopy => ({
+    text,
+    sha256: createHash("sha256").update(text).digest("hex"),
+    cut,
+  });
+  if (part === "part2") return copy(rubric.text, "the whole file");
+  const lines = rubric.text.split("\n");
+  const from = lines.findIndex((line) => line.trimEnd() === PART1_FROM);
+  const until = lines.findIndex((line) => line.startsWith(PART1_UNTIL));
+  if (from === -1 || until === -1 || until < from) {
+    throw new Error(
+      `The rubric at ${rubric.commit} has no "${PART1_FROM}" heading before "${PART1_UNTIL}".`,
+    );
+  }
+  return copy(
+    `${lines.slice(from, until).join("\n").trimEnd()}\n`,
+    `lines ${from + 1}-${until} of ${RUBRIC_PATH} at ${rubric.commit}: from "${PART1_FROM}" up to, not including, "${lines[until]}"`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Layout. The material root holds `packets/` and `key/`; judging output goes
 // to `<root>/judging/<judge>/<part>/`, which no session ever mounts.
@@ -177,19 +211,24 @@ export function runDirSources(
 
 /** A fresh run directory under /tmp holding exactly the rubric and sources. */
 export function makeRunDir(
-  rubric: Rubric,
+  rubricText: string,
   sources: Record<string, string>,
 ): string {
   const dir = realpathSync(mkdtempSync("/tmp/judge."));
-  writeFileSync(join(dir, "rubric.md"), rubric.text);
-  for (const [to, from] of Object.entries(sources)) {
-    if (!existsSync(from)) throw new Error(`${from} is missing.`);
-    mkdirSync(dirname(join(dir, to)), { recursive: true });
-    if (statSync(from).isDirectory()) {
-      cpSync(from, join(dir, to), { recursive: true });
-    } else {
-      copyFileSync(from, join(dir, to));
+  try {
+    writeFileSync(join(dir, "rubric.md"), rubricText);
+    for (const [to, from] of Object.entries(sources)) {
+      if (!existsSync(from)) throw new Error(`${from} is missing.`);
+      mkdirSync(dirname(join(dir, to)), { recursive: true });
+      if (statSync(from).isDirectory()) {
+        cpSync(from, join(dir, to), { recursive: true });
+      } else {
+        copyFileSync(from, join(dir, to));
+      }
     }
+  } catch (error) {
+    rmSync(dir, { recursive: true });
+    throw error;
   }
   return dir;
 }
@@ -425,6 +464,13 @@ export function checkPart2Ready(
       `${judge}'s Part 1 isn't marked as recorded evidence; run mark-recorded first.`,
     );
   }
+  const marked = readRecorded(part1);
+  const now = sha256(join(part1, "part1.md"));
+  if (marked.part1Sha256 !== now) {
+    throw new Error(
+      `${judge}'s part1.md has changed since it was recorded as ${marked.evidenceId} (sha256 ${marked.part1Sha256}, now ${now}).`,
+    );
+  }
   const recorded = readRun(part1).rubricCommit;
   if (recorded !== rubricCommit) {
     throw new Error(
@@ -448,7 +494,30 @@ export function markRecorded(
   if (!/^[a-z0-9]+-[a-z0-9]+$/.test(evidenceId)) {
     throw new Error(`${evidenceId} doesn't look like an evidence ID.`);
   }
-  writeFileSync(join(part1, "RECORDED"), `${evidenceId}\n`);
+  writeJson(join(part1, "RECORDED"), {
+    evidenceId,
+    part1Sha256: sha256(join(part1, "part1.md")),
+  });
+}
+
+export type Recorded = { evidenceId: string; part1Sha256: string };
+
+/** `RECORDED`: the evidence ID and the sha256 of the part1.md it recorded. */
+export function readRecorded(part1: string): Recorded {
+  const data: unknown = JSON.parse(
+    readFileSync(join(part1, "RECORDED"), "utf8"),
+  );
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("evidenceId" in data) ||
+    !("part1Sha256" in data) ||
+    typeof data.evidenceId !== "string" ||
+    typeof data.part1Sha256 !== "string"
+  ) {
+    throw new Error(`${join(part1, "RECORDED")} isn't a valid record.`);
+  }
+  return { evidenceId: data.evidenceId, part1Sha256: data.part1Sha256 };
 }
 
 // ---------------------------------------------------------------------------
@@ -460,6 +529,8 @@ export type RunRecord = {
   model: string;
   replacement: boolean;
   rubricCommit: string;
+  /** The rubric text the session got: its sha256 and where it was cut. */
+  rubric: { sha256: string; cut: string };
   runDir: string;
   /** sha256 of every file the run directory held before the session. */
   inputs: Record<string, string>;
@@ -476,64 +547,36 @@ export function readRun(dir: string): RunRecord {
   return JSON.parse(readFileSync(join(dir, "run.json"), "utf8")) as RunRecord;
 }
 
-export async function runJudge(
-  rootArg: string,
-  judge: Judge,
-  part: Part,
-  rubric: Rubric,
-  replacement: boolean,
-): Promise<RunRecord> {
-  const root = resolve(rootArg);
-  const model = JUDGES[judge];
-  const sources = runDirSources(root, judge, part);
-  const out = partDir(root, judge, part);
-  mkdirSync(out, { recursive: true });
-  const runDir = makeRunDir(rubric, sources);
-  const inputs = Object.fromEntries(
-    filesUnder(runDir).map((path) => [path, sha256(join(runDir, path))]),
-  );
-  const session = judgeSession(model, runDir);
-  const text = prompt(part);
-  writeFileSync(join(out, "prompt.md"), text);
-  const record: RunRecord = {
-    judge,
-    part,
-    model,
-    replacement,
-    rubricCommit: rubric.commit,
-    runDir,
-    inputs,
-    claudeArgs: session.args,
-    sandbox: session.sandbox,
-    startedAt: new Date().toISOString(),
-    problems: [],
-  };
-  writeJson(join(out, "run.json"), record);
-  writeFileSync(join(out, "STATUS"), "running\n");
-  console.log(`[${judge} ${part}] started ${record.startedAt} on ${model}`);
-
-  const started = performance.now();
-  const exitCode = await spawnSession(session, text, TIMEOUT_SECONDS, {
-    cwd: runDir,
-    stdout: join(out, "transcript.jsonl"),
-    stderr: join(out, "stderr.txt"),
-  }).exited;
-  record.exitCode = exitCode;
-  record.durationSeconds = Math.round((performance.now() - started) / 1000);
-
+/** What a finished session's run dir and transcript show went wrong. */
+export function postSessionProblems({
+  part,
+  model,
+  exitCode,
+  jsonl,
+  transcript,
+  runDir,
+  inputs,
+}: {
+  part: Part;
+  model: string;
+  exitCode: number;
+  jsonl: string;
+  transcript: TranscriptSummary;
+  runDir: string;
+  inputs: Record<string, string>;
+}): string[] {
   const problems: string[] = [];
   if (exitCode === 124 || exitCode === 137) {
     problems.push(`timed out after ${TIMEOUT_SECONDS}s`);
   } else if (exitCode !== 0) {
     problems.push(`claude exited ${exitCode}`);
   }
-  const jsonl = readFileSync(join(out, "transcript.jsonl"), "utf8");
-  const transcript = checkTranscript(jsonl, runDir, {
-    read: [runDir],
-    write: [runDir],
-  });
-  record.transcript = transcript;
   problems.push(...modelProblems(jsonl, transcript, model));
+  if (transcript.unparsed > 0) {
+    problems.push(
+      `${transcript.unparsed} transcript lines weren't JSON, so the transcript check couldn't read them`,
+    );
+  }
   for (const f of transcript.outside) {
     problems.push(`outside the run dir: ${f.tool}: ${f.detail}`);
   }
@@ -546,32 +589,130 @@ export async function runJudge(
   const output = join(runDir, OUTPUT[part]);
   if (!existsSync(output) || readFileSync(output, "utf8").trim() === "") {
     problems.push(`${OUTPUT[part]} is missing or empty`);
-  } else {
-    copyFileSync(output, join(out, OUTPUT[part]));
-    if (part === "part2") {
-      try {
-        parseVerdict(readFileSync(output, "utf8"));
-      } catch (error) {
-        problems.push(String(error instanceof Error ? error.message : error));
-      }
+  } else if (part === "part2") {
+    try {
+      parseVerdict(readFileSync(output, "utf8"));
+    } catch (error) {
+      problems.push(errorText(error));
     }
   }
-  // A copy of everything the run directory held afterwards, for audit.
-  cpSync(runDir, join(out, "files"), { recursive: true });
-  rmSync(runDir, { recursive: true });
+  return problems;
+}
 
-  record.problems = problems;
-  writeJson(join(out, "run.json"), record);
+const errorText = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+const writeStatus = (out: string, problems: readonly string[]) =>
   writeFileSync(
     join(out, "STATUS"),
     problems.length === 0
       ? "ok\n"
       : `failed\n${problems.map((p) => `- ${p}`).join("\n")}\n`,
   );
+
+/**
+ * Part directories whose session is under way, with their run dirs, for the
+ * signal handler.
+ */
+const running = new Map<string, string | undefined>();
+
+export async function runJudge(
+  rootArg: string,
+  judge: Judge,
+  part: Part,
+  rubric: Rubric,
+  replacement: boolean,
+): Promise<RunRecord> {
+  const root = resolve(rootArg);
+  const model = JUDGES[judge];
+  const out = partDir(root, judge, part);
+  mkdirSync(out, { recursive: true });
+  running.set(out, undefined);
+  const record: RunRecord = {
+    judge,
+    part,
+    model,
+    replacement,
+    rubricCommit: rubric.commit,
+    rubric: { sha256: "", cut: "" },
+    runDir: "",
+    inputs: {},
+    claudeArgs: [],
+    sandbox: [],
+    startedAt: new Date().toISOString(),
+    problems: [],
+  };
+  writeFileSync(join(out, "STATUS"), "running\n");
+  try {
+    const copy = rubricFor(rubric, part);
+    record.rubric = { sha256: copy.sha256, cut: copy.cut };
+    const runDir = makeRunDir(copy.text, runDirSources(root, judge, part));
+    record.runDir = runDir;
+    running.set(out, runDir);
+    try {
+      record.inputs = Object.fromEntries(
+        filesUnder(runDir).map((path) => [path, sha256(join(runDir, path))]),
+      );
+      const session = judgeSession(model, runDir);
+      record.claudeArgs = session.args;
+      record.sandbox = session.sandbox;
+      const text = prompt(part);
+      writeFileSync(join(out, "prompt.md"), text);
+      writeJson(join(out, "run.json"), record);
+      console.log(`[${judge} ${part}] started ${record.startedAt} on ${model}`);
+
+      const started = performance.now();
+      const exitCode = await spawnSession(session, text, TIMEOUT_SECONDS, {
+        cwd: runDir,
+        stdout: join(out, "transcript.jsonl"),
+        stderr: join(out, "stderr.txt"),
+      }).exited;
+      record.exitCode = exitCode;
+      record.durationSeconds = Math.round((performance.now() - started) / 1000);
+      const jsonl = readFileSync(join(out, "transcript.jsonl"), "utf8");
+      record.transcript = checkTranscript(jsonl, runDir, {
+        read: [runDir],
+        write: [runDir],
+      });
+      record.problems = postSessionProblems({
+        part,
+        model,
+        exitCode,
+        jsonl,
+        transcript: record.transcript,
+        runDir,
+        inputs: record.inputs,
+      });
+      const output = join(runDir, OUTPUT[part]);
+      if (existsSync(output)) copyFileSync(output, join(out, OUTPUT[part]));
+    } finally {
+      // A copy of everything the run directory held afterwards, for audit.
+      cpSync(runDir, join(out, "files"), { recursive: true });
+      rmSync(runDir, { recursive: true });
+    }
+  } catch (error) {
+    record.problems.push(`the runner failed: ${errorText(error)}`);
+  } finally {
+    running.delete(out);
+    writeJson(join(out, "run.json"), record);
+    writeStatus(out, record.problems);
+  }
   console.log(
-    `[${judge} ${part}] exit ${exitCode}, ${record.durationSeconds}s, ${problems.length === 0 ? "ok" : `FAILED: ${problems.join("; ")}`}`,
+    `[${judge} ${part}] exit ${record.exitCode ?? "none"}, ${record.durationSeconds ?? 0}s, ${record.problems.length === 0 ? "ok" : `FAILED: ${record.problems.join("; ")}`}`,
   );
   return record;
+}
+
+/**
+ * Marks every session under way as failed if the runner is interrupted, so
+ * none is left looking as if it might still finish.
+ */
+function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
+  for (const [out, runDir] of running) {
+    writeStatus(out, [`the runner was interrupted by ${signal}`]);
+    if (runDir !== undefined) rmSync(runDir, { recursive: true, force: true });
+  }
+  process.exit(signal === "SIGINT" ? 130 : 143);
 }
 
 /** Runs one judge, or all three: concurrently if memory allows. */
@@ -596,21 +737,29 @@ export async function runPart(
       checkSlot(root, judge, part, replacement),
     ] as const;
   });
-  for (const [dir, keep] of moves)
-    if (keep !== undefined) renameSync(dir, keep);
   ensureToken((TIMEOUT_SECONDS + 600) * 1000, hostToken);
-  const gib = availableGib();
-  if (judges.length > 1 && gib > CONCURRENT_MIN_GIB) {
-    console.log(`${gib.toFixed(1)} GiB available: running concurrently.`);
-    return Promise.all(
-      judges.map((j) => runJudge(root, j, part, rubric, replacement)),
-    );
+  for (const [dir, keep] of moves) {
+    if (keep !== undefined) renameSync(dir, keep);
   }
-  const records: RunRecord[] = [];
-  for (const judge of judges) {
-    records.push(await runJudge(root, judge, part, rubric, replacement));
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onInterrupt);
+  try {
+    const gib = availableGib();
+    if (judges.length > 1 && gib > CONCURRENT_MIN_GIB) {
+      console.log(`${gib.toFixed(1)} GiB available: running concurrently.`);
+      return await Promise.all(
+        judges.map((j) => runJudge(root, j, part, rubric, replacement)),
+      );
+    }
+    const records: RunRecord[] = [];
+    for (const judge of judges) {
+      records.push(await runJudge(root, judge, part, rubric, replacement));
+    }
+    return records;
+  } finally {
+    process.off("SIGINT", onInterrupt);
+    process.off("SIGTERM", onInterrupt);
   }
-  return records;
 }
 
 // ---------------------------------------------------------------------------
