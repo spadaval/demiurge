@@ -29,7 +29,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Verdict on the changed tool: a judging panel reads the second comparison"
-updated_at: "2026-11-05T04:13:49.600594661+00:00"
+updated_at: "2026-11-05T05:06:48.775572790+00:00"
 ---
 
 ## Goal
@@ -45,3 +45,5 @@ Find out whether the changed tool is at least as good as plain notes. A judging 
 ## Notes
 
 - 2026-11-04 [note] From review finding worldcrafter-4i9o: the second rubric copy may also state the actual pair count per premise, if a run failed.
+- 2026-11-05 [decision] Sonnet's Part 1 run counts; it is not replaced. The check will be fixed for sed substitution patterns, reviewed, and the run rechecked before any Part 2
+  Reason: Flag rule from d2401a0 on worldcrafter-i2uz: a flag starts a diagnosis; replace only on an incomplete report or a real read or write outside the material. Diagnosis before any other step: the flagged command is sed -i 's/ the Jovian-like mechanism is absent,//' part1.md, editing its own report inside its run dir; the token flagged is '//' from the sed pattern. Every tool call in the transcript (1 Bash cd/cat/ls/wc in the run dir, 8 Reads of its packets, 1 Write of part1.md, the sed) stays in /tmp/judge.B5XZ2y. Recorded before Part 2 and before any verdict is known; Part 1 reports carry no verdict.
