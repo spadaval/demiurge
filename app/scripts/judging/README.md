@@ -1,10 +1,14 @@
-# Judging panel (worldcrafter-i2uz)
+# Judging panel
 
-Runs the panel that gives the verdict on the blind comparison (decision
+Runs the panel that gives the verdict on a blind comparison (decision
 worldcrafter-zybl, strategy `docs/strategies/structure-first.md`, Verdicts):
-three judges answer `docs/verdicts/comparison-rubric.md`, Part 1 blind and
-Part 2 with the key, and the verdict is the call at least two make, else
-change.
+three judges answer a rubric, Part 1 blind and Part 2 with the key, and the
+verdict is the call at least two make, else change. The first panel
+(worldcrafter-i2uz) used `docs/verdicts/comparison-rubric.md` on
+`/home/supadava/projects/demiurge-comparison`; the second (worldcrafter-iu6l)
+uses `docs/verdicts/comparison-2-rubric.md` on
+`/home/supadava/projects/demiurge-comparison-2`. Both the rubric path and the
+root are arguments.
 
 Isolation reuses the comparison harness (`../comparison/`): `sandboxArgs`
 (bubblewrap with a fresh home, read-only OAuth credentials and an empty
@@ -53,27 +57,42 @@ Each run dir is a fresh `/tmp/judge.XXXXXX` holding exactly:
   `model-gaps/` and `failures.md`. Not `key.json`, `raw/`, or any other
   judge's files.
 
-Both rubric copies come from
-`git show <commit>:docs/verdicts/comparison-rubric.md`, never the working
-tree.
+Both rubric copies come from `git show <commit>:<rubric path>`, never the
+working tree, and run.json records the path and the commit.
 
 A session may read its run dir, plus the files Claude Code itself saved its
 large tool results to, in the sandbox's own fresh home under
 `~/.claude/projects/<the run dir's slug>/`, as those tool results name them.
 Text that `cat` writes to a file from a heredoc with a quoted delimiter
-(`cat > part1.md <<'EOF'`, `<<"EOF"` or `<<\EOF`) isn't checked as commands or
-paths, since bash doesn't expand it; the rest of the command is, and so is the
-body of an unquoted heredoc.
+(`cat > part1.md <<'EOF'`, `<<"EOF"` or `<<\EOF`), on a line of its own or
+after a plain `cd <dir>;`, isn't checked as commands or paths, since bash
+doesn't expand it. Only a top-level one counts: inside an outer heredoc or a
+quoted string, the body is checked. The rest of the command is checked, and
+so is the body of an unquoted heredoc. The check also reports `..` however
+it's punctuated (`cd ..;`, `(cd ..)`), paths inside braces
+(`{/etc/shadow,x}`), and `$IFS`.
 
 A run fails, in `STATUS`, if claude exits non-zero or times out, the
 transcript check finds anything outside the run dir, any model other than
-the judge's answered (including Claude Code's fallback when a model's
-safeguards refuse), any transcript line isn't JSON, an input file changed (so `my-part1.md` must come out
+the judge's answered, a refusal stopped it (Claude Code's fallback to another
+model, safeguards stopping a response, a `refusal` stop, or a `<synthetic>`
+message Claude Code writes in the model's place), any transcript line isn't
+JSON, an input file changed (so `my-part1.md` must come out
 unchanged), the report is missing or empty, or Part 2's last line isn't
 `VERDICT: keep|change|drop`. Failed runs aren't rerun: `--replacement`
 moves the failed one to `<part>-failed-<n>`, once the OAuth token has been
-checked, and runs a fresh session. A SIGKILL of the runner leaves `STATUS`
-at `running`; edit it to `failed` by hand before replacing that run.
+checked, and runs a fresh session. SIGINT or SIGTERM stops the sessions
+under way and records each as failed, in run.json (`interrupted`) and
+STATUS, keeping a files/ copy of its run dir. A SIGKILL of the runner leaves
+`STATUS` at `running`; edit it to `failed` by hand before replacing that run.
+
+Which Part 2 run counts is a decision, not something `verdict` guesses. Under
+the flag rule (decision note d2401a0 on worldcrafter-i2uz), a flag starts a
+diagnosis, and a run is replaced only if it produced no complete report or
+actually read or wrote outside its material; so a run moved aside by
+`--replacement` may still be the one that counts. A judge with one Part 2 run
+counts it. One with more needs `--count <judge>=<run>`, and verdict.md
+records the choice and the runs not counted.
 
 ## Commands
 
@@ -84,17 +103,17 @@ From `app/`:
 bun scripts/judging/panel.ts probe
 
 # Part 1. `all` runs the three concurrently if more than 4 GiB is available.
-bun scripts/judging/panel.ts part1 <root> <opus|sonnet|fable|all> --rubric-commit <sha>
+bun scripts/judging/panel.ts part1 <root> <opus|sonnet|fable|all> --rubric <path> --rubric-commit <sha>
 
 # After recording a judge's Part 1 as evidence:
 bun scripts/judging/panel.ts mark-recorded <root> <judge> <evidence-id>
 
 # Part 2: refuses unless that judge's Part 1 is ok, marked recorded, and used
-# the same rubric commit.
-bun scripts/judging/panel.ts part2 <root> <opus|sonnet|fable|all> --rubric-commit <sha>
+# the same rubric path and commit.
+bun scripts/judging/panel.ts part2 <root> <opus|sonnet|fable|all> --rubric <path> --rubric-commit <sha>
 
 # Replace one failed run, keeping the failed one beside it.
-bun scripts/judging/panel.ts part1 <root> <judge> --rubric-commit <sha> --replacement
+bun scripts/judging/panel.ts part1 <root> <judge> --rubric <path> --rubric-commit <sha> --replacement
 
 # Re-run the checks on a finished part's saved transcript and files, after a
 # fix to the checks; also on a run moved aside by --replacement, by its
@@ -104,6 +123,8 @@ bun scripts/judging/panel.ts part1 <root> <judge> --rubric-commit <sha> --replac
 # runner failed or was interrupted.
 bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2|<part>-failed-<n>>
 
-# The verdict, from the three Part 2 reports; also writes <root>/judging/verdict.md.
-bun scripts/judging/panel.ts verdict <root>
+# The verdict, from the Part 2 run that counts for each judge; also writes
+# <root>/judging/verdict.md. Refuses if a judge has more than one Part 2 run
+# and no --count names one, or the run named isn't ok.
+bun scripts/judging/panel.ts verdict <root> [--count <judge>=<run>]...
 ```

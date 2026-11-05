@@ -1,5 +1,5 @@
 /**
- * The judging panel for the blind comparison (worldcrafter-i2uz, decision
+ * The judging panel for a blind comparison (first worldcrafter-i2uz, decision
  * worldcrafter-zybl): three judges on three models, each a fresh `claude -p`
  * session in the comparison's bubblewrap sandbox, reaching only a run
  * directory that holds exactly its material. Part 1 is blind; Part 2 adds
@@ -7,11 +7,11 @@
  * evidence. See README.md beside this file.
  *
  *   bun scripts/judging/panel.ts probe
- *   bun scripts/judging/panel.ts part1 <root> <judge|all> --rubric-commit <sha> [--replacement]
+ *   bun scripts/judging/panel.ts part1 <root> <judge|all> --rubric <path> --rubric-commit <sha> [--replacement]
  *   bun scripts/judging/panel.ts mark-recorded <root> <judge> <evidence-id>
- *   bun scripts/judging/panel.ts part2 <root> <judge|all> --rubric-commit <sha> [--replacement]
+ *   bun scripts/judging/panel.ts part2 <root> <judge|all> --rubric <path> --rubric-commit <sha> [--replacement]
  *   bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2|<part>-failed-<n>>
- *   bun scripts/judging/panel.ts verdict <root>
+ *   bun scripts/judging/panel.ts verdict <root> [--count <judge>=<run>]...
  */
 
 import { createHash } from "node:crypto";
@@ -30,7 +30,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSession } from "../comparison/comparison";
 import {
@@ -61,7 +61,6 @@ export const TIMEOUT_SECONDS = 3600;
 const CONCURRENT_MIN_GIB = 4;
 /** No subagents, no web, no Edit: a judge reads and writes its report. */
 const TOOLS = "Bash,Read,Write";
-export const RUBRIC_PATH = "docs/verdicts/comparison-rubric.md";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "../../..");
@@ -121,17 +120,22 @@ export function isJudge(name: string): name is Judge {
 // ---------------------------------------------------------------------------
 // The rubric, pinned at a commit.
 
-export type Rubric = { commit: string; text: string };
+/** A rubric: its path in the repository, the commit, and its text there. */
+export type Rubric = { path: string; commit: string; text: string };
 
-/** The rubric as committed at `rev`, never the working tree. */
-export function rubricAt(rev: string, repo = REPO): Rubric {
+/** The rubric at `path` as committed at `rev`, never the working tree. */
+export function rubricAt(path: string, rev: string, repo = REPO): Rubric {
+  if (isAbsolute(path) || path.split("/").includes("..")) {
+    throw new Error(`${path} isn't a path inside the repository.`);
+  }
   const commit = must(
     ["git", "rev-parse", "--verify", `${rev}^{commit}`],
     repo,
   ).trim();
   return {
+    path,
     commit,
-    text: must(["git", "show", `${commit}:${RUBRIC_PATH}`], repo),
+    text: must(["git", "show", `${commit}:${path}`], repo),
   };
 }
 
@@ -165,7 +169,7 @@ export function rubricFor(rubric: Rubric, part: Part): RubricCopy {
   }
   return copy(
     `${lines.slice(from, until).join("\n").trimEnd()}\n`,
-    `lines ${from + 1}-${until} of ${RUBRIC_PATH} at ${rubric.commit}: from "${PART1_FROM}" up to, not including, "${lines[until]}"`,
+    `lines ${from + 1}-${until} of ${rubric.path} at ${rubric.commit}: from "${PART1_FROM}" up to, not including, "${lines[until]}"`,
   );
 }
 
@@ -325,10 +329,32 @@ const hostToken: TokenSource = {
   log: (message) => console.log(message),
 };
 
+/** A field of a JSON object, or undefined. */
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null
+    ? Reflect.get(value, key)
+    : undefined;
+
+/** The first text part of an assistant message, shortened. */
+function messageText(message: unknown): string {
+  const content = field(message, "content");
+  const first = Array.isArray(content)
+    ? content
+        .map((part: unknown) => field(part, "text"))
+        .find((t) => typeof t === "string")
+    : undefined;
+  const text =
+    typeof first === "string" ? first.replace(/\s+/g, " ").trim() : "";
+  return text.length > 200 ? `${text.slice(0, 200)}...` : text;
+}
+
 /**
- * Why a session's transcript doesn't show the expected model throughout, if
- * it doesn't. Claude Code falls back to another model, for the rest of the
- * session, when a model's safeguards refuse; that's named here too.
+ * Why a session's transcript shows it wasn't answered throughout by the
+ * expected model, if it does. Names each way a refusal shows: Claude Code's
+ * fallback to another model for the rest of the session; a model's
+ * safeguards stopping a response; a refusal stop; and a `<synthetic>`
+ * message, which Claude Code writes itself when the API refuses or fails
+ * and the model doesn't answer.
  */
 export function modelProblems(
   jsonl: string,
@@ -337,14 +363,40 @@ export function modelProblems(
 ): string[] {
   const problems: string[] = [];
   for (const line of jsonl.split("\n")) {
-    if (!line.includes('"model_refusal_fallback"')) continue;
-    const event: unknown = JSON.parse(line);
-    if (typeof event !== "object" || event === null) continue;
-    const field = (key: string) =>
-      key in event ? String(Reflect.get(event, key)) : "?";
-    problems.push(
-      `refusal fallback from ${field("original_model")} to ${field("fallback_model")} (${field("api_refusal_category")})`,
-    );
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const type = field(event, "type");
+    const subtype = field(event, "subtype");
+    const message = field(event, "message");
+    if (subtype === "model_refusal_fallback") {
+      problems.push(
+        `refusal fallback from ${String(field(event, "original_model"))} to ${String(field(event, "fallback_model"))} (${String(field(event, "api_refusal_category"))})`,
+      );
+    } else if (
+      type === "system" &&
+      typeof field(event, "content") === "string" &&
+      /safeguards/i.test(String(field(event, "content")))
+    ) {
+      problems.push(
+        `stopped by safeguards: ${String(field(event, "content"))}`,
+      );
+    } else if (
+      type === "assistant" &&
+      field(message, "model") === "<synthetic>"
+    ) {
+      problems.push(
+        `stopped by a refusal or API error; Claude Code answered in the model's place (<synthetic>): ${messageText(message)}`,
+      );
+    } else if (
+      type === "assistant" &&
+      field(message, "stop_reason") === "refusal"
+    ) {
+      problems.push(`the model refused: ${messageText(message)}`);
+    }
   }
   if (summary.initModel !== model) {
     problems.push(`init reported model ${summary.initModel ?? "none"}`);
@@ -452,7 +504,7 @@ export function checkSlot(
 export function checkPart2Ready(
   root: string,
   judge: Judge,
-  rubricCommit: string,
+  rubric: Pick<Rubric, "path" | "commit">,
 ): void {
   const part1 = partDir(root, judge, "part1");
   if (!existsSync(join(part1, "part1.md"))) {
@@ -473,10 +525,10 @@ export function checkPart2Ready(
       `${judge}'s part1.md has changed since it was recorded as ${marked.evidenceId} (sha256 ${marked.part1Sha256}, now ${now}).`,
     );
   }
-  const recorded = readRun(part1).rubricCommit;
-  if (recorded !== rubricCommit) {
+  const run = readRun(part1);
+  if (run.rubricPath !== rubric.path || run.rubricCommit !== rubric.commit) {
     throw new Error(
-      `${judge}'s Part 1 used rubric ${recorded}, not ${rubricCommit}.`,
+      `${judge}'s Part 1 used rubric ${run.rubricPath} at ${run.rubricCommit}, not ${rubric.path} at ${rubric.commit}.`,
     );
   }
 }
@@ -530,6 +582,7 @@ export type RunRecord = {
   part: Part;
   model: string;
   replacement: boolean;
+  rubricPath: string;
   rubricCommit: string;
   /** The rubric text the session got: its sha256 and where it was cut. */
   rubric: { sha256: string; cut: string };
@@ -543,6 +596,8 @@ export type RunRecord = {
   durationSeconds?: number;
   transcript?: TranscriptSummary;
   problems: string[];
+  /** The signal that interrupted the runner during this session, if one did. */
+  interrupted?: "SIGINT" | "SIGTERM";
 };
 
 export function readRun(dir: string): RunRecord {
@@ -685,10 +740,10 @@ const writeStatus = (out: string, problems: readonly string[], note?: string) =>
   );
 
 /**
- * Part directories whose session is under way, with their run dirs, for the
+ * Part directories whose session is under way, with their records, for the
  * signal handler.
  */
-const running = new Map<string, string | undefined>();
+const running = new Map<string, RunRecord>();
 
 export async function runJudge(
   rootArg: string,
@@ -701,12 +756,12 @@ export async function runJudge(
   const model = JUDGES[judge];
   const out = partDir(root, judge, part);
   mkdirSync(out, { recursive: true });
-  running.set(out, undefined);
   const record: RunRecord = {
     judge,
     part,
     model,
     replacement,
+    rubricPath: rubric.path,
     rubricCommit: rubric.commit,
     rubric: { sha256: "", cut: "" },
     runDir: "",
@@ -716,13 +771,13 @@ export async function runJudge(
     startedAt: new Date().toISOString(),
     problems: [],
   };
+  running.set(out, record);
   writeFileSync(join(out, "STATUS"), "running\n");
   try {
     const copy = rubricFor(rubric, part);
     record.rubric = { sha256: copy.sha256, cut: copy.cut };
     const runDir = makeRunDir(copy.text, runDirSources(root, judge, part));
     record.runDir = runDir;
-    running.set(out, runDir);
     try {
       record.inputs = Object.fromEntries(
         filesUnder(runDir).map((path) => [path, sha256(join(runDir, path))]),
@@ -870,9 +925,9 @@ function childPids(): number[] {
 
 /**
  * If the runner is interrupted, stops every session under way (`timeout`
- * passes the signal on to bwrap, which takes claude with it), marks it
- * failed, and removes its run dir, so none is left running, or looking as
- * if it might still finish.
+ * passes the signal on to bwrap, which takes claude with it) and records it
+ * as failed, so none is left running, or looking as if it might still
+ * finish.
  */
 function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
   for (const pid of childPids()) {
@@ -882,11 +937,30 @@ function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
       // Already gone.
     }
   }
-  for (const [out, runDir] of running) {
-    writeStatus(out, [`the runner was interrupted by ${signal}`]);
-    if (runDir !== undefined) rmSync(runDir, { recursive: true, force: true });
-  }
+  for (const [out, record] of running) recordInterruption(out, record, signal);
   process.exit(signal === "SIGINT" ? 130 : 143);
+}
+
+/**
+ * Records an interrupted session as a finished run would be: the problem in
+ * run.json and STATUS, and a files/ copy of the run dir, which is then
+ * removed.
+ */
+export function recordInterruption(
+  out: string,
+  record: RunRecord,
+  signal: "SIGINT" | "SIGTERM",
+): void {
+  record.interrupted = signal;
+  record.problems.push(`the runner was interrupted by ${signal}`);
+  if (record.runDir !== "" && existsSync(record.runDir)) {
+    if (!existsSync(join(out, "files"))) {
+      cpSync(record.runDir, join(out, "files"), { recursive: true });
+    }
+    rmSync(record.runDir, { recursive: true, force: true });
+  }
+  writeJson(join(out, "run.json"), record);
+  writeStatus(out, record.problems);
 }
 
 /** Runs one judge, or all three: concurrently if memory allows. */
@@ -894,18 +968,19 @@ export async function runPart(
   rootArg: string,
   which: Judge | "all",
   part: Part,
+  rubricPath: string,
   rubricRev: string,
   replacement: boolean,
 ): Promise<RunRecord[]> {
   const root = resolve(rootArg);
-  const rubric = rubricAt(rubricRev);
+  const rubric = rubricAt(rubricPath, rubricRev);
   const judges: Judge[] = which === "all" ? JUDGE_NAMES : [which];
   if (which === "all" && replacement) {
     throw new Error("Replace one judge at a time.");
   }
   // Check every judge before starting any.
   const moves = judges.map((judge) => {
-    if (part === "part2") checkPart2Ready(root, judge, rubric.commit);
+    if (part === "part2") checkPart2Ready(root, judge, rubric);
     return [
       partDir(root, judge, part),
       checkSlot(root, judge, part, replacement),
@@ -989,36 +1064,127 @@ export function aggregate(calls: readonly Call[]): {
       };
 }
 
-export function verdict(rootArg: string): string {
-  const root = resolve(rootArg);
-  const rows = JUDGE_NAMES.map((judge) => {
-    const dir = partDir(root, judge, "part2");
-    if (statusOf(dir) !== "ok") {
-      throw new Error(`${judge}'s Part 2 isn't marked ok in STATUS.`);
+/** A judge's Part 2 runs: `part2` and any moved aside as `part2-failed-<n>`. */
+export function part2Runs(root: string, judge: Judge): string[] {
+  const dir = join(root, "judging", judge);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => /^part2(?:-failed-[1-9]\d*)?$/.test(name))
+    .sort();
+}
+
+/**
+ * Which Part 2 run counts for each judge. A judge with one Part 2 run counts
+ * it. One with more needs an explicit choice, `count[judge]`: under the flag
+ * rule (decision note d2401a0 on worldcrafter-i2uz) a flag starts a
+ * diagnosis, and a run is replaced only if it produced no complete report or
+ * actually read or wrote outside its material, so which run counts is a
+ * recorded decision, never a guess. The run that counts must be ok.
+ */
+export function countedRuns(
+  root: string,
+  count: Partial<Record<Judge, string>>,
+): Record<Judge, { slot: string; others: string[]; chosen: boolean }> {
+  const pick = (judge: Judge) => {
+    const runs = part2Runs(root, judge);
+    const chosen = count[judge];
+    if (chosen !== undefined && !runs.includes(chosen)) {
+      throw new Error(
+        `--count ${judge}=${chosen}: ${judge} has no such Part 2 run (${runs.join(", ") || "none"}).`,
+      );
     }
+    if (chosen === undefined && runs.length > 1) {
+      throw new Error(
+        `${judge} has ${runs.length} Part 2 runs (${runs.join(", ")}); say which counts with --count ${judge}=<run>.`,
+      );
+    }
+    const slot = chosen ?? runs[0];
+    if (slot === undefined) throw new Error(`${judge} has no Part 2 run.`);
+    if (statusOf(join(root, "judging", judge, slot)) !== "ok") {
+      throw new Error(`${judge}'s ${slot} isn't marked ok in STATUS.`);
+    }
+    return {
+      slot,
+      others: runs.filter((run) => run !== slot),
+      chosen: chosen !== undefined,
+    };
+  };
+  for (const judge of Object.keys(count)) {
+    if (!isJudge(judge)) throw new Error(`--count names no judge ${judge}.`);
+  }
+  return { opus: pick("opus"), sonnet: pick("sonnet"), fable: pick("fable") };
+}
+
+/** Parses `--count <judge>=<run>` arguments. */
+export function parseCounts(
+  values: readonly string[],
+): Partial<Record<Judge, string>> {
+  const count: Partial<Record<Judge, string>> = {};
+  for (const value of values) {
+    const [judge, slot, ...extra] = value.split("=");
+    if (
+      judge === undefined ||
+      slot === undefined ||
+      extra.length > 0 ||
+      !isJudge(judge)
+    ) {
+      throw new Error(`--count takes <judge>=<run>, not ${value}.`);
+    }
+    if (count[judge] !== undefined)
+      throw new Error(`--count names ${judge} twice.`);
+    count[judge] = slot;
+  }
+  return count;
+}
+
+export function verdict(
+  rootArg: string,
+  count: Partial<Record<Judge, string>> = {},
+): string {
+  const root = resolve(rootArg);
+  const counted = countedRuns(root, count);
+  const rows = JUDGE_NAMES.map((judge) => {
+    const { slot, others, chosen } = counted[judge];
+    const dir = join(root, "judging", judge, slot);
     const run = readRun(dir);
     if (run.model !== JUDGES[judge]) {
-      throw new Error(`${judge}'s Part 2 ran on ${run.model}.`);
+      throw new Error(`${judge}'s ${slot} ran on ${run.model}.`);
     }
     const call = parseVerdict(readFileSync(join(dir, "part2.md"), "utf8"));
-    return { judge, model: run.model, rubricCommit: run.rubricCommit, call };
+    return {
+      judge,
+      slot,
+      others,
+      chosen,
+      model: run.model,
+      rubric: `\`${run.rubricPath}\` at ${run.rubricCommit}`,
+      call,
+    };
   });
-  const commits = new Set(rows.map((r) => r.rubricCommit));
-  if (commits.size !== 1) {
+  const rubrics = new Set(rows.map((r) => r.rubric));
+  if (rubrics.size !== 1) {
     throw new Error(
-      `The judges used different rubric commits: ${[...commits].join(", ")}.`,
+      `The judges used different rubrics: ${[...rubrics].join(", ")}.`,
     );
   }
   const { tally, result, rule } = aggregate(rows.map((r) => r.call));
   const dissent = rows.filter((r) => r.call !== result);
   const lines = [
-    "# Verdict (worldcrafter-i2uz)",
+    "# Verdict",
     "",
-    `Rubric: \`${RUBRIC_PATH}\` at ${rows[0]?.rubricCommit}.`,
+    `Rubric: ${rows[0]?.rubric}.`,
     "",
     ...rows.map(
       (r) =>
-        `- ${r.judge} (${r.model}): ${r.call} (\`judging/${r.judge}/part2/part2.md\`)`,
+        `- ${r.judge} (${r.model}): ${r.call} (\`judging/${r.judge}/${r.slot}/part2.md\`)`,
+    ),
+    "",
+    "Runs counted:",
+    "",
+    ...rows.map((r) =>
+      r.others.length === 0
+        ? `- ${r.judge}: ${r.slot}, its only Part 2 run.`
+        : `- ${r.judge}: ${r.slot}, chosen with \`--count ${r.judge}=${r.slot}\`; not counted: ${r.others.join(", ")}.`,
     ),
     "",
     `Tally: keep ${tally.keep}, change ${tally.change}, drop ${tally.drop}.`,
@@ -1041,20 +1207,20 @@ export function verdict(rootArg: string): string {
 
 const USAGE = `Usage:
   panel.ts probe
-  panel.ts part1 <root> <opus|sonnet|fable|all> --rubric-commit <sha> [--replacement]
+  panel.ts part1 <root> <opus|sonnet|fable|all> --rubric <path> --rubric-commit <sha> [--replacement]
   panel.ts mark-recorded <root> <judge> <evidence-id>
-  panel.ts part2 <root> <opus|sonnet|fable|all> --rubric-commit <sha> [--replacement]
+  panel.ts part2 <root> <opus|sonnet|fable|all> --rubric <path> --rubric-commit <sha> [--replacement]
   panel.ts recheck <root> <judge> <part1|part2|<part>-failed-<n>>
-  panel.ts verdict <root>`;
+  panel.ts verdict <root> [--count <judge>=<run>]...`;
 
 export async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
-  const flag = (name: string) => {
-    const i = rest.indexOf(name);
-    return i === -1 ? undefined : rest[i + 1];
-  };
+  const VALUED = ["--rubric", "--rubric-commit", "--count"];
+  const flags = (name: string) =>
+    rest.flatMap((arg, i) => (arg === name ? [rest[i + 1] ?? ""] : []));
+  const flag = (name: string) => flags(name)[0];
   const positional = rest.filter(
-    (arg, i) => !arg.startsWith("--") && rest[i - 1] !== "--rubric-commit",
+    (arg, i) => !arg.startsWith("--") && !VALUED.includes(rest[i - 1] ?? ""),
   );
   switch (command) {
     case "probe": {
@@ -1066,8 +1232,14 @@ export async function main(argv: string[]): Promise<void> {
     case "part1":
     case "part2": {
       const [root, who] = positional;
+      const rubricPath = flag("--rubric");
       const rubric = flag("--rubric-commit");
-      if (root === undefined || who === undefined || rubric === undefined) {
+      if (
+        root === undefined ||
+        who === undefined ||
+        rubricPath === undefined ||
+        rubric === undefined
+      ) {
         break;
       }
       if (who !== "all" && !isJudge(who)) break;
@@ -1075,6 +1247,7 @@ export async function main(argv: string[]): Promise<void> {
         root,
         who,
         command,
+        rubricPath,
         rubric,
         rest.includes("--replacement"),
       );
@@ -1119,7 +1292,7 @@ export async function main(argv: string[]): Promise<void> {
     case "verdict": {
       const [root] = positional;
       if (root === undefined) break;
-      console.log(verdict(root));
+      console.log(verdict(root, parseCounts(flags("--count"))));
       return;
     }
   }
