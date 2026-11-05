@@ -13,9 +13,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T19:03:32.651257899+00:00"
+status: "done"
 title: "World first: demonstrate the Demiurge-assisted process on one premise"
-updated_at: "2026-11-05T06:28:41.317364341+00:00"
+updated_at: "2026-11-05T19:03:32.651257899+00:00"
 ---
 
 ## Outcome
@@ -28,3 +29,7 @@ A fresh writer agent, using Demiurge (the story CLI and skill), builds a rich wo
 - The rubric is written and reviewed before any judge reads anything.
 - Each round's four scenes, story-so-far texts, point choices, judge reports and round log are recorded.
 - The mission ends after five rounds or after a round with no meaningful tool or skill issues.
+
+## Close Reason
+
+World first complete under Sumeet's direction (decision worldcrafter-jeue): Round 0's six tool fixes and five judged rounds, each round's fixes reviewed and merged locally. 80 judge reports across 20 scenes, scores per judge flat (overall 8.0-8.75 means, world aliveness 7.0-8.5); the readings show each targeted class of continuity error gone after its fix, ending with none confirmed in Round 5. Summary: docs/rounds/README.md. Follow-up backlog: yxfp, 0pt4, lfyv, 54d6, cosv, 2lxe.

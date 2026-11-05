@@ -11,7 +11,7 @@ relationships:
   relates:
   - kind: "issue"
     id: "worldcrafter-gwx3"
-    type: "advances"
+    type: "related"
   - kind: "issue"
     id: "worldcrafter-hdly"
     type: "discovered_from"
