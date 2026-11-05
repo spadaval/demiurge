@@ -1,13 +1,15 @@
 /**
  * A whole story as text a person can read, with no IDs: names, wants and
- * questions stand in for the records they belong to. It's how a sketch is
- * read and how its length is judged, so it says only what the story holds,
- * in the order a reader would want it, and says each thing once: a sketch's
- * length should measure the story, not its links. So a want is printed in
- * full only under its actor and named in a few words elsewhere, a relation is
- * printed once, a constraint the positions already satisfy is left out, and
- * so are rejected candidates and the candidates of a question being weighed.
- * An event's causes are named after it ("because of …") in a few words each.
+ * questions stand in for the records they belong to. It is the author's
+ * bible, read while working on the story; it is not the story, and readers
+ * never see it. The prose lives in each scene's own file.
+ *
+ * It says each thing once, in the order an author would want it, so it stays
+ * easy to read: a want is printed in full only under its actor and named in a
+ * few words elsewhere, a relation is printed once, a constraint the positions
+ * already satisfy is left out, and so are rejected candidates and the
+ * candidates of a question being weighed. An event's causes are named after
+ * it ("because of …"), and a scene's links after the scene.
  */
 
 import {
@@ -18,7 +20,7 @@ import {
 } from "../time/chronology";
 import type { Constraint, Position, Timeline } from "../time/timeline";
 import { storyContradictions } from "./contradictions";
-import { isAnswered, type Ref, type Story } from "./story";
+import { isAnswered, type Ref, SCENE_LINK_KINDS, type Story } from "./story";
 
 /** The story as Markdown-like text. */
 export function renderStory(story: Story): string {
@@ -396,6 +398,12 @@ function satisfiedBy(placed: Chronology, c: Constraint): boolean {
   }
 }
 
+const SCENE_LINK_WORDS = {
+  reveals: "Reveals",
+  implies: "Implies",
+  withholds: "Withholds",
+} as const;
+
 function sceneLines(story: Story): string[] {
   return story.scenes.flatMap((scene, i) => {
     const details = [
@@ -408,6 +416,13 @@ function sceneLines(story: Story): string[] {
       scene.pressures.length === 0
         ? undefined
         : `Pressure on ${scene.pressures.map((d) => driveName(story, d)).join("; ")}.`,
+      ...SCENE_LINK_KINDS.map((how) =>
+        scene[how].length === 0
+          ? undefined
+          : sentence(
+              `${SCENE_LINK_WORDS[how]}: ${scene[how].map((ref) => refName(story, ref)).join("; ")}`,
+            ),
+      ),
     ];
     const summary =
       scene.summary.trim() === "" ? "" : ` ${sentence(scene.summary)}`;

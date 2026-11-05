@@ -9,7 +9,10 @@
  * and queries, so a story with a dangling reference still loads.
  *
  * Actors and scenes are plain records here, not documents, and a scene has no
- * place in story time: `depicts` is its only link to events.
+ * place in story time: `depicts` is its only link to events. The file is the
+ * author's bible: a scene's prose is kept apart from it, in a file of its own
+ * (`proseFile` in `scripts/story.ts`), and a scene record says only what the
+ * scene does with the bible's records.
  */
 
 import { err, ok, Result } from "neverthrow";
@@ -63,14 +66,23 @@ export type ReaderQuestion = {
   answeredAt?: string;
 };
 
+/**
+ * What a scene does with a record: tells the reader outright, lets the reader
+ * infer it, or keeps it from the reader where the reader would expect it.
+ */
+export const SCENE_LINK_KINDS = ["reveals", "implies", "withholds"] as const;
+
+export type SceneLinkKind = (typeof SCENE_LINK_KINDS)[number];
+
 export type Scene = {
   id: string;
   title: string;
+  /** The author's note on the scene, not its prose. */
   summary: string;
   actors: string[];
   depicts: EventId[];
   pressures: string[];
-};
+} & Record<SceneLinkKind, Ref[]>;
 
 export type Candidate = { id: string; answer: string; touches: Ref[] };
 
@@ -458,6 +470,10 @@ function checkReaderQuestion(v: JsonRecord, at: string): Check<ReaderQuestion> {
   }));
 }
 
+/** Absent when empty, so files written before scene links read the same. */
+const checkSceneLinks = (value: unknown, at: string): Check<Ref[]> =>
+  value === undefined ? ok([]) : checkRecords(value, at, checkRef);
+
 function checkScene(v: JsonRecord, at: string): Check<Scene> {
   const known = checkKeys(v, at, [
     "id",
@@ -466,6 +482,7 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     "actors",
     "depicts",
     "pressures",
+    ...SCENE_LINK_KINDS,
   ]);
   if (known.isErr()) return err(known.error);
   return Result.combine([
@@ -475,14 +492,32 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     checkStrings(v.actors, `${at}.actors`),
     checkStrings(v.depicts, `${at}.depicts`),
     checkStrings(v.pressures, `${at}.pressures`),
-  ]).map(([id, title, summary, actors, depicts, pressures]) => ({
-    id,
-    title,
-    summary,
-    actors,
-    depicts,
-    pressures,
-  }));
+    checkSceneLinks(v.reveals, `${at}.reveals`),
+    checkSceneLinks(v.implies, `${at}.implies`),
+    checkSceneLinks(v.withholds, `${at}.withholds`),
+  ]).map(
+    ([
+      id,
+      title,
+      summary,
+      actors,
+      depicts,
+      pressures,
+      reveals,
+      implies,
+      withholds,
+    ]) => ({
+      id,
+      title,
+      summary,
+      actors,
+      depicts,
+      pressures,
+      reveals,
+      implies,
+      withholds,
+    }),
+  );
 }
 
 function checkCandidate(v: JsonRecord, at: string): Check<Candidate> {
@@ -817,6 +852,9 @@ function normalized(story: Story): Story {
       actors: sortedStrings(scene.actors),
       depicts: sortedStrings(scene.depicts),
       pressures: sortedStrings(scene.pressures),
+      reveals: sortedRefs(scene.reveals),
+      implies: sortedRefs(scene.implies),
+      withholds: sortedRefs(scene.withholds),
     })),
     openQuestions: byId(
       story.openQuestions.map(({ superseded, ...question }) => ({
@@ -928,9 +966,15 @@ function withOrderedKeys(value: unknown): unknown {
 
 /** The file's text. Equal stories give equal text, however they were edited. */
 export function serializeStory(story: Story): string {
-  const { causes, deliberateGaps, ...rest } = normalized(story);
+  const { causes, deliberateGaps, scenes, ...rest } = normalized(story);
   const written = {
     ...rest,
+    scenes: scenes.map(({ reveals, implies, withholds, ...scene }) => ({
+      ...scene,
+      ...(reveals.length === 0 ? {} : { reveals }),
+      ...(implies.length === 0 ? {} : { implies }),
+      ...(withholds.length === 0 ? {} : { withholds }),
+    })),
     ...(causes.length === 0 ? {} : { causes }),
     ...(deliberateGaps.length === 0 ? {} : { deliberateGaps }),
   };

@@ -28,6 +28,40 @@ repository you're working in. Each edit is checked and written only if it
 succeeds; a refused edit says why, so fix it and run it again. Add a record
 before linking to it.
 
+## The bible and the prose
+
+The story file is your bible: the world, the people, what happened and why,
+what you have and haven't decided. It is for you alone. No reader sees it,
+and nobody judges the story by it, so it has no length to keep to: put down
+everything that is true of the world, however much, and never cut a true
+record or link to make it shorter. Drives, causes and open questions don't
+have to appear in the prose.
+
+The story is the prose, and each scene's prose lives in its own file,
+`scenes/<scene-id>.md` beside the story file. `show scene:<id>` prints the
+path and how many words are there so far. Write the prose there with your
+ordinary file tools, never in a scene's `--summary` or any other field of the
+story file; a summary is your note on what the scene does. Git keeps earlier
+drafts, so rewrite in place and commit.
+
+Say what each scene does with the bible:
+
+- `set-scene-links storm reveals fact:seen-ashore candidate:who-wrote/ferryman`:
+  what the scene tells the reader outright.
+- `set-scene-links storm implies event:wreck`: what a reader can infer from
+  it without being told.
+- `set-scene-links storm withholds drive:keep-quiet`: what it keeps back
+  where a reader would expect to learn it.
+
+Each command sets that kind of link for the scene; `none` clears it. Any
+record or candidate can be linked. `show scene:<id>` lists a scene's links,
+and `scenes <ref>` lists, in telling order, every scene that touches a
+record and how: who is in it, what it depicts or pressures, which reader
+questions it opens or answers, and what it reveals, implies or withholds.
+Before writing a scene, check what the scenes before it have already
+revealed; after changing a record, `scenes <ref>` shows whose prose to
+reread.
+
 ## How the craft maps onto it
 
 - **Put things down** with the `add-` commands. An actor, drive, event, fact
@@ -40,15 +74,13 @@ before linking to it.
 - **Weigh in the file, not in your head.** While you are still weighing a
   question's candidates, mark it with `set-open-question-working who-wrote`.
   `render` then shows the question in one line and leaves its candidates
-  out, so weighing costs no words in the readable form. Answering clears the
-  mark; `--stop` clears it without answering. An answered question can't be
+  out. Answering clears the mark; `--stop` clears it without answering. An answered question can't be
   marked working: unanswer it first.
 - **Re-answering keeps the history.** Choosing a different candidate, or
   `unanswer-open-question`, keeps the old answer as superseded, with what
   replaced it. `show open-question:who-wrote` lists that history, and
   `render` prints only the current answer. So rework an answer by answering
-  again; don't delete the question or its other candidates, which cost no
-  words once the question is decided.
+  again; don't delete the question or its other candidates.
 - **Causes.** When one event happened because of another, record it with
   `add-cause wreck letter` (the wreck caused the letter). Positions and
   constraints only say what comes first; a cause says why. `render` says
@@ -71,7 +103,8 @@ before linking to it.
   version". Read it and fix what is now wrong; nothing is rewritten for you.
   After other changes, such as answering a question that changes what
   someone did, run `mentions event:wreck` (or `actor:`, `drive:` and so on)
-  yourself on what the change reaches.
+  yourself on what the change reaches. `mentions` doesn't read prose files;
+  `scenes <ref>` lists the scenes whose prose may need rereading.
 - **`gaps` and `contradictions` are prompts, not a to-do list.** Run them now
   and then to see what isn't woven in yet or still pulls against itself, and
   act on what is worth acting on. When a gap is a choice, say so: each gap
@@ -80,12 +113,12 @@ before linking to it.
   counsel"`. The mark and its reason stay in the story file, and `gaps`
   stops listing it. Mark only what you have decided, not what you haven't
   got to yet.
-- **Check length and readability with `render`**, which prints the whole
-  story as text with no IDs and a word count. It is how the story will be
-  read. It says each thing once: a want in full under its holder, and
-  briefly elsewhere; a relation once; a constraint only when the positions
-  don't already show it; a decided question as its answer alone. Links cost
-  few words, so cut story, not true links, when you are over length.
+- **Read the whole bible with `render`**, which prints it as text with no
+  IDs, for you to check what it holds and how it hangs together. It is not
+  the story and no reader sees it. It says each thing once: a want in full
+  under its holder, and briefly elsewhere; a relation once; a constraint
+  only when the positions don't already show it; a decided question as its
+  answer alone; and each scene's links after the scene.
 
 ## The model gaps log
 
@@ -97,7 +130,7 @@ judged, so it matters as much as the story.
 
 ## Commit as you go
 
-Commit the story file and `model-gaps.md` after each meaningful change, in
-the git repository that holds the story, with a message that says what
-changed in the story ("The ferryman wrote the letter", not "update
+Commit the story file, the scene files and `model-gaps.md` after each
+meaningful change, in the git repository that holds the story, with a
+message that says what changed in the story ("The ferryman wrote the letter", not "update
 story.json").

@@ -633,7 +633,7 @@ const satisfiedConstraints: StoryCommand[] = [0, 1, 2, 3, 4, 5, 6].map((i) => ({
   ...(i % 2 === 0 ? { duration: { amount: 3, frame: "world" } } : {}),
 }));
 
-describe("the render's length measures the story, not its links", () => {
+describe("the render names a linked record briefly and says each thing once", () => {
   test("each link adds at most eight words, and a satisfied constraint none", () => {
     let story = bare;
     let words = wordCount(renderStory(story));

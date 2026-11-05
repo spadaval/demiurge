@@ -389,6 +389,9 @@ describe("what it skips", () => {
           actors: ["ghost"],
           depicts: ["never"],
           pressures: ["lost", "nobody"],
+          reveals: [],
+          implies: [],
+          withholds: [],
         },
         {
           id: "s2",
@@ -397,6 +400,9 @@ describe("what it skips", () => {
           actors: ["ghost"],
           depicts: [],
           pressures: [],
+          reveals: [],
+          implies: [],
+          withholds: [],
         },
       ],
     };

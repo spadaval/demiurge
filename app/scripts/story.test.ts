@@ -7,14 +7,15 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { wordCount } from "../src/story/render";
 import { parseStory, type Story } from "../src/story/story";
 import { EDITS, READS } from "./story";
 
@@ -162,41 +163,31 @@ describe("story CLI", () => {
       "## Decided\n\n- Why did Joel leave? He found what the caravans carried.\n",
     );
     expect(rendered).not.toContain("He wanted adventure");
-    expect(rendered).toMatch(/\(\d+ words\)\n$/);
+    // The bible carries no word budget.
+    expect(rendered).not.toMatch(/words\)/);
     for (const id of ["joel", "belong", "exile", "why-leave", "cargo"]) {
       expect(rendered).not.toContain(id);
     }
   });
 
-  test("a question being weighed renders in one line, and the word count is the render's", () => {
+  test("a question being weighed renders in one line", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-open-question", "who", "Who wrote it?");
     ok("add-candidate", "who", "ferry", "The ferryman, who saw the wreck");
     ok("add-candidate", "who", "keeper", "The old keeper, before he died");
-    const words = (out: string) => {
-      const [, count] = out.match(/\((\d+) words\)\n$/) ?? [];
-      return {
-        count: Number(count),
-        text: out.replace(/\(\d+ words\)\n$/, ""),
-      };
-    };
-
-    const open = words(ok("render"));
-    expect(open.text).toContain("The ferryman, who saw the wreck.");
-    expect(open.count).toBe(wordCount(open.text));
+    const open = ok("render");
+    expect(open).toContain("The ferryman, who saw the wreck.");
 
     ok("set-open-question-working", "who");
     expect(ok("show", "open-question:who")).toContain("working: yes");
-    const weighed = words(ok("render"));
-    expect(weighed.text).toContain("- Who wrote it? (being weighed)\n");
-    expect(weighed.text).not.toContain("ferryman");
-    expect(weighed.count).toBe(wordCount(weighed.text));
-    expect(weighed.count).toBeLessThan(open.count);
+    const weighed = ok("render");
+    expect(weighed).toContain("- Who wrote it? (being weighed)\n");
+    expect(weighed).not.toContain("ferryman");
     expect(saved().openQuestions[0]?.candidates).toHaveLength(2);
 
     ok("set-open-question-working", "who", "--stop");
     expect(saved().openQuestions[0]?.working).toBeUndefined();
-    expect(words(ok("render")).count).toBe(open.count);
+    expect(ok("render")).toBe(open);
 
     // Answering clears the mark, and an answered question can't be weighed.
     ok("set-open-question-working", "who");
@@ -476,6 +467,76 @@ describe("story CLI", () => {
     expect(missing.code).toBe(1);
     expect(missing.stderr).toContain("cannot read");
     expect(existsSync(file)).toBe(false);
+  });
+
+  test("keeps a scene's prose in its own file and lists its links both ways", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-fact", "lamp", "The lamp was out that night");
+    ok("add-event", "wreck", "The wreck");
+    ok("add-open-question", "who", "Who wrote it?");
+    ok("add-candidate", "who", "ferry", "The ferryman");
+    ok("add-scene", "storm", "The storm");
+    ok("add-scene", "docks", "The docks");
+    const prose = join(dir, "scenes", "storm.md");
+    expect(ok("show", "scene:storm")).toContain(
+      `prose: ${prose} (not written yet)\n`,
+    );
+    mkdirSync(join(dir, "scenes"));
+    writeFileSync(prose, "Rain on the glass. She did not light it.\n");
+    expect(ok("show", "scene:storm")).toContain(`prose: ${prose} (9 words)\n`);
+    expect(readFileSync(file, "utf8")).not.toContain("Rain on the glass");
+
+    ok("set-scene-links", "storm", "withholds", "fact:lamp");
+    ok("set-scene-links", "storm", "implies", "event:wreck");
+    ok(
+      "set-scene-links",
+      "docks",
+      "reveals",
+      "fact:lamp",
+      "candidate:who/ferry",
+    );
+    const storm = ok("show", "scene:storm");
+    expect(storm).toContain(
+      'withholds: fact:lamp ("The lamp was out that night")\n',
+    );
+    expect(storm).toContain('implies: event:wreck ("The wreck")\n');
+    expect(ok("scenes", "fact:lamp")).toBe(
+      '1. scene:storm ("The storm"): withholds it\n2. scene:docks ("The docks"): reveals it\n',
+    );
+    expect(ok("scenes", "open-question:who")).toBe(
+      '2. scene:docks ("The docks"): reveals its candidate ferry\n',
+    );
+    expect(ok("scenes", "event:wreck")).toBe(
+      '1. scene:storm ("The storm"): implies it\n',
+    );
+    ok("add-actor", "mara", "Mara");
+    expect(ok("scenes", "actor:mara")).toBe("No scene touches it.\n");
+
+    const missing = cli(
+      file,
+      "set-scene-links",
+      "storm",
+      "reveals",
+      "fact:nope",
+    );
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain("fact nope does not exist");
+    const badHow = cli(file, "set-scene-links", "storm", "hints", "fact:lamp");
+    expect(badHow.code).toBe(2);
+    expect(badHow.stderr).toContain(
+      "<how> must be one of reveals, implies, withholds",
+    );
+
+    ok("set-scene-links", "storm", "withholds", "none");
+    expect(ok("scenes", "fact:lamp")).toBe(
+      '2. scene:docks ("The docks"): reveals it\n',
+    );
+    const rendered = ok("render");
+    expect(rendered).toContain(
+      "Reveals: The ferryman; The lamp was out that night.",
+    );
+    expect(rendered).not.toContain("Rain on the glass");
+    expect(rendered).not.toMatch(/words\)/);
   });
 
   test("--help lists every command with an example, and every example runs", () => {

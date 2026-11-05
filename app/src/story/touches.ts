@@ -8,7 +8,13 @@
  */
 
 import { err, ok, type Result } from "neverthrow";
-import { describeRef, type Ref, refExists, type Story } from "./story";
+import {
+  describeRef,
+  type Ref,
+  refExists,
+  SCENE_LINK_KINDS,
+  type Story,
+} from "./story";
 
 export type TouchKind = Ref["kind"];
 
@@ -196,6 +202,9 @@ function directLinks(story: Story, ref: Ref): Link[] {
       for (const drive of scene?.pressures ?? []) {
         add("a drive it puts under pressure", driveRef(drive));
       }
+      for (const how of SCENE_LINK_KINDS) {
+        add(`what it ${how}`, ...(scene?.[how] ?? []));
+      }
       for (const question of story.readerQuestions) {
         const qRef: Ref = { kind: "readerQuestion", id: question.id };
         if (question.opensAt === id) add("a reader question it opens", qRef);
@@ -248,6 +257,13 @@ function directLinks(story: Story, ref: Ref): Link[] {
   }
 
   // Whatever refers to `ref` by a Ref.
+  for (const scene of story.scenes) {
+    for (const how of SCENE_LINK_KINDS) {
+      if (scene[how].some((linked) => sameRef(linked, ref))) {
+        add(`a scene that ${how} it`, sceneRef(scene));
+      }
+    }
+  }
   for (const fact of story.facts) {
     if (fact.about.some((about) => sameRef(about, ref))) {
       add("a fact about it", { kind: "fact", id: fact.id });

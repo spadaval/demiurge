@@ -32,6 +32,7 @@ import {
   type OpenQuestion,
   type Ref,
   refExists,
+  type SceneLinkKind,
   type Story,
   type StoryError,
 } from "./story";
@@ -105,6 +106,8 @@ export type StoryCommand =
   | { type: "setSceneEvents"; id: string; depicts: EventId[] }
   /** The drives the scene puts under pressure. */
   | { type: "setScenePressures"; id: string; pressures: string[] }
+  /** The records the scene reveals, implies or withholds (`SceneLinkKind`). */
+  | { type: "setSceneLinks"; id: string; how: SceneLinkKind; refs: Ref[] }
   | {
       type: "addOpenQuestion";
       id: string;
@@ -562,15 +565,35 @@ export function applyStoryCommand(
 
     case "addScene": {
       const { id, title, summary } = command;
-      return fresh("scene", story.scenes, id).andThen(() =>
-        kept({
-          ...story,
-          scenes: [
-            ...story.scenes,
-            { id, title, summary, actors: [], depicts: [], pressures: [] },
-          ],
-        }),
-      );
+      return fresh("scene", story.scenes, id)
+        .andThen(() =>
+          // The ID names the scene's prose file.
+          /^\.*$|[/\\]/.test(id)
+            ? refuse(
+                "invalid_command",
+                `scene ID ${id} can't name a file: use letters, digits and dashes`,
+              )
+            : ok(null),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            scenes: [
+              ...story.scenes,
+              {
+                id,
+                title,
+                summary,
+                actors: [],
+                depicts: [],
+                pressures: [],
+                reveals: [],
+                implies: [],
+                withholds: [],
+              },
+            ],
+          }),
+        );
     }
 
     case "updateScene":
@@ -667,6 +690,19 @@ export function applyStoryCommand(
             scenes: replace(story.scenes, command.id, (scene) => ({
               ...scene,
               pressures: command.pressures,
+            })),
+          }),
+        );
+
+    case "setSceneLinks":
+      return existing("scene", story.scenes, command.id)
+        .andThen(() => resolveRefs(command.refs))
+        .andThen(() =>
+          kept({
+            ...story,
+            scenes: replace(story.scenes, command.id, (scene) => ({
+              ...scene,
+              [command.how]: command.refs,
             })),
           }),
         );
@@ -1033,8 +1069,8 @@ function relationBetween(story: Story, a: string, b: string): boolean {
 }
 
 /**
- * Drops the refs `gone` matches from every fact, open question and candidate,
- * and the deliberate gaps on them.
+ * Drops the refs `gone` matches from every fact, scene link, open question and
+ * candidate, and the deliberate gaps on them.
  */
 function withoutRefs(story: Story, gone: (ref: Ref) => boolean): Story {
   const kept = (refs: readonly Ref[]) => refs.filter((ref) => !gone(ref));
@@ -1044,6 +1080,12 @@ function withoutRefs(story: Story, gone: (ref: Ref) => boolean): Story {
       ({ ref }) => ref === null || !gone(ref),
     ),
     facts: story.facts.map((fact) => ({ ...fact, about: kept(fact.about) })),
+    scenes: story.scenes.map((scene) => ({
+      ...scene,
+      reveals: kept(scene.reveals),
+      implies: kept(scene.implies),
+      withholds: kept(scene.withholds),
+    })),
     openQuestions: story.openQuestions.map((q) => ({
       ...q,
       about: kept(q.about),

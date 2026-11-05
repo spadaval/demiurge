@@ -9,6 +9,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { err, ok, Result } from "neverthrow";
 import {
   applyStoryCommand,
@@ -19,6 +20,7 @@ import { storyContradictions } from "../src/story/contradictions";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
 import { type Mention, whatMentions } from "../src/story/mentions";
 import { renderStory, wordCount } from "../src/story/render";
+import { scenesTouching } from "../src/story/scenes";
 import {
   GAP_KINDS,
   type GapKind,
@@ -27,6 +29,7 @@ import {
   type Ref,
   type RefKind,
   refExists,
+  SCENE_LINK_KINDS,
   type Story,
   serializeStory,
 } from "../src/story/story";
@@ -186,6 +189,16 @@ class Reader {
   rest(): string[] {
     const { rest } = this.parsed;
     return rest.length === 1 && rest[0] === "none" ? [] : rest;
+  }
+
+  /** The remaining arguments as refs; a lone `none` is an empty list. */
+  restRefs(): Ref[] {
+    return this.rest().flatMap((value) => {
+      const ref = parseRef(value);
+      if (ref.isOk()) return [ref.value];
+      this.errors.push(ref.error);
+      return [];
+    });
   }
 
   text(flag: string): string | undefined {
@@ -597,7 +610,12 @@ export const EDITS: EditSpecs = {
   addScene: {
     group: "Scenes: the telling",
     args: ["id", "title"],
-    flags: { summary: text },
+    flags: {
+      summary: {
+        value: "<text>",
+        help: "your note on what happens, not its prose, which goes in its own file",
+      },
+    },
     summary: "Add a scene at the end of the telling order.",
     example: [
       "add-scene",
@@ -633,7 +651,7 @@ export const EDITS: EditSpecs = {
   removeScene: {
     group: "Scenes: the telling",
     args: ["id"],
-    summary: "Remove a scene and links to it.",
+    summary: "Remove a scene and links to it. Its prose file is left alone.",
     example: ["remove-scene", "storm"],
     build: (a) => ({ type: "removeScene", id: a.arg("id") }),
   },
@@ -679,6 +697,19 @@ export const EDITS: EditSpecs = {
       type: "setScenePressures",
       id: a.arg("id"),
       pressures: a.rest(),
+    }),
+  },
+  setSceneLinks: {
+    group: "Scenes: the telling",
+    args: ["id", "how", "ref..."],
+    summary:
+      "Set the records the scene reveals (tells the reader), implies (lets the reader infer) or withholds (keeps back where the reader would expect it); none clears them. Any record or candidate can be linked.",
+    example: ["set-scene-links", "storm", "withholds", "event:letter"],
+    build: (a) => ({
+      type: "setSceneLinks",
+      id: a.arg("id"),
+      how: a.choice(a.arg("how"), SCENE_LINK_KINDS, "<how>"),
+      refs: a.restRefs(),
     }),
   },
 
@@ -995,6 +1026,7 @@ type ReadName =
   | "show"
   | "list"
   | "touches"
+  | "scenes"
   | "mentions"
   | "gaps"
   | "contradictions"
@@ -1042,6 +1074,13 @@ export const READS: Record<ReadName, Spec> = {
       "What a record or candidate is connected to: its declared links, plus one step further. Only declared links count; for what free text mentions, use mentions.",
     example: ["touches", "candidate:who-wrote/ferryman"],
   },
+  scenes: {
+    group: "Start and read",
+    args: ["ref"],
+    summary:
+      "The scenes that touch a record, in telling order, and how: who is in them, what they depict, pressure, open or answer, and what they reveal, imply or withhold. For a scene's own links, use show scene:<id>.",
+    example: ["scenes", "fact:seen-ashore"],
+  },
   mentions: {
     group: "Start and read",
     args: ["ref"],
@@ -1067,7 +1106,7 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: [],
     summary:
-      "The whole story as readable text with no IDs, then its word count.",
+      "The whole bible as readable text with no IDs, for you while you work. It is not the story and no reader sees it; the story is the scenes' prose.",
     example: ["render"],
   },
 };
@@ -1128,6 +1167,12 @@ export function helpText(): string {
     "a candidate is candidate:<question-id>/<candidate-id>. Lists of refs are",
     "comma-separated (--about actor:mara,event:wreck). Quote text with spaces.",
     "A link can only point at a record that exists, so add records first.",
+    "",
+    "The story file is your bible: what the story holds, for you, never shown",
+    "to a reader. A scene's prose goes in its own file, scenes/<scene-id>.md",
+    "beside the story file (show scene:<id> prints the path); write it there",
+    "with any editor. Link a scene to what it reveals, implies or withholds",
+    "with set-scene-links, and see the scenes that touch a record with scenes.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -1150,7 +1195,24 @@ export function helpText(): string {
 // ---------------------------------------------------------------------------
 // Reading.
 
-function showRecord(story: Story, ref: Ref): string[] {
+/**
+ * Where a scene's prose lives: `scenes/<scene-id>.md` beside the story file.
+ * The story file holds the bible; the prose is kept out of it.
+ */
+export function proseFile(storyPath: string, sceneId: string): string {
+  return join(dirname(storyPath), "scenes", `${sceneId}.md`);
+}
+
+/** `prose: scenes/storm.md (1840 words)`, or `(not written yet)`. */
+function proseLine(storyPath: string, sceneId: string): string {
+  const path = proseFile(storyPath, sceneId);
+  const words = readFile(path)
+    .map((text) => `${wordCount(text)} words`)
+    .unwrapOr("not written yet");
+  return `prose: ${path} (${words})`;
+}
+
+function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
   const field = (name: string, value: string) =>
     value.trim() === "" ? [] : [`${name}: ${value}`];
   const ids = (name: string, kind: RefKind, values: readonly string[]) =>
@@ -1258,6 +1320,8 @@ function showRecord(story: Story, ref: Ref): string[] {
         ...ids("actors", "actor", scene.actors),
         ...ids("depicts", "event", scene.depicts),
         ...ids("pressures", "drive", scene.pressures),
+        ...SCENE_LINK_KINDS.flatMap((how) => refs(how, scene[how])),
+        proseLine(storyPath, scene.id),
       ];
     }
     case "openQuestion": {
@@ -1498,6 +1562,7 @@ function runRead(
   name: ReadName,
   a: Reader,
   story: Story,
+  storyPath: string,
 ): Result<string[], Failure> {
   switch (name) {
     case "init":
@@ -1507,7 +1572,10 @@ function runRead(
         .mapErr(usageError)
         .andThen((ref) =>
           refExists(story, ref)
-            ? ok([...showRecord(story, ref), ...markLines(story, ref)])
+            ? ok([
+                ...showRecord(story, ref, storyPath),
+                ...markLines(story, ref),
+              ])
             : err(refused(`${formatRef(ref)} does not exist`)),
         );
     case "list": {
@@ -1540,6 +1608,20 @@ function runRead(
           "One step further:",
           ...touchLines(t.further),
         ]);
+    case "scenes":
+      return parseRef(a.arg("ref"))
+        .mapErr(usageError)
+        .andThen((ref) =>
+          scenesTouching(story, ref).mapErr((e) => refused(e.message)),
+        )
+        .map((found) =>
+          found.length === 0
+            ? ["No scene touches it."]
+            : found.map(
+                ({ scene, index, how }) =>
+                  `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}: ${how.join("; ")}`,
+              ),
+        );
     case "mentions":
       return parseRef(a.arg("ref"))
         .mapErr(usageError)
@@ -1580,10 +1662,8 @@ function runRead(
             ),
       );
     }
-    case "render": {
-      const text = renderStory(story);
-      return ok([text.trimEnd(), "", `(${wordCount(text)} words)`]);
-    }
+    case "render":
+      return ok([renderStory(story).trimEnd()]);
   }
 }
 
@@ -1620,7 +1700,7 @@ export function run(argv: readonly string[]): Result<Output, Failure> {
   if (isReadName(name)) {
     return parsed(READS[name], rest).andThen((a) =>
       loadStory(path)
-        .andThen((story) => runRead(name, a, story))
+        .andThen((story) => runRead(name, a, story, path))
         .map((lines) => ({ stdout: `${lines.join("\n")}\n` })),
     );
   }
