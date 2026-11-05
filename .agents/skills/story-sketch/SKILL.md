@@ -19,9 +19,9 @@ bun "$STORY_CLI" story.json init "<premise>"
 bun "$STORY_CLI" story.json <command> [arguments]
 ```
 
-If `STORY_CLI` is unset, stop and report that it is missing. Read `--help` once before you start; it
-is the reference for every command and the ref format (`actor:mara`,
-`candidate:who-wrote/ferryman`).
+If `STORY_CLI` is unset, stop and report that it is missing. Read `--help`
+once before you start; it is the reference for every command and the ref
+format (`actor:mara`, `candidate:who-wrote/ferryman`).
 
 Keep the story file, `story.json` unless you were told otherwise, in the git
 repository you're working in. Each edit is checked and written only if it
@@ -76,25 +76,27 @@ them off. Any record or candidate can be linked. `show scene:<id>` lists a
 scene's links, and `scenes <ref>` lists, in telling order, every scene that
 touches a record and how.
 
-## Before writing a scene
+## Writing a scene
 
-Ask the bible what the reader knows by then, rather than trusting memory:
+Before drafting, ask the bible what the reader knows by then, rather than
+trusting memory:
 
-- `reader-order --before <scene>` lists, in short labels, everything the
-  scenes before it have told the reader, with when it happened and how long
-  before the scene, and what they have held back. For a scene with a
+- `reader-order --before <scene>`, read whole, never through `head` or
+  `tail`: its early lines hold the setups. It lists, in short labels, what
+  earlier scenes have told the reader and when each happened, what they held
+  back, and each count's value as of the scene. For a scene with a
   viewpoint, it marks what the reader has been told that the viewpoint
   character doesn't know (`Mara doesn't know yet, believes version:fog`):
-  the dramatic irony the scene can play on. The marks come from knowledge
-  records. A record is marked only when someone's knowledge of it is
-  recorded and the viewpoint character holds none at the scene's latest
-  event, so record who knows a secret with `add-knowledge`.
-- `show` each event the scene depicts, and `span <event> <event>` for any
-  time the prose states ("three days since").
-- `show count:<id>` for any number the prose states.
+  the dramatic irony the scene can play on. A record is marked only when
+  someone's knowledge of it is recorded and the viewpoint character holds
+  none at the scene's latest event, so record who knows each secret with
+  `add-knowledge`, or nothing is marked.
+- `show` each event the scene depicts.
 
-After writing it, set its links, and after changing a record read what the
-edit prints (see `trace` below).
+After drafting, and before you commit the draft, check every number and
+stated time in its prose: `show count:<id>` for each number ("nearly
+half", "five boats") and `span <event> <event>` for each time ("three days
+since"). Then set the scene's links, and read what each edit prints.
 
 ## How the craft maps onto it
 
@@ -105,9 +107,8 @@ edit prints (see `trace` below).
   `--touches`, then **try it** with `touches candidate:<question>/<id>`.
   Choose an answer with `answer-open-question` once a satisfying one has
   emerged, then make what it implies with other commands. Logging a choice
-  you made on the spot, answer and ruled-out candidates in one go, is fine;
-  a question you're genuinely unsure of should stay undecided while you test
-  its candidates with `touches`.
+  made on the spot in one go is fine; a question you're unsure of stays
+  undecided while you test its candidates.
 - **Weigh in the file, not in your head.** Rule a candidate out with
   `reject-candidate who-wrote keeper --reason "He died before the wreck"`
   rather than removing it: it stays in the file with its reason. `--undo`
@@ -162,11 +163,10 @@ edit prints (see `trace` below).
   (`object:knife --role "the weapon"`).
 - **Who belongs to a group, and when.** A group is an actor (`add-actor crew
   "The crew" --kind organization`), and belonging to it is a membership:
-  `add-membership ivo-crew ivo crew --since signs-on --until wreck`.
-  Without `--since` they always have, and without `--until` they never
-  leave; someone who leaves and rejoins has a second membership. Set the
-  leaving later with `update-membership ivo-crew --until wreck`. `show
-  actor:ivo` lists the groups he belongs to, and `show actor:crew` its
+  `add-membership ivo-crew ivo crew --since signs-on --until wreck`, not an
+  event with a participant role. Without `--since` they always have, and
+  without `--until` they never leave; someone who rejoins has a second
+  membership. `show actor:ivo` lists his groups, and `show actor:crew` its
   members, each with when.
 - **A drive's life.** A want can end or change: `add-drive-turn find-sender
   satisfied --at letter`, `renounced`, `replaced --into <drive>` (a new want
@@ -180,43 +180,42 @@ edit prints (see `trace` below).
   `1954-10-12` or `"1954-10-12 21:00"`, each the span it names, and `--end`
   makes a range. Two events on one day can be ordered with `constrain ...
   before`; `--gap` takes a unit (`3d`, `2w`, `6h`, `4mo`), give or take half
-  that unit without `--tolerance`. Output prints dates, not fractions of a
-  year. `span <event> <event>` gives the time between two placed events in
-  calendar days. Knowledge `--since`/`--until` and turns `--at` name events,
-  so they follow the events wherever they are placed.
+  that unit without `--tolerance`. `span <event> <event>` gives the time
+  between two placed events in calendar days. Knowledge and membership
+  `--since`/`--until` and turns `--at` name events, so they follow the
+  events wherever they are placed.
 - **Counts.** A number the plot runs on, such as hands aboard or days of
   food left, is a count, not a fact: `add-count crew "Hands aboard"
   --total 12 --direction falls`, then `set-count crew wreck 3 --note "Nine
   drowned"` at each event where it changes. A value holds until the next
   one in story order. A total that itself changes is another count (`--of
   <count>`), and `--threshold 6` or `more-than-half` marks the value that
-  matters. `show count:crew` and `render` print the series and how far each
-  value is from the threshold. `contradictions` checks only a value above
-  its total and, with `--direction`, one that moves the other way.
-- **Rework** an event with `describe-event` (or `update-event`),
-  `set-position` or `constrain`, a motive with `update-drive` or
-  `set-drive-origins`, and see what it reaches with `touches`.
+  matters. After setting a count's series, read `show count:crew` once and
+  check each value, and how far it is from the threshold, against what
+  that event says: `contradictions` checks only a value above its total
+  and, with `--direction`, one that moves the other way.
 - **Find what a change left behind with `trace`.** After an edit that
-  changes a record, the CLI prints the top three suspects under "What may
-  still state the old ...": records and paragraphs of scene prose
-  (`scenes/<id>.md:<line>`) that may now be wrong, each with why, and how
-  many more `trace <ref>` would list. Adding a record, placing an event or
-  setting a count at an event for the first time prints none. `trace <ref>`
-  on its own lists everything that may depend on a record, likeliest first.
-  These are suspects, not verdicts: read each, fix what the change made
-  wrong, and leave the rest. `touches` (declared links only) and `mentions`
-  (text naming it only) are the narrower views it builds on.
+  changes a record (`describe-event`, `set-position`, `update-drive`), the
+  CLI prints the top three suspects under "What may still state the old
+  ...": records and paragraphs of scene prose (`scenes/<id>.md:<line>`)
+  that may now be wrong, each with why, and how many more `trace <ref>`
+  would list. `trace <ref>` on its own lists everything that may depend on
+  a record, likeliest first. These are suspects, not verdicts: read each,
+  fix what the change made wrong, and leave the rest. `touches` (declared
+  links only) and `mentions` (text naming it only) are the narrower views
+  it builds on.
 - **`gaps` is advisory: optional prompts, never a reason to delete.** Run it
-  now and then and act only on what is worth acting on. An empty list is
-  not a goal: don't add links or relations just to clear it, and never cut,
-  merge or unlink anything true. A minor character with no drive, an event
-  nothing refers to and a want nobody opposes all belong in the bible if
-  they are true. To mark a gap you have decided on, paste its `[gap ref]`
-  into `mark-gap-deliberate drive-without-origin drive:keep-quiet --reason
-  "He has always kept his own counsel"`, and `gaps` stops listing it.
+  now and then and act only on what is worth acting on. An empty list is not
+  a goal, and not a result to report: don't add links or relations just to
+  clear it, and never cut, merge or unlink anything true. A minor character
+  with no drive, an event nothing refers to and a want nobody opposes all
+  belong in the bible if they are true. To mark a gap you have decided on,
+  paste its `[gap ref]` into `mark-gap-deliberate drive-without-origin
+  drive:keep-quiet --reason "He has always kept his own counsel"`, and
+  `gaps` stops listing it.
 - **Read the bible with `render`**, which prints it as text with no IDs.
   `render --section events,scenes` prints only those sections; `--help`
-  lists the names. It says each thing once, and no reader sees it.
+  lists the names. It says each thing once.
 
 ## The model gaps log
 
@@ -230,5 +229,5 @@ judged, so it matters as much as the story.
 
 Commit the story file, the scene files and `model-gaps.md` after each
 meaningful change, in the git repository that holds the story, with a
-message that says what changed in the story ("The ferryman wrote the letter", not "update
-story.json").
+message that says what changed in the story ("The ferryman wrote the
+letter", not "update story.json").
