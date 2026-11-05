@@ -14,7 +14,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Render the story, not the links"
-updated_at: "2026-11-05T00:50:24.443713507+00:00"
+updated_at: "2026-11-05T00:57:16.467360564+00:00"
 ---
 
 ## Goal
@@ -29,3 +29,7 @@ The readable form says each thing once, so a sketch's length measures the story 
 - A decided question prints only its chosen answer; rejected candidates and superseded answers stay in the file and out of the render.
 - A test over a fixture with many links shows that adding the links, relations and satisfied constraints adds at most eight words per link; another shows a violated constraint still shows; `render`'s word count reflects the result.
 - `bun run check` passes.
+
+## Notes
+
+- 2026-11-04 [note] From review finding worldcrafter-4i9o: a working question must still show in the render as one line (the question, and that it's being weighed), so the judges can see alternatives were weighed; only its candidates drop out.
