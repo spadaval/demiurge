@@ -58,21 +58,35 @@ Say what each scene does with the bible:
   where a reader would expect to learn it.
 - `set-scene-links storm plants object:knife` and `set-scene-links duel
   pays-off object:knife`: what it sets up to matter later, and what it
-  brings back. Any record can be planted, but objects are the usual case:
-  `add-object knife "Doran's knife"` makes a thing the scenes can link to,
-  and `show object:knife` lists where it is planted and paid off.
+  brings back. Use them for a setup and its payoff, usually a thing (`add-object
+  knife "Doran's knife"`; `show object:knife` lists both ends), a promise or
+  a skill. A character's first and later appearances are reveals and scene
+  actors, not plants, and a record a scene already reveals needs no plant
+  as well unless its return is the point.
+- `set-scene-events storm wreck` says the scene depicts the event as it
+  really happened. A flashback through a false memory or a lie reveals that
+  version instead (`reveals version:fog`) and doesn't depict the event.
 
-Each command sets that kind of link for the scene, replacing the list;
-`none` clears it, and the edit names any ref it dropped. Add `--add` to add
-refs to the list (`set-scene-links storm plants --add object:knife`) or
-`--remove` to take them off, without retyping the rest. Any record or
-candidate can be linked. `show scene:<id>` lists a scene's links,
-and `scenes <ref>` lists, in telling order, every scene that touches a
-record and how: who is in it, what it depicts or pressures, which reader
-questions it opens or answers, and what it reveals, implies or withholds.
-Before writing a scene, check what the scenes before it have already
-revealed; after changing a record, `trace <ref>` lists the paragraphs of
-prose (and the records) that may need rereading.
+Each command replaces that kind of link; `none` clears it, and the edit
+names any ref it dropped. `--add` adds refs without retyping the list
+(`set-scene-links storm plants --add object:knife`) and `--remove` takes
+them off. Any record or candidate can be linked. `show scene:<id>` lists a
+scene's links, and `scenes <ref>` lists, in telling order, every scene that
+touches a record and how.
+
+## Before writing a scene
+
+Ask the bible what the reader knows by then, rather than trusting memory:
+
+- `reader-order --before <scene>` lists, in short labels, everything the
+  scenes before it have told the reader, with when it happened and how long
+  before the scene, and what they have held back.
+- `show` each event the scene depicts, and `span <event> <event>` for any
+  time the prose states ("twenty-six days since").
+- `show count:<id>` for any number the prose states.
+
+After writing it, set its links, and after changing a record read what the
+edit prints (see `trace` below).
 
 ## How the craft maps onto it
 
@@ -82,160 +96,113 @@ prose (and the records) that may need rereading.
   answers. Give each candidate the records it would bring in with
   `--touches`, then **try it** with `touches candidate:<question>/<id>`.
   Choose an answer with `answer-open-question` once a satisfying one has
-  emerged, then make what it implies with other commands.
-- **Weigh in the file, not in your head.** When you rule a candidate out,
-  say why with `reject-candidate who-wrote keeper --reason "He died before
-  the wreck"` rather than removing it: the candidate and its reason stay in
-  the file, and `show` and `render` list it as ruled out. `--undo` puts it
-  back in the running, and choosing it as the answer does too.
-- **Where a question stands.** `show open-question:who-wrote` prints its
-  state, and `render` gives each state its own section, headed "Open
-  questions: undecided" and so on (`render --section undecided` prints just
-  that one):
-  - *undecided* (`--section undecided`): no answer chosen yet. This is
-    your task.
+  emerged, then make what it implies with other commands. Logging a choice
+  you made on the spot, answer and ruled-out candidates in one go, is fine;
+  a question you're genuinely unsure of should stay undecided while you test
+  its candidates with `touches`.
+- **Weigh in the file, not in your head.** Rule a candidate out with
+  `reject-candidate who-wrote keeper --reason "He died before the wreck"`
+  rather than removing it: it stays in the file with its reason. `--undo`
+  puts it back in the running, and choosing it as the answer does too.
+- **Where a question stands.** `show open-question:<id>` prints its state,
+  and `render` gives each state its own section (`render --section
+  undecided`):
+  - *undecided* (`undecided`): no answer chosen yet. This is your task.
   - *decided, not revealed yet* (`decided`): you know the answer and no
     scene has told the reader.
   - *revealed in scene X* (`revealed`): the first scene, in telling order,
-    whose `set-scene-links ... reveals` names the question or its chosen
-    candidate.
+    whose `reveals` names the question or its chosen candidate.
   - *left open for the reader* (`left-open`): `leave-for-reader who-wrote
     --reason "..."` says the story never answers it, whether or not you
     have; `--undo` takes the mark off.
 
   Only undecided questions are prompts in `gaps`. A decided question no
-  scene reveals, or one left open, is a normal place to rest: a story leaves
-  most of its questions unanswered on the page, and nothing reports that as
-  a problem. The same goes for a reader question no scene answers.
+  scene reveals, one left open, or a reader question no scene answers is a
+  normal place to rest.
 - **Re-answering keeps the history.** Choosing a different candidate, or
-  `unanswer-open-question`, keeps the old answer as superseded, with what
-  replaced it. `show open-question:who-wrote` lists that history, and
-  `render` prints only the current answer. So rework an answer by answering
-  again; don't delete the question or its other candidates.
+  `unanswer-open-question`, keeps the old answer as superseded, and `show`
+  lists that history. So rework an answer by answering again; don't delete
+  the question or its other candidates.
 - **Who knows what, and the versions people tell.** An event's summary is
   what really happened. What someone says happened is a version beside it:
   `add-version fog wreck "The fog took her; nobody could have saved her"
-  --by ivo`. Hold as many versions of an event as there are tellers, whether
-  true, partial or lies. What a character knows or believes, from a point in
-  story time, is knowledge: `add-knowledge mara-fog mara believes
-  version:fog --since wreck --until letter`. It can be of a fact, a version,
-  an event or a candidate answer. Without `--since` it holds from the start,
-  and without `--until` it never stops. Times are events, so a belief starts
-  and ends with what happens. `show actor:mara` lists what she knows or
-  believes, and `show event:wreck` lists its versions. Removing a record
-  takes with it the versions and knowledge that depend on it: an event's
-  versions and participants, an actor's knowledge and parts in events, and
-  anyone's knowledge of the record. The edit lists them under "Also
-  removed", so rework by updating rather than removing when the account or
-  belief is still true. Knowledge that ends
-  before it starts is kept and reported by `contradictions`.
+  --by ivo`, as many as there are tellers, true, partial or lies. What a
+  character knows or believes is knowledge: `add-knowledge mara-fog mara
+  believes version:fog --since wreck --until letter`, of a fact, a version,
+  an event or a candidate. Without `--since` it holds from the start, and
+  without `--until` it never stops. `show actor:mara` lists what she knows
+  or believes. Removing a record takes the versions, knowledge and parts in
+  events that depend on it, and the edit lists them under "Also removed",
+  so rework by updating when the account or belief is still true.
 - **Telling order is not true order.** A scene tells the reader something by
   revealing or implying it: the fact, a version (the reader may believe a
-  lie for a while), or the knowledge itself (`set-scene-links docks reveals
-  knowledge:mara-fog` tells the reader that Mara believes it). `reader-order`
-  lists each scene in telling order with what it shows, reveals, implies or
-  withholds and when that is in story time. Then it lists the events in
-  story order with the first scene that tells the reader of each, through
-  the event itself, a version of it or someone's knowledge of it, and when
-  each character's knowledge starts. Use it to plan what the reader learns
-  when, and to check a scene doesn't give away what a later scene reveals.
-  `reader-order --before <scene>` is the short form for one scene: each
-  thing the scenes before it have told the reader, once, in a short label,
-  with when it happened and how long before the scene (the latest event the
-  scene shows), and what they have held back.
-- **Causes.** When one event happened because of another, record it with
-  `add-cause wreck letter` (the wreck caused the letter). Positions and
-  constraints only say what comes first; a cause says why. `render` says
-  "because of", `touches` follows causes both ways, and a move that puts an
-  effect before its cause, or a circle of causes, is kept and reported by
-  `contradictions`.
-- **Contradictions are kept.** A timeline edit that makes events contradict
-  each other is saved and the problem printed. A clash that isn't about time
-  can be an open question with `--conflict`.
+  lie for a while), or the knowledge itself (`reveals knowledge:mara-fog`
+  tells the reader that Mara believes it). `reader-order` lists each scene
+  in telling order with what it tells and when that is in story time, then
+  the events in story order with the first scene that tells the reader of
+  each. Use it to plan what the reader learns when, and to check a scene
+  doesn't give away what a later scene reveals.
+- **Causes.** `add-cause wreck letter` says the wreck caused the letter.
+  Positions and constraints only say what comes first; a cause says why.
+- **Contradictions are kept.** An edit that puts events out of order, an
+  effect before its cause, knowledge ending before it starts, or a count
+  above its total is saved and the problem printed; `contradictions` lists
+  them all. A clash that isn't about time can be an open question with
+  `--conflict`.
 - **Who takes part in an event.** `set-participant wreck actor:ivo --role
   "at the helm"` records who did it, who saw it, or which object was used
-  (`object:knife --role "the weapon"`), so a change of who did it can be
-  traced with `touches` instead of living only in a summary.
+  (`object:knife --role "the weapon"`). There is no membership record, so
+  when someone joins or leaves a group, add an event for it with them as a
+  participant (`--role "leaves the Gallery"`), and `show actor:` lists it.
 - **A drive's life.** A want can end or change: `add-drive-turn find-sender
   satisfied --at letter`, `renounced`, `replaced --into <drive>` (a new want
-  takes its place) or `flipped --into <drive>` (it turns into its opposite,
-  often against what it was allied with). Give the event where it turns
-  with `--at`, and a `--note`. A drive can turn more than once (met, then
-  given up) and one with no turns is still live. `show drive:<id>` lists
-  its life in order and `render` prints it under the want. So a want that
-  changes over the story is two drives, the first replaced by or flipped
-  into the second, each with its own relations.
-- **Time finer than a year.** `set-position` takes a year (`1954`, as
-  before) or a date: `1954-10` (that month), `1954-10-12` (that day) or
-  `"1954-10-12 21:00"` (that minute). A date is the span it names, so two
-  events on the same day can be ordered with `constrain ... before`, and
-  `set-position wreck 1954-10-12 --end 1954-10-14` spans days. `render`,
-  `show`, `list`, `reader-order` and `contradictions` print dates (`12 to
-  14 October 1954`) and gaps in units (`2 weeks`), not fractions of a
-  year. `constrain --gap` takes a unit too: `--gap 3d`, `2w`, `6h`, `4mo`;
-  without `--tolerance` it is give or take half that unit. Knowledge `--since` and `--until` and drive turns
-  `--at` name events, so they follow the events wherever they are placed.
-- **Counts.** A number the plot runs on, such as parts of a pact held,
-  soldiers left or days of food, is a count, not a fact:
-  `add-count crew "Hands aboard" --total 12 --direction falls`, then
-  `set-count crew wreck 3 --note "Nine drowned"` at each event where it
-  changes. A value holds until the next one in story order. A total that
-  itself changes is another count: `--of <count>`. `--threshold 6` or
-  `--threshold more-than-half` marks the value that matters, and each value
-  then says how far short of it it is. `show count:crew` and `render`
-  print the series; `show event:wreck` lists the counts set there; `trace`
-  follows a count to its events and to text stating its old values.
-  `contradictions` reports only two things: a value above its total, and,
-  with `--direction`, a value that moves the other way. Check the numbers
-  you write in prose against `show count:<id>`.
-- **How long between.** `span bakehouse heist` prints the time from one
-  placed event to the other in calendar days ("27 days"), with months or
-  years beside long spans. Use it before writing "twenty-six days later".
-- **Rework** a motive with `update-drive` or `set-drive-origins`, an event
-  with `describe-event` (or its other name, `update-event`), `set-position`
-  or `constrain`, and see what it reaches with `touches`.
+  takes its place) or `flipped --into <drive>` (it turns into its opposite).
+  `--into` names another drive of the same holder: a character who comes to
+  share someone else's want gets a new drive of their own, allied to it.
+  Give the event with `--at` and a `--note`. A drive can turn more than
+  once, and one with no turns is still live; `show drive:<id>` lists its
+  life.
+- **Time.** `set-position` takes a year (`1954`) or a date: `1954-10`,
+  `1954-10-12` or `"1954-10-12 21:00"`, each the span it names, and `--end`
+  makes a range. Two events on one day can be ordered with `constrain ...
+  before`; `--gap` takes a unit (`3d`, `2w`, `6h`, `4mo`), give or take half
+  that unit without `--tolerance`. Output prints dates, not fractions of a
+  year. `span <event> <event>` gives the time between two placed events in
+  calendar days. Knowledge `--since`/`--until` and turns `--at` name events,
+  so they follow the events wherever they are placed.
+- **Counts.** A number the plot runs on, such as parts of a pact held or
+  soldiers left, is a count, not a fact: `add-count crew "Hands aboard"
+  --total 12 --direction falls`, then `set-count crew wreck 3 --note "Nine
+  drowned"` at each event where it changes. A value holds until the next
+  one in story order. A total that itself changes is another count (`--of
+  <count>`), and `--threshold 6` or `more-than-half` marks the value that
+  matters. `show count:crew` and `render` print the series and how far each
+  value is from the threshold. `contradictions` checks only a value above
+  its total and, with `--direction`, one that moves the other way.
+- **Rework** an event with `describe-event` (or `update-event`),
+  `set-position` or `constrain`, a motive with `update-drive` or
+  `set-drive-origins`, and see what it reaches with `touches`.
 - **Find what a change left behind with `trace`.** After an edit that
-  changes a record (moving or rewording an event, updating an actor, drive,
-  fact, version, knowledge or object, re-answering a question, a drive
-  turn), the CLI prints the top three of `trace` under "What may still
-  state the old ...": records and paragraphs of scene prose
-  (`scenes/<id>.md:<line>`) that may now be wrong, each with why it is
-  suspected, and how many more `trace` would list. Adding a record, or
-  placing an event for the first time, prints none, since nothing can yet
-  state an old version of it. It looks only for
-  what the change took away: the old name or year if those changed, words
-  the old text had that the new lacks, and for a moved event spans such as
-  "ten years since" (and says when the span matches the gap to another
-  event). A scene file is listed there only by a paragraph whose text
-  matched, never just because the scene touches the record. `trace <ref>`
-  on its own lists everything that may depend on a
-  record, likeliest first: its declared links and one step on, consequences
-  through causes, versions and knowledge of it, text naming it, free text
-  and prose sharing its distinctive words, the prose of scenes that touch
-  it, and scenes revealing an answer since replaced. These are suspects, not
-  verdicts: read each, fix what the change made wrong, and leave the rest.
-  Nothing is rewritten for you. `touches` (declared links only) and
-  `mentions` (text naming it only) are the narrower views `trace` builds on.
+  changes a record, the CLI prints the top three suspects under "What may
+  still state the old ...": records and paragraphs of scene prose
+  (`scenes/<id>.md:<line>`) that may now be wrong, each with why, and how
+  many more `trace <ref>` would list. Adding a record, placing an event or
+  setting a count at an event for the first time prints none. `trace <ref>`
+  on its own lists everything that may depend on a record, likeliest first.
+  These are suspects, not verdicts: read each, fix what the change made
+  wrong, and leave the rest. `touches` (declared links only) and `mentions`
+  (text naming it only) are the narrower views it builds on.
 - **`gaps` is advisory: optional prompts, never a reason to delete.** Run it
-  now and then to see where you could add a link or a record, and act only on
-  what is worth acting on. Never cut, merge or unlink anything true to clear
-  a gap: a minor character with no drive, an event or fact that nothing else
-  refers to, and a want nobody opposes all belong in the bible if they are
-  true of the world. `contradictions` is the same: prompts, not a to-do list.
-  When a gap is a choice and you want it out of the list, say so: each gap
-  ends with a `[gap ref]` to paste into `mark-gap-deliberate
-  drive-without-origin drive:keep-quiet --reason "He has always kept his own
-  counsel"`. The mark and its reason stay in the story file, and `gaps`
-  stops listing it. Mark only what you have decided, not what you haven't
-  got to yet.
-- **Read the whole bible with `render`**, which prints it as text with no
-  IDs, for you to check what it holds and how it hangs together. `render
-  --section events,scenes` prints only those sections; `--help` lists the
-  section names. It is not
-  the story and no reader sees it. It says each thing once: a want in full
-  under its holder, and briefly elsewhere; a relation once; a constraint
-  only when the positions don't already show it; a decided question as its
-  answer alone; and each scene's links after the scene.
+  now and then and act only on what is worth acting on. An empty list is
+  not a goal: don't add links or relations just to clear it, and never cut,
+  merge or unlink anything true. A minor character with no drive, an event
+  nothing refers to and a want nobody opposes all belong in the bible if
+  they are true. To mark a gap you have decided on, paste its `[gap ref]`
+  into `mark-gap-deliberate drive-without-origin drive:keep-quiet --reason
+  "He has always kept his own counsel"`, and `gaps` stops listing it.
+- **Read the bible with `render`**, which prints it as text with no IDs.
+  `render --section events,scenes` prints only those sections; `--help`
+  lists the names. It says each thing once, and no reader sees it.
 
 ## The model gaps log
 
