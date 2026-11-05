@@ -605,6 +605,19 @@ describe("a session's own saved tool results", () => {
       "/home/writer/.claude.json",
     ]);
   });
+  test("a spill path the judge names in its own message is still flagged", () => {
+    const named = own.replace("b6l1z88u1", "named0001");
+    const text = JSON.stringify({
+      type: "assistant",
+      message: {
+        model: "claude-opus-5-5",
+        content: [{ type: "text", text: saved(named) }],
+      },
+    });
+    const lines = [text, use("2", "Read", { file_path: named })];
+    expect(persistedOutputs(lines.join("\n"), runDir)).toEqual([]);
+    expect(flagged(lines)).toEqual([named]);
+  });
   test("a path named outside this run dir's project, or by the session itself, doesn't count", () => {
     const elsewhere = own.replace("-tmp-judge-Dpoxx8", "-tmp-judge-other");
     const lines = [
