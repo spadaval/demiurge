@@ -314,6 +314,23 @@ describe("constraints in the render", () => {
         duration: ten,
       }),
     ).toBe("10 years before The famine");
+    // Two decades as long as each other: the gap runs from the end of the
+    // war to the start of the rebuilding, anything from 10 to 30 years.
+    const wide = (amount: number): StoryCommand => ({
+      type: "constrain",
+      id: "c",
+      a: "b",
+      relation: "after",
+      b: "a",
+      duration: { amount, frame: "world" },
+    });
+    const decades = [at("a", 1200, 1210), at("b", 1220, 1230)];
+    expect(renderStory(run(events, ...decades, wide(20)))).toContain(
+      "[20 years after The flood]",
+    );
+    expect(renderStory(run(events, ...decades, wide(10)))).toContain(
+      "[10 years after The flood]",
+    );
     // A position is somewhere within its span, so a year inside a decade
     // isn't known to fall during an event placed in that decade.
     expect(

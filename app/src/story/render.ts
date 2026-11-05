@@ -292,9 +292,11 @@ const DEFAULT_TOLERANCE = 0.5;
  * contradict, isn't satisfied.
  *
  * A gap is settled when the positions put it within the stated amount, give
- * or take its tolerance. Two events placed with equal precision (two points,
- * or two whole years) are that far apart when their starts are: 1203 and 1213
- * are ten years apart. Otherwise every gap their positions allow must fit.
+ * or take its tolerance. Two events placed no more precisely than a unit
+ * (points, or whole years) are that far apart when their starts are: 1203
+ * and 1213 are ten years apart. For longer spans the gap runs from the end of
+ * the earlier to the start of the later, so every gap their positions allow
+ * must fit: 1200 to 1210 and 1220 to 1230 could be 10 to 30 years apart.
  */
 function satisfiedBy(placed: Chronology, c: Constraint): boolean {
   const point = (event: string, end: "start" | "end") =>
@@ -337,7 +339,9 @@ function satisfiedBy(placed: Chronology, c: Constraint): boolean {
       const tolerance = duration.tolerance ?? DEFAULT_TOLERANCE;
       const fits = (gap: number) =>
         Math.abs(gap - duration.amount) <= tolerance + 1e-9;
-      return from.end - from.start === to.end - to.start
+      const withinAUnit = (span: { start: number; end: number }) =>
+        span.end - span.start <= 1;
+      return withinAUnit(from) && withinAUnit(to)
         ? fits(to.start - from.start)
         : fits(to.start - from.end) && fits(to.end - from.start);
     }
