@@ -18,14 +18,26 @@ import {
 } from "../src/story/commands";
 import { storyContradictions } from "../src/story/contradictions";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
+import {
+  type FirstTold,
+  knowledgeAlways,
+  tellingOrder,
+  trueOrder,
+} from "../src/story/learning";
 import { type Mention, whatMentions } from "../src/story/mentions";
-import { renderStory, wordCount } from "../src/story/render";
+import { eventTime, renderStory, wordCount } from "../src/story/render";
 import { scenesTouching } from "../src/story/scenes";
 import {
+  type Candidate,
   GAP_KINDS,
   type GapKind,
+  KNOWLEDGE_HOWS,
+  type Knowledge,
   newStory,
+  type OpenQuestion,
   parseStory,
+  type QuestionState,
+  questionState,
   type Ref,
   type RefKind,
   refExists,
@@ -53,6 +65,8 @@ const KIND_NAMES: Record<Ref["kind"], string> = {
   scene: "scene",
   openQuestion: "open-question",
   candidate: "candidate",
+  version: "version",
+  knowledge: "knowledge",
 };
 
 const REF_KIND_BY_NAME = new Map(
@@ -230,6 +244,20 @@ class Reader {
     return n;
   }
 
+  /** One ref; a bad one is recorded and an actor ref returned. */
+  ref(value: string): Ref {
+    const ref = parseRef(value);
+    if (ref.isOk()) return ref.value;
+    this.errors.push(ref.error);
+    return { kind: "actor", id: "" };
+  }
+
+  /** An event ID, or null for `none`. */
+  eventOrNone(flag: string): string | null | undefined {
+    const value = this.text(flag);
+    return value === undefined ? undefined : orNone(value);
+  }
+
   /** One ref, or null for `story`. */
   refOrStory(value: string): Ref | null {
     if (value === "story") return null;
@@ -250,6 +278,15 @@ class Reader {
   }
 
   /** A comma-separated list of refs; an empty string is an empty list. */
+  /** A comma-separated list of IDs; an empty string is an empty list. */
+  list(flag: string): string[] | undefined {
+    return this.text(flag)
+      ?.split(",")
+      .map((part) => part.trim())
+      .filter((part) => part !== "");
+  }
+
+  /** A comma-separated list of refs; an empty string is an empty list. */
   refs(flag: string): Ref[] | undefined {
     const value = this.text(flag);
     if (value === undefined) return undefined;
@@ -266,6 +303,10 @@ class Reader {
 
 /** `drive_without_origin` as the command line writes it: `drive-without-origin`. */
 const gapName = (kind: GapKind) => kind.replaceAll("_", "-");
+
+/** Printed above the gaps, so a list of them doesn't read as a to-do list. */
+const GAPS_ADVISORY =
+  "Optional prompts, not problems: places you could add a link or a record. None is a reason to cut or merge anything true; a record can stay unlinked.";
 
 type EditSpec<C extends StoryCommand> = Spec & {
   build: (a: Reader, story: Story) => C;
@@ -355,7 +396,8 @@ export const EDITS: EditSpecs = {
   removeActor: {
     group: "Actors: people and groups",
     args: ["id"],
-    summary: "Remove an actor. Their drives stay, held by nobody.",
+    summary:
+      "Remove an actor. Their drives stay, held by nobody; what they know or believe goes, and they stop telling any version. Any knowledge of the actor goes too, with links to that; the edit lists what went.",
     example: ["remove-actor", "mara"],
     build: (a) => ({ type: "removeActor", id: a.arg("id") }),
   },
@@ -404,7 +446,8 @@ export const EDITS: EditSpecs = {
   removeEvent: {
     group: "Events: what happens in story time",
     args: ["id"],
-    summary: "Remove an event, its position and constraints, and links to it.",
+    summary:
+      "Remove an event, its position and constraints, and links to it. Its versions go, and any knowledge of it or of them, with links to those; knowledge held from or until it loses that time. The edit lists what went.",
     example: ["remove-event", "wreck"],
     build: (a) => ({ type: "removeEvent", id: a.arg("id") }),
   },
@@ -571,7 +614,8 @@ export const EDITS: EditSpecs = {
   removeDrive: {
     group: "Drives: what someone wants",
     args: ["id"],
-    summary: "Remove a drive and every link to it.",
+    summary:
+      "Remove a drive and every link to it. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-drive", "find-sender"],
     build: (a) => ({ type: "removeDrive", id: a.arg("id") }),
   },
@@ -651,7 +695,8 @@ export const EDITS: EditSpecs = {
   removeScene: {
     group: "Scenes: the telling",
     args: ["id"],
-    summary: "Remove a scene and links to it. Its prose file is left alone.",
+    summary:
+      "Remove a scene and links to it. Its prose file is left alone. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-scene", "storm"],
     build: (a) => ({ type: "removeScene", id: a.arg("id") }),
   },
@@ -757,7 +802,8 @@ export const EDITS: EditSpecs = {
   removeFact: {
     group: "Facts: plain statements about the world",
     args: ["id"],
-    summary: "Remove a fact.",
+    summary:
+      "Remove a fact. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-fact", "seen-ashore"],
     build: (a) => ({ type: "removeFact", id: a.arg("id") }),
   },
@@ -791,7 +837,8 @@ export const EDITS: EditSpecs = {
   removeReaderQuestion: {
     group: "Reader questions: what the reader waits to find out",
     args: ["id"],
-    summary: "Remove a reader question.",
+    summary:
+      "Remove a reader question. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-reader-question", "sender"],
     build: (a) => ({ type: "removeReaderQuestion", id: a.arg("id") }),
   },
@@ -824,7 +871,7 @@ export const EDITS: EditSpecs = {
   },
 
   addOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["id", "question"],
     flags: {
       about: refList("what it's about"),
@@ -847,7 +894,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   updateOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["id"],
     flags: {
       question: text,
@@ -870,14 +917,15 @@ export const EDITS: EditSpecs = {
     },
   },
   removeOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["id"],
-    summary: "Remove an open question and its candidates.",
+    summary:
+      "Remove an open question and its candidates. Any knowledge of the question or a candidate goes too, with links to that; the edit lists what went.",
     example: ["remove-open-question", "who-wrote"],
     build: (a) => ({ type: "removeOpenQuestion", id: a.arg("id") }),
   },
   addCandidate: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id", "answer"],
     flags: { touches: refList("what it would connect to") },
     summary:
@@ -899,7 +947,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   updateCandidate: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id"],
     flags: { answer: text, touches: refList("replaces what it would touch") },
     summary: "Change a candidate answer.",
@@ -923,9 +971,10 @@ export const EDITS: EditSpecs = {
     },
   },
   removeCandidate: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id"],
-    summary: "Remove a candidate answer.",
+    summary:
+      "Remove a candidate answer. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-candidate", "who-wrote", "ferryman"],
     build: (a) => ({
       type: "removeCandidate",
@@ -934,7 +983,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   answerOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "candidate-id"],
     summary:
       "Choose a candidate. An answer it replaces is kept as superseded, which show lists and render leaves out. Nothing else changes: make what it implies with other commands.",
@@ -946,30 +995,195 @@ export const EDITS: EditSpecs = {
     }),
   },
   unanswerOpenQuestion: {
-    group: "Open questions: what isn't decided yet",
+    group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id"],
     summary: "Make the question open again. The answer is kept as superseded.",
     example: ["unanswer-open-question", "who-wrote"],
     build: (a) => ({ type: "unanswerOpenQuestion", id: a.arg("question-id") }),
   },
-  setOpenQuestionWorking: {
-    group: "Open questions: what isn't decided yet",
-    args: ["question-id"],
+  rejectCandidate: {
+    group: "Open questions: undecided, decided, left open or revealed",
+    args: ["question-id", "candidate-id"],
     flags: {
-      stop: { bool: true, help: "stop weighing, so render shows them again" },
+      reason: { value: "<text>", help: "why it's ruled out" },
+      undo: { bool: true, help: "put it back in the running" },
     },
     summary:
-      "Mark the question as being weighed: render shows it in one line and leaves out its candidates, which stay in the file. Refused on an answered question; answering clears the mark.",
-    example: ["set-open-question-working", "who-wrote"],
+      "Rule a candidate out. It stays in the file with its reason, and show and render list it as ruled out. Refused on the chosen answer; answering with a ruled-out candidate puts it back.",
+    example: [
+      "reject-candidate",
+      "who-wrote",
+      "ferryman",
+      "--reason",
+      "He was at sea the night it was posted",
+    ],
+    build: (a) => {
+      const undo = a.bool("undo") === true;
+      const reason = a.text("reason");
+      if (undo === (reason !== undefined)) {
+        a.errors.push("give --reason <text> or --undo");
+      }
+      return {
+        type: "rejectCandidate",
+        questionId: a.arg("question-id"),
+        id: a.arg("candidate-id"),
+        reason: undo ? null : (reason ?? ""),
+      };
+    },
+  },
+  leaveForReader: {
+    group: "Open questions: undecided, decided, left open or revealed",
+    args: ["question-id"],
+    flags: {
+      reason: { value: "<text>", help: "why the story never answers it" },
+      undo: { bool: true, help: "take the mark off" },
+    },
+    summary:
+      "Leave the question open for the reader on purpose, answered by you or not. Until a scene reveals it, it is listed as left open, and gaps and contradictions don't report it.",
+    example: [
+      "leave-for-reader",
+      "who-wrote",
+      "--reason",
+      "The ending works only if the reader can't be sure",
+    ],
+    build: (a) => {
+      const undo = a.bool("undo") === true;
+      const reason = a.text("reason");
+      if (undo === (reason !== undefined)) {
+        a.errors.push("give --reason <text> or --undo");
+      }
+      return {
+        type: "leaveForReader",
+        id: a.arg("question-id"),
+        reason: undo ? null : (reason ?? ""),
+      };
+    },
+  },
+
+  addVersion: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id", "event-id", "text"],
+    flags: { by: { value: "<actor,actor,...>", help: "who tells it" } },
+    summary:
+      "Add one account of an event, beside the event's own summary (what really happened) and any other versions. It can be true, partial or a lie.",
+    example: [
+      "add-version",
+      "ivo-wreck",
+      "wreck",
+      "The boat hit the rocks in the fog; nobody could have saved it",
+      "--by",
+      "ivo",
+    ],
     build: (a) => ({
-      type: "setOpenQuestionWorking",
-      id: a.arg("question-id"),
-      working: a.bool("stop") !== true,
+      type: "addVersion",
+      id: a.arg("id"),
+      event: a.arg("event-id"),
+      text: a.arg("text"),
+      by: a.list("by") ?? [],
     }),
+  },
+  updateVersion: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    flags: {
+      event: { value: "<event-id>" },
+      text,
+      by: { value: "<actor,actor,...>", help: '"" for nobody' },
+    },
+    summary: "Change a version's event, text or tellers.",
+    example: ["update-version", "ivo-wreck", "--by", "ivo,mara"],
+    build: (a) => {
+      const event = a.text("event");
+      const text = a.text("text");
+      const by = a.list("by");
+      return {
+        type: "updateVersion",
+        id: a.arg("id"),
+        ...(event === undefined ? {} : { event }),
+        ...(text === undefined ? {} : { text }),
+        ...(by === undefined ? {} : { by }),
+      };
+    },
+  },
+  removeVersion: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    summary:
+      "Remove a version, knowledge of it, and links to both; the edit lists the knowledge that went.",
+    example: ["remove-version", "ivo-wreck"],
+    build: (a) => ({ type: "removeVersion", id: a.arg("id") }),
+  },
+  addKnowledge: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id", "actor-id", "how", "ref"],
+    flags: {
+      since: { value: "<event-id>", help: "from when, in story time" },
+      until: { value: "<event-id>", help: "until when" },
+    },
+    summary:
+      "Say an actor knows or believes a record: a fact, a version of an event, an event, a candidate answer. Without --since it holds from the start. To tell the reader, have a scene reveal knowledge:<id>.",
+    example: [
+      "add-knowledge",
+      "mara-doubts",
+      "mara",
+      "believes",
+      "version:ivo-wreck",
+      "--since",
+      "letter",
+    ],
+    build: (a) => {
+      const since = a.text("since");
+      const until = a.text("until");
+      return {
+        type: "addKnowledge",
+        id: a.arg("id"),
+        actor: a.arg("actor-id"),
+        how: a.choice(a.arg("how"), KNOWLEDGE_HOWS, "<how>"),
+        what: a.ref(a.arg("ref")),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+      };
+    },
+  },
+  updateKnowledge: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    flags: {
+      how: { value: "knows|believes" },
+      what: { value: "<ref>" },
+      since: { value: "<event-id>", help: "none clears it" },
+      until: { value: "<event-id>", help: "none clears it" },
+    },
+    summary: "Change what an actor knows or believes, or from and until when.",
+    example: ["update-knowledge", "mara-doubts", "--until", "none"],
+    build: (a) => {
+      const how = a.text("how");
+      const what = a.text("what");
+      const since = a.eventOrNone("since");
+      const until = a.eventOrNone("until");
+      return {
+        type: "updateKnowledge",
+        id: a.arg("id"),
+        ...(how === undefined
+          ? {}
+          : { how: a.choice(how, KNOWLEDGE_HOWS, "--how") }),
+        ...(what === undefined ? {} : { what: a.ref(what) }),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+      };
+    },
+  },
+  removeKnowledge: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    summary:
+      "Remove what an actor knows or believes, and links to it. Knowledge of that knowledge goes too; the edit lists it.",
+    example: ["remove-knowledge", "mara-doubts"],
+    build: (a) => ({ type: "removeKnowledge", id: a.arg("id") }),
   },
 
   markGapDeliberate: {
-    group: "Gaps: what isn't woven in yet",
+    group: "Gaps: optional prompts",
     args: ["gap", "ref"],
     flags: {
       reason: { value: "<text>", help: "why it's fine", required: true },
@@ -991,7 +1205,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   unmarkGapDeliberate: {
-    group: "Gaps: what isn't woven in yet",
+    group: "Gaps: optional prompts",
     args: ["gap", "ref"],
     summary: "Remove the mark, so gaps lists the gap again.",
     example: [
@@ -1027,6 +1241,7 @@ type ReadName =
   | "list"
   | "touches"
   | "scenes"
+  | "reader-order"
   | "mentions"
   | "gaps"
   | "contradictions"
@@ -1042,6 +1257,8 @@ const LIST_KINDS = [
   "reader-question",
   "open-question",
   "candidate",
+  "version",
+  "knowledge",
 ] as const;
 
 export const READS: Record<ReadName, Spec> = {
@@ -1081,6 +1298,13 @@ export const READS: Record<ReadName, Spec> = {
       "The scenes that touch a record, in telling order, and how: who is in them, what they depict, pressure, open or answer, and what they reveal, imply or withhold. For a scene's own links, use show scene:<id>.",
     example: ["scenes", "fact:seen-ashore"],
   },
+  "reader-order": {
+    group: "Start and read",
+    args: [],
+    summary:
+      "The order the reader learns things in, beside the order they happen: each scene in telling order with what it shows, reveals, implies or withholds and when that is in story time; then events in story order, each with the first scene that tells the reader of it (itself, a version of it, or someone's knowledge of it) and the knowledge that starts then.",
+    example: ["reader-order"],
+  },
   mentions: {
     group: "Start and read",
     args: ["ref"],
@@ -1092,14 +1316,14 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: [],
     summary:
-      "What isn't woven in yet, each with its [gap ref] for mark-gap-deliberate. Prompts, not a to-do list.",
+      "Optional prompts: what you could still link or add, each with its [gap ref] for mark-gap-deliberate. Advisory, not a to-do list, and never a reason to cut or merge anything true.",
     example: ["gaps"],
   },
   contradictions: {
     group: "Start and read",
     args: [],
     summary:
-      "Timeline problems, effects placed before their causes, circles of causes, and open questions marked as conflicts.",
+      "Timeline problems, effects placed before their causes, circles of causes, knowledge that ends before it starts, and open questions marked as conflicts.",
     example: ["contradictions"],
   },
   render: {
@@ -1173,6 +1397,13 @@ export function helpText(): string {
     "beside the story file (show scene:<id> prints the path); write it there",
     "with any editor. Link a scene to what it reveals, implies or withholds",
     "with set-scene-links, and see the scenes that touch a record with scenes.",
+    "",
+    "What a character knows or believes, and from when in story time, is",
+    "knowledge (add-knowledge); the accounts different people give of an event",
+    "are versions (add-version), held beside the event's own summary, which is",
+    "what really happened. A scene tells the reader one by revealing it, and",
+    "reader-order lists what the reader learns in telling order beside the",
+    "order things happen.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -1240,6 +1471,18 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           "drive",
           story.drives.filter((d) => d.actorId === actor.id).map((d) => d.id),
         ),
+        ...ids(
+          "knows or believes",
+          "knowledge",
+          story.knowledge.filter((k) => k.actor === actor.id).map((k) => k.id),
+        ),
+        ...ids(
+          "tells",
+          "version",
+          story.versions
+            .filter((v) => v.by.includes(actor.id))
+            .map((v) => v.id),
+        ),
       ];
     }
     case "drive": {
@@ -1306,6 +1549,21 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           "event",
           story.causes.filter((c) => c.cause === event.id).map((c) => c.effect),
         ),
+        ...ids(
+          "versions",
+          "version",
+          story.versions.filter((v) => v.event === event.id).map((v) => v.id),
+        ),
+        ...ids(
+          "knowledge from then",
+          "knowledge",
+          story.knowledge.filter((k) => k.since === event.id).map((k) => k.id),
+        ),
+        ...ids(
+          "knowledge until then",
+          "knowledge",
+          story.knowledge.filter((k) => k.until === event.id).map((k) => k.id),
+        ),
       ];
     }
     case "scene": {
@@ -1331,12 +1589,17 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...head,
         `question: ${q.question}`,
         ...(q.conflict ? ["conflict: yes"] : []),
-        ...(q.working === true ? ["working: yes"] : []),
+        `state: ${stateText(questionState(story, q))}`,
+        ...(q.leftOpen === undefined
+          ? []
+          : [
+              `left open for the reader${q.leftOpen.trim() === "" ? "" : `: ${q.leftOpen}`}`,
+            ]),
         ...refs("about", q.about),
         ...(q.candidates.length === 0 ? ["candidates: none"] : ["candidates:"]),
         ...q.candidates.map(
           (c) =>
-            `  ${formatRef({ kind: "candidate", questionId: q.id, id: c.id })}${c.id === q.answer ? " (chosen)" : ""}: ${c.answer}`,
+            `  ${formatRef({ kind: "candidate", questionId: q.id, id: c.id })}${candidateMark(q, c)}: ${c.answer}`,
         ),
         ...((q.superseded ?? []).length === 0
           ? []
@@ -1345,6 +1608,38 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           (old) =>
             `  ${old.candidate}: ${old.answer} (${old.by === undefined ? "unanswered" : `replaced by ${formatRef({ kind: "candidate", questionId: q.id, id: old.by })}`})`,
         ),
+      ];
+    }
+    case "version": {
+      const version = story.versions.find((v) => v.id === ref.id);
+      if (version === undefined) return head;
+      return [
+        ...head,
+        `text: ${version.text}`,
+        `event: ${describe(story, { kind: "event", id: version.event })}`,
+        ...ids("told by", "actor", version.by),
+        ...ids(
+          "held by",
+          "knowledge",
+          story.knowledge
+            .filter(
+              (k) => k.what.kind === "version" && k.what.id === version.id,
+            )
+            .map((k) => k.id),
+        ),
+      ];
+    }
+    case "knowledge": {
+      const k = story.knowledge.find((x) => x.id === ref.id);
+      if (k === undefined) return head;
+      return [
+        ...head,
+        `actor: ${describe(story, { kind: "actor", id: k.actor })}`,
+        `${k.how}: ${describe(story, k.what)}`,
+        k.since === undefined
+          ? "since: the start"
+          : `since: ${describe(story, { kind: "event", id: k.since })}`,
+        ...ids("until", "event", k.until === undefined ? [] : [k.until]),
       ];
     }
     case "candidate": {
@@ -1356,10 +1651,33 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         `answer: ${c.answer}`,
         `question: ${describe(story, { kind: "openQuestion", id: q.id })}`,
         ...(c.id === q.answer ? ["chosen: yes"] : []),
+        ...(c.rejected === undefined ? [] : [`ruled out: ${c.rejected}`]),
         ...refs("touches", c.touches),
       ];
     }
   }
+}
+
+/** `revealed in scene:docks`, `left open for the reader`, and so on. */
+function stateText(state: QuestionState): string {
+  switch (state.state) {
+    case "undecided":
+      return "undecided";
+    case "decided":
+      return "decided, not revealed yet";
+    case "left_open":
+      return "left open for the reader";
+    case "revealed":
+      return `revealed in scene:${state.scene}`;
+  }
+}
+
+/** ` (chosen)`, ` (ruled out: reason)` or nothing. */
+function candidateMark(q: OpenQuestion, c: Candidate): string {
+  if (c.id === q.answer) return " (chosen)";
+  return c.rejected === undefined
+    ? ""
+    : ` (ruled out${c.rejected.trim() === "" ? "" : `: ${c.rejected}`})`;
 }
 
 /** The record's deliberate gaps, with their reasons. */
@@ -1421,16 +1739,101 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
     case "open-question":
       return story.openQuestions.map(
         (q) =>
-          `${line({ kind: "openQuestion", id: q.id })}${q.answer === undefined ? "" : " (answered)"}${q.conflict ? " (conflict)" : ""}${q.working === true ? " (working)" : ""}`,
+          `${line({ kind: "openQuestion", id: q.id })} (${stateText(questionState(story, q))})${q.conflict ? " (conflict)" : ""}`,
       );
+    case "version":
+      return story.versions.map(
+        (v) =>
+          `${line({ kind: "version", id: v.id })} of ${formatRef({ kind: "event", id: v.event })}`,
+      );
+    case "knowledge":
+      return story.knowledge.map((k) => line({ kind: "knowledge", id: k.id }));
     case "candidate":
       return story.openQuestions.flatMap((q) =>
         q.candidates.map(
           (c) =>
-            `${line({ kind: "candidate", questionId: q.id, id: c.id })}${c.id === q.answer ? " (chosen)" : ""}`,
+            `${line({ kind: "candidate", questionId: q.id, id: c.id })}${candidateMark(q, c)}`,
         ),
       );
   }
+}
+
+/** ` at year 30`, or nothing for a record with no place in story time. */
+function storyTime(story: Story, ref: Ref): string {
+  const at = (id: string | undefined) => {
+    if (id === undefined) return undefined;
+    return eventTime(story, id) ?? "an unplaced time";
+  };
+  switch (ref.kind) {
+    case "event": {
+      const time = at(ref.id);
+      return time === undefined ? "" : ` at ${time}`;
+    }
+    case "version": {
+      const event = story.versions.find((v) => v.id === ref.id)?.event;
+      return event === undefined
+        ? ""
+        : `, of ${formatRef({ kind: "event", id: event })} at ${at(event)}`;
+    }
+    case "knowledge": {
+      const since = story.knowledge.find((k) => k.id === ref.id)?.since;
+      return since === undefined
+        ? ", held from the start"
+        : `, held from ${formatRef({ kind: "event", id: since })} at ${at(since)}`;
+    }
+    default:
+      return "";
+  }
+}
+
+function firstToldText(story: Story, first: FirstTold | undefined): string {
+  if (first === undefined) return "no scene tells the reader";
+  const scene = `${first.index + 1}. ${describe(story, { kind: "scene", id: first.scene.id })}`;
+  const account =
+    first.via.kind === "version"
+      ? " (an account, maybe not what happened)"
+      : "";
+  return `first told in ${scene}, which ${first.how} ${formatRef(first.via)}${account}`;
+}
+
+/** Telling order, then true order, as `reader-order` prints them. */
+function readerOrderLines(story: Story): string[] {
+  const telling = tellingOrder(story).flatMap(({ scene, index, told }) => [
+    `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}`,
+    ...(told.length === 0
+      ? ["   (tells nothing yet)"]
+      : told.map(
+          ({ how, ref }) =>
+            `   ${how} ${describe(story, ref)}${storyTime(story, ref)}`,
+        )),
+  ]);
+  const knowledgeLine = ({
+    knowledge,
+    first,
+  }: {
+    knowledge: Knowledge;
+    first?: FirstTold;
+  }) =>
+    `${describe(story, { kind: "knowledge", id: knowledge.id })}: ${firstToldText(story, first)}`;
+  const always = knowledgeAlways(story);
+  const truth = trueOrder(story).flatMap(({ event, first, knowledgeFrom }) => [
+    `- ${describe(story, { kind: "event", id: event.id })}${storyTime(story, { kind: "event", id: event.id })}: ${firstToldText(story, first)}`,
+    ...knowledgeFrom.map((k) => `    from then, ${knowledgeLine(k)}`),
+  ]);
+  return [
+    "In telling order, what each scene puts before the reader:",
+    ...(telling.length === 0 ? ["(no scenes yet)"] : telling),
+    "",
+    "In story order, where the reader first learns of each event:",
+    ...(truth.length === 0 ? ["(no events yet)"] : truth),
+    ...(always.length === 0
+      ? []
+      : [
+          "",
+          "Held from the start:",
+          ...always.map((k) => `- ${knowledgeLine(k)}`),
+        ]),
+  ];
 }
 
 /** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
@@ -1622,6 +2025,8 @@ function runRead(
                   `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}: ${how.join("; ")}`,
               ),
         );
+    case "reader-order":
+      return ok(readerOrderLines(story));
     case "mentions":
       return parseRef(a.arg("ref"))
         .mapErr(usageError)
@@ -1641,7 +2046,7 @@ function runRead(
       return ok([
         ...(gaps.length === 0
           ? ["No gaps found."]
-          : gaps.map((g) => `- ${g.message} ${where(g)}`)),
+          : [GAPS_ADVISORY, ...gaps.map((g) => `- ${g.message} ${where(g)}`)]),
         ...(marked.length === 0
           ? []
           : [
@@ -1658,7 +2063,7 @@ function runRead(
           ? ["No contradictions."]
           : found.map(
               (c) =>
-                `- ${c.message}${c.source === "openQuestion" ? ` [${formatRef(c.ref)}]` : ""}`,
+                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" ? ` [${formatRef(c.ref)}]` : ""}`,
             ),
       );
     }
@@ -1732,6 +2137,7 @@ function runEdit(
               (message) =>
                 `Cause problem (kept; see contradictions): ${message}`,
             ),
+            ...alsoRemovedLines(story, next, command),
             ...staleTextLines(story, next, command),
           ]
             .join("\n")
@@ -1739,6 +2145,35 @@ function runEdit(
         }));
     }),
   );
+}
+
+/**
+ * The versions and knowledge an edit removed besides the record it named,
+ * since removing one record can take them with it.
+ */
+function alsoRemovedLines(
+  before: Story,
+  after: Story,
+  command: StoryCommand,
+): string[] {
+  const named = (kind: "version" | "knowledge", id: string) =>
+    (command.type === "removeVersion" && kind === "version") ||
+    (command.type === "removeKnowledge" && kind === "knowledge")
+      ? command.id === id
+      : false;
+  const gone = (
+    kind: "version" | "knowledge",
+    was: readonly { id: string }[],
+    now: readonly { id: string }[],
+  ) =>
+    was
+      .filter(({ id }) => !now.some((n) => n.id === id) && !named(kind, id))
+      .map(({ id }) => describe(before, { kind, id }));
+  const removed = [
+    ...gone("version", before.versions, after.versions),
+    ...gone("knowledge", before.knowledge, after.knowledge),
+  ];
+  return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
 }
 
 /** Cause contradictions in `after` that weren't in `before`. */

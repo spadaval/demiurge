@@ -1,7 +1,8 @@
 /**
  * The scenes that touch a record, in telling order: the scenes it is in,
  * that depict it or put it under pressure, that open or answer it, and that
- * reveal, imply or withhold it. A scene's prose isn't read: only what its
+ * reveal, imply or withhold it, or a version of an event or what an actor
+ * knows or believes. A scene's prose isn't read: only what its
  * record declares counts.
  */
 
@@ -69,6 +70,24 @@ function sceneHow(story: Story, scene: Scene, ref: Ref): string[] {
         linked.questionId === id
       ) {
         how.push(`${kind} its candidate ${linked.id}`);
+      }
+      // A version or knowledge stands for its event and its actors.
+      if (linked.kind === "version") {
+        const version = story.versions.find((v) => v.id === linked.id);
+        if (ref.kind === "event" && version?.event === id) {
+          how.push(`${kind} its version ${linked.id}`);
+        }
+        if (ref.kind === "actor" && version?.by.includes(id)) {
+          how.push(`${kind} the version ${linked.id} they tell`);
+        }
+      }
+      if (linked.kind === "knowledge") {
+        const k = story.knowledge.find((x) => x.id === linked.id);
+        if (ref.kind === "actor" && k?.actor === id) {
+          how.push(
+            `${kind} what they ${k.how === "knows" ? "know" : "believe"} (${linked.id})`,
+          );
+        }
       }
     }
   }

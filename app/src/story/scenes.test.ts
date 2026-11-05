@@ -113,6 +113,25 @@ describe("scene links", () => {
     expect(cleared.scenes.find((s) => s.id === "storm")?.withholds).toEqual([]);
   });
 
+  test("link a record given twice once", () => {
+    const twice = run(base, {
+      type: "setSceneLinks",
+      id: "docks",
+      how: "reveals",
+      refs: [
+        { kind: "fact", id: "lamp" },
+        { kind: "fact", id: "lamp" },
+      ],
+    });
+    expect(twice.scenes.find((s) => s.id === "docks")?.reveals).toEqual([
+      { kind: "fact", id: "lamp" },
+    ]);
+    expect(
+      scenesTouching(twice, { kind: "fact", id: "lamp" })._unsafeUnwrap()[0]
+        ?.how,
+    ).toEqual(["reveals it"]);
+  });
+
   test("go when the record they link goes", () => {
     const gone = run(
       linked,

@@ -12,7 +12,7 @@ import {
 } from "../time/chronology";
 import { timelineProblems } from "../time/commands";
 import type { EventId } from "../time/timeline";
-import { isAnswered, type Ref, type Story } from "./story";
+import { questionState, type Ref, type Story } from "./story";
 import { refLabel } from "./touches";
 
 export type Contradiction =
@@ -31,9 +31,17 @@ export type Contradiction =
       message: string;
     }
   /** Events that are each other's causes, in a circle, sorted by ID. */
-  | { source: "cause"; kind: "cycle"; events: EventId[]; message: string };
+  | { source: "cause"; kind: "cycle"; events: EventId[]; message: string }
+  /**
+   * Knowledge whose `until` story time puts strictly before its `since`. Two
+   * events not ordered against each other aren't listed.
+   */
+  | { source: "knowledge"; ref: Ref; message: string };
 
-/** The timeline's problems, then the causes', then the open conflicts. */
+/**
+ * The timeline's problems, then the causes', then knowledge that ends before
+ * it starts, then the open conflicts.
+ */
 export function storyContradictions(story: Story): Contradiction[] {
   // Story scenes aren't in the timeline, as in `applyStoryCommand`.
   const chronology = compileChronology(story.timeline, []);
@@ -45,7 +53,10 @@ export function storyContradictions(story: Story): Contradiction[] {
     }),
   );
   const conflicts = story.openQuestions
-    .filter((q) => q.conflict && !isAnswered(q))
+    .filter(
+      // One left open for the reader is a choice, not a problem.
+      (q) => q.conflict && questionState(story, q).state === "undecided",
+    )
     .map(
       (q): Contradiction => ({
         source: "openQuestion",
@@ -53,7 +64,27 @@ export function storyContradictions(story: Story): Contradiction[] {
         message: `Not settled yet: ${q.question}`,
       }),
     );
-  return [...timeline, ...causeContradictions(story, chronology), ...conflicts];
+  const label = (id: string) => `"${refLabel(story, { kind: "event", id })}"`;
+  const knowledge = story.knowledge
+    .filter(
+      ({ since, until }) =>
+        since !== undefined &&
+        until !== undefined &&
+        compareEvents(chronology, until, since) === "before",
+    )
+    .map(
+      (k): Contradiction => ({
+        source: "knowledge",
+        ref: { kind: "knowledge", id: k.id },
+        message: `"${refLabel(story, { kind: "knowledge", id: k.id })}" is held until ${label(k.until ?? "")}, which happens before ${label(k.since ?? "")}, when it starts.`,
+      }),
+    );
+  return [
+    ...timeline,
+    ...causeContradictions(story, chronology),
+    ...knowledge,
+    ...conflicts,
+  ];
 }
 
 function causeContradictions(

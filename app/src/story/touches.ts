@@ -28,6 +28,8 @@ export const TOUCH_KINDS: readonly TouchKind[] = [
   "readerQuestion",
   "openQuestion",
   "candidate",
+  "version",
+  "knowledge",
 ];
 
 /** A record reached, its name for display, and each way it was reached. */
@@ -89,8 +91,12 @@ const key = (ref: Ref) =>
 
 const sameRef = (a: Ref, b: Ref) => key(a) === key(b);
 
-/** The record's name, or its ID if the name is blank. */
-export function refLabel(story: Story, ref: Ref): string {
+/**
+ * The record's name, or its ID if the name is blank. Knowledge has no name of
+ * its own: it is named for its actor and what they know, which can itself be
+ * knowledge, so `depth` stops a circle.
+ */
+export function refLabel(story: Story, ref: Ref, depth = 0): string {
   const label = ((): string => {
     switch (ref.kind) {
       case "actor":
@@ -115,6 +121,14 @@ export function refLabel(story: Story, ref: Ref): string {
             .find((q) => q.id === ref.questionId)
             ?.candidates.find((c) => c.id === ref.id)?.answer ?? ""
         );
+      case "version":
+        return story.versions.find((v) => v.id === ref.id)?.text ?? "";
+      case "knowledge": {
+        const k = story.knowledge.find((x) => x.id === ref.id);
+        if (k === undefined || depth > 2) return "";
+        const who = refLabel(story, { kind: "actor", id: k.actor }, depth + 1);
+        return `${who} ${k.how}: ${refLabel(story, k.what, depth + 1)}`;
+      }
     }
   })();
   return label.trim() === "" ? ref.id : label;
@@ -141,6 +155,16 @@ function directLinks(story: Story, ref: Ref): Link[] {
       }
       for (const scene of story.scenes) {
         if (scene.actors.includes(id)) add("a scene it's in", sceneRef(scene));
+      }
+      for (const version of story.versions) {
+        if (version.by.includes(id)) {
+          add("a version it tells", { kind: "version", id: version.id });
+        }
+      }
+      for (const k of story.knowledge) {
+        if (k.actor === id) {
+          add(`what it ${k.how}`, { kind: "knowledge", id: k.id });
+        }
       }
       break;
     case "drive": {
@@ -180,6 +204,16 @@ function directLinks(story: Story, ref: Ref): Link[] {
       for (const { cause, effect } of story.causes) {
         if (cause === id) add("an event it caused", eventRef(effect));
         if (effect === id) add("an event that caused it", eventRef(cause));
+      }
+      for (const version of story.versions) {
+        if (version.event === id) {
+          add("a version of it", { kind: "version", id: version.id });
+        }
+      }
+      for (const k of story.knowledge) {
+        const kRef: Ref = { kind: "knowledge", id: k.id };
+        if (k.since === id) add("knowledge held from then", kRef);
+        if (k.until === id) add("knowledge held until then", kRef);
       }
       for (const c of story.timeline.constraints) {
         const other = c.a === id ? c.b : c.b === id ? c.a : undefined;
@@ -246,6 +280,24 @@ function directLinks(story: Story, ref: Ref): Link[] {
       }
       break;
     }
+    case "version": {
+      const version = story.versions.find((v) => v.id === id);
+      if (version !== undefined) {
+        add("the event it's an account of", eventRef(version.event));
+        for (const actor of version.by) add("who tells it", actorRef(actor));
+      }
+      break;
+    }
+    case "knowledge": {
+      const k = story.knowledge.find((x) => x.id === id);
+      if (k !== undefined) {
+        add(`who ${k.how} it`, actorRef(k.actor));
+        add(`what they ${k.how === "knows" ? "know" : "believe"}`, k.what);
+        if (k.since !== undefined) add("when it starts", eventRef(k.since));
+        if (k.until !== undefined) add("when it ends", eventRef(k.until));
+      }
+      break;
+    }
     case "candidate": {
       add("the question it answers", {
         kind: "openQuestion",
@@ -257,6 +309,11 @@ function directLinks(story: Story, ref: Ref): Link[] {
   }
 
   // Whatever refers to `ref` by a Ref.
+  for (const k of story.knowledge) {
+    if (sameRef(k.what, ref)) {
+      add(`someone who ${k.how} it`, { kind: "knowledge", id: k.id });
+    }
+  }
   for (const scene of story.scenes) {
     for (const how of SCENE_LINK_KINDS) {
       if (scene[how].some((linked) => sameRef(linked, ref))) {
@@ -374,6 +431,8 @@ function grouped(story: Story, links: Link[], subject: Ref): TouchGroups {
     readerQuestion: [],
     openQuestion: [],
     candidate: [],
+    version: [],
+    knowledge: [],
   };
   const seen = new Map<string, Touch>();
   for (const { ref, how } of links) {

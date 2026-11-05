@@ -185,15 +185,21 @@ function storyTexts(story: Story): Text[] {
     add({ kind: "readerQuestion", id: q.id }, { question: q.question });
   }
   for (const q of story.openQuestions) {
-    add({ kind: "openQuestion", id: q.id }, { question: q.question });
+    add(
+      { kind: "openQuestion", id: q.id },
+      { question: q.question, leftOpen: q.leftOpen ?? "" },
+    );
   }
   for (const q of story.openQuestions) {
     for (const c of q.candidates) {
       add(
         { kind: "candidate", questionId: q.id, id: c.id },
-        { answer: c.answer },
+        { answer: c.answer, rejected: c.rejected ?? "" },
       );
     }
+  }
+  for (const v of story.versions) {
+    add({ kind: "version", id: v.id }, { text: v.text });
   }
   return texts;
 }
@@ -226,6 +232,11 @@ function nameOf(story: Story, ref: Ref): { field: string; value: string } {
         field: "question",
         value: find(story.openQuestions)?.question ?? "",
       };
+    case "version":
+      return { field: "text", value: find(story.versions)?.text ?? "" };
+    // Knowledge has no text of its own to look for.
+    case "knowledge":
+      return { field: "", value: "" };
     case "candidate":
       return {
         field: "answer",

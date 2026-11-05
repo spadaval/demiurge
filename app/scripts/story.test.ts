@@ -160,7 +160,7 @@ describe("story CLI", () => {
     const rendered = ok("render");
     expect(rendered).toContain("Expose what the tribe carried");
     expect(rendered).toContain(
-      "## Decided\n\n- Why did Joel leave? He found what the caravans carried.\n",
+      "## Decided\n\n- Why did Joel leave? He found what the caravans carried. Not revealed yet.\n",
     );
     expect(rendered).not.toContain("He wanted adventure");
     // The bible carries no word budget.
@@ -170,36 +170,62 @@ describe("story CLI", () => {
     }
   });
 
-  test("a question being weighed renders in one line", () => {
+  test("an open question is undecided, decided, left open or revealed, and keeps what was ruled out", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-open-question", "who", "Who wrote it?");
     ok("add-candidate", "who", "ferry", "The ferryman, who saw the wreck");
     ok("add-candidate", "who", "keeper", "The old keeper, before he died");
-    const open = ok("render");
-    expect(open).toContain("The ferryman, who saw the wreck.");
+    ok("add-scene", "docks", "The docks");
+    const state = () =>
+      ok("show", "open-question:who")
+        .split("\n")
+        .find((line) => line.startsWith("state: "));
+    expect(state()).toBe("state: undecided");
 
-    ok("set-open-question-working", "who");
-    expect(ok("show", "open-question:who")).toContain("working: yes");
-    const weighed = ok("render");
-    expect(weighed).toContain("- Who wrote it? (being weighed)\n");
-    expect(weighed).not.toContain("ferryman");
-    expect(saved().openQuestions[0]?.candidates).toHaveLength(2);
+    ok("reject-candidate", "who", "keeper", "--reason", "He died first");
+    expect(ok("show", "open-question:who")).toContain(
+      "candidate:who/keeper (ruled out: He died first): The old keeper",
+    );
+    expect(ok("show", "candidate:who/keeper")).toContain(
+      "ruled out: He died first\n",
+    );
+    expect(ok("render")).toContain(
+      "  - Ruled out: The old keeper, before he died. He died first.\n",
+    );
+    const both = cli(file, "reject-candidate", "who", "ferry");
+    expect(both.code).toBe(2);
+    expect(both.stderr).toContain("give --reason <text> or --undo");
 
-    ok("set-open-question-working", "who", "--stop");
-    expect(saved().openQuestions[0]?.working).toBeUndefined();
-    expect(ok("render")).toBe(open);
-
-    // Answering clears the mark, and an answered question can't be weighed.
-    ok("set-open-question-working", "who");
     ok("answer-open-question", "who", "ferry");
-    expect(saved().openQuestions[0]?.working).toBeUndefined();
-    const before = readFileSync(file, "utf8");
-    const answered = cli(file, "set-open-question-working", "who");
-    expect(answered.code).toBe(1);
-    expect(answered.stderr).toContain("open question who is answered");
-    expect(readFileSync(file, "utf8")).toBe(before);
-    expect(cli("--help").stdout).toContain(
-      "Refused on an answered question; answering clears the mark.",
+    expect(state()).toBe("state: decided, not revealed yet");
+    const chosen = cli(
+      file,
+      "reject-candidate",
+      "who",
+      "ferry",
+      "--reason",
+      "x",
+    );
+    expect(chosen.code).toBe(1);
+    expect(chosen.stderr).toContain("is the chosen answer");
+
+    ok("leave-for-reader", "who", "--reason", "The reader should wonder");
+    expect(state()).toBe("state: left open for the reader");
+    expect(ok("list", "open-question")).toContain("(left open for the reader)");
+    expect(ok("render")).toContain("## Left open for the reader\n");
+    expect(ok("gaps")).not.toContain("open-question:who");
+
+    ok("set-scene-links", "docks", "reveals", "candidate:who/ferry");
+    expect(state()).toBe("state: revealed in scene:docks");
+    expect(ok("render")).toContain(
+      '- Who wrote it? The ferryman, who saw the wreck. Revealed in "The docks".\n',
+    );
+    ok("leave-for-reader", "who", "--undo");
+    ok("set-scene-links", "docks", "reveals", "none");
+    expect(state()).toBe("state: decided, not revealed yet");
+    ok("reject-candidate", "who", "keeper", "--undo");
+    expect(saved().openQuestions[0]?.candidates.map((c) => c.rejected)).toEqual(
+      [undefined, undefined],
     );
   });
 
@@ -395,6 +421,13 @@ describe("story CLI", () => {
     expect(ok("gaps")).toContain(
       `- The drive "Stay calm" doesn't come from any event yet. ${gap}\n`,
     );
+    expect(ok("gaps")).toStartWith(
+      "Optional prompts, not problems: places you could add a link or a record. None is a reason to cut or merge anything true; a record can stay unlinked.\n- ",
+    );
+    // A person with no drive isn't a gap.
+    ok("add-actor", "oro", "Oro");
+    expect(ok("gaps")).not.toContain("actor:oro");
+    expect(cli("--help").stdout).not.toContain("person-without-drive");
     const noReason = cli(
       file,
       "mark-gap-deliberate",
@@ -537,6 +570,93 @@ describe("story CLI", () => {
     );
     expect(rendered).not.toContain("Rain on the glass");
     expect(rendered).not.toMatch(/words\)/);
+  });
+
+  test("holds who knows or believes what, versions side by side, and the reader's order apart from the true order", () => {
+    ok("init", "A warlock with hundreds of patrons.");
+    ok("add-actor", "vell", "Vell");
+    ok("add-actor", "oren", "Oren");
+    ok("add-event", "pact", "The first pact");
+    ok("set-position", "pact", "3");
+    ok(
+      "add-event",
+      "burning",
+      "The chapel burns",
+      "--summary",
+      "The patron burned it",
+    );
+    ok("set-position", "burning", "4");
+    ok("add-fact", "tithe", "Each patron takes a sliver of her luck");
+    ok(
+      "add-knowledge",
+      "vell-tithe",
+      "vell",
+      "knows",
+      "fact:tithe",
+      "--since",
+      "pact",
+    );
+    ok(
+      "add-version",
+      "lightning",
+      "burning",
+      "Lightning struck it",
+      "--by",
+      "oren",
+    );
+    ok("add-version", "arson", "burning", "Vell set the fire", "--by", "vell");
+    ok(
+      "add-knowledge",
+      "oren-lightning",
+      "oren",
+      "believes",
+      "version:lightning",
+      "--since",
+      "burning",
+    );
+    ok("add-scene", "ash", "Ash");
+    ok("add-scene", "stall", "The stall");
+    ok("set-scene-links", "ash", "reveals", "version:lightning");
+    ok("set-scene-links", "stall", "reveals", "knowledge:vell-tithe");
+
+    expect(ok("show", "knowledge:oren-lightning")).toBe(
+      'knowledge:oren-lightning\nactor: actor:oren ("Oren")\nbelieves: version:lightning ("Lightning struck it")\nsince: event:burning ("The chapel burns")\n',
+    );
+    expect(ok("show", "event:burning")).toContain(
+      'versions: version:arson ("Vell set the fire"), version:lightning ("Lightning struck it")\n',
+    );
+    const order = ok("reader-order");
+    expect(order).toContain(
+      'In telling order, what each scene puts before the reader:\n1. scene:ash ("Ash")\n   reveals version:lightning ("Lightning struck it"), of event:burning at year 4\n2. scene:stall ("The stall")\n   reveals knowledge:vell-tithe ("Vell knows: Each patron takes a sliver of her luck"), held from event:pact at year 3\n',
+    );
+    expect(order).toContain(
+      '- event:pact ("The first pact") at year 3: no scene tells the reader\n    from then, knowledge:vell-tithe ("Vell knows: Each patron takes a sliver of her luck"): first told in 2. scene:stall ("The stall"), which reveals knowledge:vell-tithe\n- event:burning ("The chapel burns") at year 4: first told in 1. scene:ash ("Ash"), which reveals version:lightning (an account, maybe not what happened)\n',
+    );
+    expect(ok("list", "knowledge")).toContain("knowledge:oren-lightning");
+
+    expect(ok("remove-version", "lightning")).toBe(
+      'Saved.\nAlso removed: knowledge:oren-lightning ("Oren believes: Lightning struck it")\n',
+    );
+    ok("add-knowledge", "oren-arson", "oren", "knows", "version:arson");
+    expect(ok("remove-event", "burning")).toBe(
+      'Saved.\nAlso removed: version:arson ("Vell set the fire"), knowledge:oren-arson ("Oren knows: Vell set the fire")\n',
+    );
+    expect(ok("remove-fact", "tithe")).toContain(
+      "Also removed: knowledge:vell-tithe",
+    );
+    expect(ok("remove-actor", "oren")).toBe("Saved.\n");
+    expect(saved().knowledge).toEqual([]);
+    expect(saved().scenes[0]?.reveals).toEqual([]);
+    const bad = cli(
+      file,
+      "add-knowledge",
+      "x",
+      "vell",
+      "suspects",
+      "fact:tithe",
+    );
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toContain("<how> must be one of knows, believes");
   });
 
   test("--help lists every command with an example, and every example runs", () => {

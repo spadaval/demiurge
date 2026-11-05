@@ -797,8 +797,8 @@ describe("timeline events have summaries", () => {
   });
 });
 
-describe("open questions can be marked as working", () => {
-  const file = (working?: JsonValue) =>
+describe("open questions in the file", () => {
+  const file = (extra: Record<string, JsonValue>) =>
     JSON.stringify({
       version: 1,
       premise: "P",
@@ -812,32 +812,29 @@ describe("open questions can be marked as working", () => {
           id: "q",
           question: "Why?",
           about: [],
-          candidates: [],
+          candidates: [{ id: "c", answer: "A", touches: [] }],
           conflict: false,
-          ...(working === undefined ? {} : { working }),
+          ...extra,
         },
       ],
       timeline: emptyTimeline,
     });
 
-  test("a file written before the mark existed parses, and writes back unchanged", () => {
-    const old = file();
-    const story = parseStory(old)._unsafeUnwrap();
-    expect(story.openQuestions[0]?.working).toBeUndefined();
+  test("an old file's working mark loads and is dropped", () => {
+    const story = parseStory(file({ working: true }))._unsafeUnwrap();
     expect(serializeStory(story)).not.toContain("working");
-    expect(JSON.parse(serializeStory(story))).toEqual(JSON.parse(old));
+    expect(serializeStory(story)).toBe(
+      serializeStory(parseStory(file({}))._unsafeUnwrap()),
+    );
   });
 
-  test("the mark is kept, false is the same as no mark, and a malformed one is rejected", () => {
+  test("a left-open mark is kept, and a malformed one is rejected", () => {
+    const story = parseStory(file({ leftOpen: "Why not" }))._unsafeUnwrap();
+    expect(story.openQuestions[0]?.leftOpen).toBe("Why not");
+    expect(serializeStory(story)).toContain('"leftOpen": "Why not"');
     expect(
-      parseStory(file(true))._unsafeUnwrap().openQuestions[0]?.working,
-    ).toBe(true);
-    expect(
-      serializeStory(parseStory(file(false))._unsafeUnwrap()),
-    ).not.toContain("working");
-    expect(parseStory(file("yes"))._unsafeUnwrapErr().message).toContain(
-      "openQuestions[0].working",
-    );
+      parseStory(file({ leftOpen: true }))._unsafeUnwrapErr().message,
+    ).toContain("openQuestions[0].leftOpen");
   });
 });
 
@@ -959,6 +956,24 @@ describe("answer history and deliberate gaps in the file", () => {
     expect(text).toContain(
       '"superseded": [\n        {\n          "candidate": "adventure",\n          "answer": "Wanderlust",\n          "by": "cargo"\n        },',
     );
+  });
+
+  test("marks of retired gap kinds load and are dropped", () => {
+    const value = JSON.parse(serializeStory(withHistory));
+    value.deliberateGaps.push(
+      {
+        gap: "person_without_drive",
+        ref: { kind: "actor", id: "joel" },
+        reason: "A walk-on",
+      },
+      {
+        gap: "reader_question_never_answered",
+        ref: { kind: "readerQuestion", id: "who" },
+        reason: "Left hanging",
+      },
+    );
+    const story = parseStory(JSON.stringify(value))._unsafeUnwrap();
+    expect(serializeStory(story)).toBe(serializeStory(withHistory));
   });
 
   test.each<[string, JsonValue, string]>([

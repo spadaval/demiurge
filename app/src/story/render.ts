@@ -6,10 +6,11 @@
  *
  * It says each thing once, in the order an author would want it, so it stays
  * easy to read: a want is printed in full only under its actor and named in a
- * few words elsewhere, a relation is printed once, a constraint the positions
- * already satisfy is left out, and so are rejected candidates and the
- * candidates of a question being weighed. An event's causes are named after
- * it ("because of …"), and a scene's links after the scene.
+ * few words elsewhere, a relation is printed once, and a constraint the
+ * positions already satisfy is left out. Open questions are grouped by where
+ * they stand (`questionState`), with the candidates ruled out and why. An
+ * event's causes are named after it ("because of …"), and a scene's links
+ * after the scene.
  */
 
 import {
@@ -18,9 +19,20 @@ import {
   compileChronology,
   type PointOrder,
 } from "../time/chronology";
-import type { Constraint, Position, Timeline } from "../time/timeline";
+import type {
+  Constraint,
+  Position,
+  TimeEvent,
+  Timeline,
+} from "../time/timeline";
 import { storyContradictions } from "./contradictions";
-import { isAnswered, type Ref, SCENE_LINK_KINDS, type Story } from "./story";
+import {
+  type OpenQuestion,
+  questionState,
+  type Ref,
+  SCENE_LINK_KINDS,
+  type Story,
+} from "./story";
 
 /** The story as Markdown-like text. */
 export function renderStory(story: Story): string {
@@ -33,9 +45,11 @@ export function renderStory(story: Story): string {
       "The world",
       story.facts.map((fact) => `- ${sentence(fact.text)}`),
     ),
+    section("Who knows or believes what", knowledgeLines(story)),
     section("Scenes, in telling order", sceneLines(story)),
     section("What the reader is waiting to find out", readerLines(story)),
     section("Decided", decidedLines(story)),
+    section("Left open for the reader", leftOpenLines(story)),
     section("Not decided yet", openQuestionLines(story)),
     section("Where the story pulls against itself", contradictionLines(story)),
   ].filter((text) => text !== "");
@@ -152,6 +166,24 @@ function refName(story: Story, ref: Ref): string {
           .find((q) => q.id === ref.questionId)
           ?.candidates.find((c) => c.id === ref.id)?.answer,
       );
+    case "version": {
+      const version = story.versions.find((v) => v.id === ref.id);
+      if (version === undefined) return UNNAMED;
+      const event = eventLabel(story, version.event);
+      return version.by.length === 0
+        ? `an account of ${event}`
+        : `${tellers(story, version.by)}'s account of ${event}`;
+    }
+    case "knowledge": {
+      const k = story.knowledge.find((x) => x.id === ref.id);
+      if (k === undefined) return UNNAMED;
+      // Knowledge of knowledge is named one level deep.
+      const what =
+        k.what.kind === "knowledge"
+          ? `what ${named(actorName(story, story.knowledge.find((x) => x.id === k.what.id)?.actor ?? null))} holds`
+          : refName(story, k.what);
+      return `${named(actorName(story, k.actor))} ${k.how}: ${what}`;
+    }
   }
 }
 
@@ -244,8 +276,8 @@ function constraintText(story: Story, c: Constraint): string {
  * come before each, then by position, then causes before their effects, then
  * by label. Unordered events fall where that puts them.
  */
-function eventLines(story: Story): string[] {
-  const { events, positions, constraints } = story.timeline;
+export function eventsInStoryOrder(story: Story): TimeEvent[] {
+  const { events, positions } = story.timeline;
   const chronology = compileChronology(story.timeline, []);
   const worldPosition = (id: string) =>
     positions.find((p) => p.event === id && p.frame === "world");
@@ -258,7 +290,7 @@ function eventLines(story: Story): string[] {
     ]),
   );
   const depth = causeDepths(story);
-  const ordered = [...events].sort(
+  return [...events].sort(
     (a, b) =>
       (earlier.get(a.id) ?? 0) - (earlier.get(b.id) ?? 0) ||
       (worldPosition(a.id)?.start ?? Number.POSITIVE_INFINITY) -
@@ -266,8 +298,23 @@ function eventLines(story: Story): string[] {
       depth(a.id) - depth(b.id) ||
       named(a.label).localeCompare(named(b.label)),
   );
+}
+
+const worldPositionOf = (story: Story, id: string) =>
+  story.timeline.positions.find((p) => p.event === id && p.frame === "world");
+
+/** `year 30`, `year 1200 to 1210, spring`, or undefined if it has no place. */
+export function eventTime(story: Story, id: string): string | undefined {
+  const text = positionText(story, worldPositionOf(story, id));
+  return text === "" ? undefined : text.slice(2, -1);
+}
+
+function eventLines(story: Story): string[] {
+  const { constraints } = story.timeline;
+  const ordered = eventsInStoryOrder(story);
+  const worldPosition = (id: string) => worldPositionOf(story, id);
   const placed = positionsOnly(story.timeline);
-  return ordered.map((event) => {
+  return ordered.flatMap((event) => {
     const stated = constraints
       .filter(
         (c) => c.a === event.id && c.b !== event.id && !satisfiedBy(placed, c),
@@ -276,8 +323,45 @@ function eventLines(story: Story): string[] {
     const when = stated.length === 0 ? "" : ` [${stated.join("; ")}]`;
     const summary =
       event.summary.trim() === "" ? "" : `: ${sentence(event.summary)}`;
-    return `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}`;
+    return [
+      `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}`,
+      ...story.versions
+        .filter((v) => v.event === event.id)
+        .map(
+          (v) =>
+            `  - ${v.by.length === 0 ? "One account" : `As ${tellers(story, v.by)} tell${v.by.length === 1 ? "s" : ""} it`}: ${sentence(named(v.text))}`,
+        ),
+    ];
   });
+}
+
+/** `Lew`, `Lew and Ada`, `Lew, Ada and Tom`. */
+function tellers(story: Story, ids: readonly string[]): string {
+  const names = ids.map((id) => named(actorName(story, id)));
+  return names.length <= 1
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+/** `Mara knows: The lamp was out, from The wreck until The trial.` */
+function knowledgeLines(story: Story): string[] {
+  return [...story.knowledge]
+    .sort((a, b) =>
+      named(actorName(story, a.actor)).localeCompare(
+        named(actorName(story, b.actor)),
+      ),
+    )
+    .map((k) => {
+      const when = joined([
+        k.since === undefined
+          ? undefined
+          : `from ${eventLabel(story, k.since)}`,
+        k.until === undefined
+          ? undefined
+          : `until ${eventLabel(story, k.until)}`,
+      ]);
+      return `- ${sentence(`${refName(story, { kind: "knowledge", id: k.id })}${when === "" ? "" : `, ${when}`}`)}`;
+    });
 }
 
 /** "Because of" takes two of a link's eight words. */
@@ -448,36 +532,75 @@ function readerLines(story: Story): string[] {
   });
 }
 
+/** A question's ruled-out candidates, each with why, a line apiece. */
+function ruledOutLines(q: OpenQuestion): string[] {
+  return q.candidates.flatMap((c) =>
+    c.rejected === undefined || c.id === q.answer
+      ? []
+      : [
+          `  - ${joined([
+            sentence(`Ruled out: ${named(c.answer)}`),
+            c.rejected.trim() === "" ? undefined : sentence(c.rejected),
+          ])}`,
+        ],
+  );
+}
+
 /**
- * Unanswered questions, each with its candidates in a line apiece; what a
- * candidate touches stays in the file. A question being weighed is one line,
- * without its candidates, so weighing them costs no words.
+ * Undecided questions, each with its candidates still in the running and
+ * those ruled out, a line apiece; what a candidate touches stays in the file.
  */
 function openQuestionLines(story: Story): string[] {
   return story.openQuestions
-    .filter((q) => !isAnswered(q))
+    .filter((q) => questionState(story, q).state === "undecided")
     .flatMap((q) => {
       const marker = q.conflict ? " (a contradiction to resolve)" : "";
-      if (q.working === true) {
-        return [`- ${q.question}${marker} (being weighed)`];
-      }
       return [
         `- ${q.question}${marker}${concerns(story, q.about)}`,
-        ...q.candidates.map((c) => `  - ${sentence(named(c.answer))}`),
+        ...q.candidates
+          .filter((c) => c.rejected === undefined)
+          .map((c) => `  - ${sentence(named(c.answer))}`),
+        ...ruledOutLines(q),
       ];
     });
 }
 
 /**
- * Answered questions with the chosen answer only. Rejected candidates, and
- * what the question concerns, stay in the file.
+ * Answered questions with the chosen answer, where it is revealed, and the
+ * candidates ruled out. What the question concerns stays in the file.
  */
 function decidedLines(story: Story): string[] {
   return story.openQuestions.flatMap((q) => {
+    const state = questionState(story, q);
     const chosen = q.candidates.find((c) => c.id === q.answer);
-    return chosen === undefined
-      ? []
-      : [`- ${q.question} ${sentence(named(chosen.answer))}`];
+    if (chosen === undefined || state.state === "left_open") return [];
+    const where =
+      state.state === "revealed"
+        ? `Revealed in "${sceneTitle(story, state.scene)}".`
+        : "Not revealed yet.";
+    return [
+      `- ${q.question} ${sentence(named(chosen.answer))} ${where}`,
+      ...ruledOutLines(q),
+    ];
+  });
+}
+
+/** Questions the story leaves open for the reader, with why, and any answer. */
+function leftOpenLines(story: Story): string[] {
+  return story.openQuestions.flatMap((q) => {
+    const state = questionState(story, q);
+    if (state.state !== "left_open") return [];
+    const chosen = q.candidates.find((c) => c.id === q.answer);
+    return [
+      `- ${joined([
+        q.question,
+        chosen === undefined
+          ? undefined
+          : sentence(`The author's answer: ${named(chosen.answer)}`),
+        state.reason.trim() === "" ? undefined : sentence(state.reason),
+      ])}`,
+      ...ruledOutLines(q),
+    ];
   });
 }
 
@@ -488,12 +611,20 @@ function concerns(story: Story, about: readonly Ref[]): string {
 }
 
 /**
- * Timeline and cause problems in words; open conflicts are already marked
- * above.
+ * Timeline, cause and knowledge problems in words; open conflicts are
+ * already marked above.
  */
 function contradictionLines(story: Story): string[] {
   return storyContradictions(story).flatMap((c) => {
     if (c.source === "openQuestion") return [];
+    if (c.source === "knowledge") {
+      const k = story.knowledge.find((x) => x.id === c.ref.id);
+      return k?.since === undefined || k.until === undefined
+        ? []
+        : [
+            `- ${refName(story, c.ref)} ends with ${eventLabel(story, k.until)}, which happens before ${eventLabel(story, k.since)}, when it starts.`,
+          ];
+    }
     if (c.source === "cause") {
       return c.kind === "effect_first"
         ? [

@@ -71,16 +71,58 @@ reread.
   `--touches`, then **try it** with `touches candidate:<question>/<id>`.
   Choose an answer with `answer-open-question` once a satisfying one has
   emerged, then make what it implies with other commands.
-- **Weigh in the file, not in your head.** While you are still weighing a
-  question's candidates, mark it with `set-open-question-working who-wrote`.
-  `render` then shows the question in one line and leaves its candidates
-  out. Answering clears the mark; `--stop` clears it without answering. An answered question can't be
-  marked working: unanswer it first.
+- **Weigh in the file, not in your head.** When you rule a candidate out,
+  say why with `reject-candidate who-wrote keeper --reason "He died before
+  the wreck"` rather than removing it: the candidate and its reason stay in
+  the file, and `show` and `render` list it as ruled out. `--undo` puts it
+  back in the running, and choosing it as the answer does too.
+- **Where a question stands.** `show open-question:who-wrote` prints its
+  state, and `render` groups questions by it:
+  - *undecided*: no answer chosen yet. This is your task.
+  - *decided, not revealed yet*: you know the answer and no scene has told
+    the reader.
+  - *left open for the reader*: `leave-for-reader who-wrote --reason "..."`
+    says the story never answers it, whether or not you have; `--undo`
+    takes the mark off.
+  - *revealed in scene X*: the first scene, in telling order, whose
+    `set-scene-links ... reveals` names the question or its chosen
+    candidate.
+
+  Only undecided questions are prompts in `gaps`. A decided question no
+  scene reveals, or one left open, is a normal place to rest: a story leaves
+  most of its questions unanswered on the page, and nothing reports that as
+  a problem. The same goes for a reader question no scene answers.
 - **Re-answering keeps the history.** Choosing a different candidate, or
   `unanswer-open-question`, keeps the old answer as superseded, with what
   replaced it. `show open-question:who-wrote` lists that history, and
   `render` prints only the current answer. So rework an answer by answering
   again; don't delete the question or its other candidates.
+- **Who knows what, and the versions people tell.** An event's summary is
+  what really happened. What someone says happened is a version beside it:
+  `add-version fog wreck "The fog took her; nobody could have saved her"
+  --by ivo`. Hold as many versions of an event as there are tellers, whether
+  true, partial or lies. What a character knows or believes, from a point in
+  story time, is knowledge: `add-knowledge mara-fog mara believes
+  version:fog --since wreck --until letter`. It can be of a fact, a version,
+  an event or a candidate answer. Without `--since` it holds from the start,
+  and without `--until` it never stops. Times are events, so a belief starts
+  and ends with what happens. `show actor:mara` lists what she knows or
+  believes, and `show event:wreck` lists its versions. Removing a record
+  takes with it the versions and knowledge that depend on it: an event's
+  versions, an actor's knowledge, and anyone's knowledge of the record. The
+  edit lists them under "Also removed", so rework by updating rather than
+  removing when the account or belief is still true. Knowledge that ends
+  before it starts is kept and reported by `contradictions`.
+- **Telling order is not true order.** A scene tells the reader something by
+  revealing or implying it: the fact, a version (the reader may believe a
+  lie for a while), or the knowledge itself (`set-scene-links docks reveals
+  knowledge:mara-fog` tells the reader that Mara believes it). `reader-order`
+  lists each scene in telling order with what it shows, reveals, implies or
+  withholds and when that is in story time. Then it lists the events in
+  story order with the first scene that tells the reader of each, through
+  the event itself, a version of it or someone's knowledge of it, and when
+  each character's knowledge starts. Use it to plan what the reader learns
+  when, and to check a scene doesn't give away what a later scene reveals.
 - **Causes.** When one event happened because of another, record it with
   `add-cause wreck letter` (the wreck caused the letter). Positions and
   constraints only say what comes first; a cause says why. `render` says
@@ -105,9 +147,13 @@ reread.
   someone did, run `mentions event:wreck` (or `actor:`, `drive:` and so on)
   yourself on what the change reaches. `mentions` doesn't read prose files;
   `scenes <ref>` lists the scenes whose prose may need rereading.
-- **`gaps` and `contradictions` are prompts, not a to-do list.** Run them now
-  and then to see what isn't woven in yet or still pulls against itself, and
-  act on what is worth acting on. When a gap is a choice, say so: each gap
+- **`gaps` is advisory: optional prompts, never a reason to delete.** Run it
+  now and then to see where you could add a link or a record, and act only on
+  what is worth acting on. Never cut, merge or unlink anything true to clear
+  a gap: a minor character with no drive, an event or fact that nothing else
+  refers to, and a want nobody opposes all belong in the bible if they are
+  true of the world. `contradictions` is the same: prompts, not a to-do list.
+  When a gap is a choice and you want it out of the list, say so: each gap
   ends with a `[gap ref]` to paste into `mark-gap-deliberate
   drive-without-origin drive:keep-quiet --reason "He has always kept his own
   counsel"`. The mark and its reason stay in the story file, and `gaps`
