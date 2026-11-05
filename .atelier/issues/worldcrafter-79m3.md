@@ -3,6 +3,9 @@ created_at: "2026-11-05T14:15:00.621627344+00:00"
 id: "worldcrafter-79m3"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-79m3
 priority: "P1"
 relationships:
   blocks: []
@@ -24,7 +27,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 3 fixes: viewpoint marks, reader context, years, traces"
-updated_at: "2026-11-05T14:15:00.783027747+00:00"
+updated_at: "2026-11-05T14:17:33.386041924+00:00"
 ---
 
 ## Goal

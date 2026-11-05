@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Viewpoint marks and reader-order --before telling (Round 3 reading 3, 4)"
-updated_at: "2026-11-05T14:15:00.661349359+00:00"
+updated_at: "2026-11-05T14:17:33.386043888+00:00"
 ---
 
 ## Goal
