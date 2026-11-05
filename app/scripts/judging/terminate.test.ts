@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -133,10 +134,21 @@ describe("termination reaches the sandboxed session (worldcrafter-7b2r)", () => 
     const { dir, token, proc } = await startRunner(true);
     expect(holding(token).length).toBeGreaterThanOrEqual(3);
     // The startup check sees it.
-    expect(
-      sandboxedSessions(["sleep"]).some((s) => s.command.includes(token)),
-    ).toBe(true);
+    // The startup check sees it once (its timeout, not the bwraps under it),
+    // and only as this user's.
+    const mine = sandboxedSessions(["sleep"]).filter((s) =>
+      s.command.includes(token),
+    );
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.command.startsWith("/usr/bin/timeout")).toBe(true);
     expect(() => refuseIfSessionsRunning(["sleep"])).toThrow("still running");
+    const other = (process.getuid?.() ?? 0) + 1;
+    expect(
+      sandboxedSessions(["sleep"], other).filter((s) =>
+        s.command.includes(token),
+      ),
+    ).toEqual([]);
+    expect(() => refuseIfSessionsRunning(["sleep"], other)).not.toThrow();
     proc.kill(signal);
     const code = await proc.exited;
     expect(code).toBe({ SIGHUP: 129, SIGINT: 130, SIGTERM: 143 }[signal]);
@@ -160,4 +172,37 @@ describe("termination reaches the sandboxed session (worldcrafter-7b2r)", () => 
     }
     expect(await gone(token)).toEqual([]);
   }, 40_000);
+});
+
+describe("the round runner's phase guard (worldcrafter-s8hy)", () => {
+  test("a signal between sessions still removes the phase's temp dirs and exits", async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "terminate-test.")));
+    temps.push(dir);
+    const scratch = join(dir, "so-far-home.x");
+    mkdirSync(scratch);
+    const script = join(dir, "phase.ts");
+    writeFileSync(
+      script,
+      `import { writeFileSync } from "node:fs";
+import { live, withPhaseGuard } from ${JSON.stringify(join(HERE, "../round/round.ts"))};
+await withPhaseGuard(async () => {
+  // Between a story so far's reply and its revision: no session runs.
+  live.cleanup.add(${JSON.stringify(scratch)});
+  writeFileSync(${JSON.stringify(join(dir, "ready"))}, "");
+  await Bun.sleep(60_000);
+});
+`,
+    );
+    const proc = Bun.spawn(["bun", script], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    const until = Date.now() + 20_000;
+    while (!existsSync(join(dir, "ready")) && Date.now() < until)
+      await Bun.sleep(100);
+    expect(existsSync(scratch)).toBe(true);
+    proc.kill("SIGTERM");
+    expect(await proc.exited).toBe(143);
+    expect(existsSync(scratch)).toBe(false);
+  }, 30_000);
 });

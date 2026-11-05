@@ -109,11 +109,16 @@ SIGTERM to each `timeout`, which passes it to bwrap; whatever is still alive
 after 15 s gets SIGKILL, process group and all. The phase's `record.json`
 and `run.json` record it as failed with `interrupted` and "the runner was
 interrupted by <signal>", a story so far's temporary directories are
-removed, and the runner exits 128 + the signal number.
+removed, and the runner exits 128 + the signal number. The handler covers the
+whole phase (`withPhaseGuard`), not each session, so a signal between a story
+so far's reply and its revision is handled too. A synchronous step, a host
+token refresh or a memory wait, finishes before the handler runs; no
+sandboxed session runs then.
 
 Every phase (`outline`, `scenes`, `so-far`) refuses to start while any
-sandboxed claude or grok session (`bwrap --args 3 claude|grok`) is running
-on the host, from this round or any other: stop it first.
+sandboxed claude or grok session (`bwrap --args 3 claude|grok`) of this
+user is running on the host, from this round or any other: stop it first.
+Each is listed once, by its outermost process (the `timeout`).
 
 Nothing in the runner signals itself: a runner stopped part-way was stopped
 from outside, most likely by a time limit on whatever launched it. Run the

@@ -762,6 +762,50 @@ function which(name: string): string {
   return path;
 }
 
+/**
+ * What a phase has under way, for its termination handler: the sessions
+ * running, and temporary directories to remove.
+ */
+export const live = {
+  sessions: new Map<
+    string,
+    { round: string; dir: string; record: SessionRecord }
+  >(),
+  cleanup: new Set<string>(),
+};
+
+/**
+ * Runs a phase with one termination handler for all of it (worldcrafter-
+ * 7b2r, s8hy): on SIGTERM, SIGINT or SIGHUP, whenever it arrives, the
+ * sessions under way are stopped and recorded as failed with the signal,
+ * the phase's temporary directories are removed, and the runner exits.
+ * A synchronous step (a host token refresh, a memory wait) finishes first:
+ * the handler runs once it returns, and no sandboxed session runs then.
+ */
+export async function withPhaseGuard<T>(phase: () => Promise<T>): Promise<T> {
+  const stopHandling = onTermination((signal) => {
+    for (const [name, { round, dir, record }] of live.sessions) {
+      record.interrupted = signal;
+      record.problems.push(`the runner was interrupted by ${signal}`);
+      writeJson(join(dir, "record.json"), record);
+      const run = readRound(round);
+      run.sessions.push(record);
+      saveRound(round, run);
+      console.log(
+        `[${name}] interrupted by ${signal}; its session was stopped.`,
+      );
+    }
+    for (const path of live.cleanup)
+      rmSync(path, { recursive: true, force: true });
+    console.log(`Stopped by ${signal}.`);
+  });
+  try {
+    return await phase();
+  } finally {
+    stopHandling();
+  }
+}
+
 /** Runs one session into `<round>/phases/<phase>/` and returns its record. */
 async function runSession({
   round,
@@ -773,7 +817,6 @@ async function runSession({
   sandboxCwd,
   timeoutSeconds,
   check,
-  cleanup = [],
 }: {
   round: string;
   phase: string;
@@ -785,8 +828,6 @@ async function runSession({
   sandboxCwd: string;
   timeoutSeconds: number;
   check: (jsonl: string) => TranscriptSummary;
-  /** Temporary directories to remove if the runner is interrupted. */
-  cleanup?: string[];
 }): Promise<{ record: SessionRecord; jsonl: string; dir: string }> {
   const dir = join(paths(round).phases, phase);
   if (existsSync(dir)) {
@@ -809,20 +850,9 @@ async function runSession({
     problems: [],
   };
   console.log(`[${phase}] started ${record.startedAt}`);
-  // If the runner is told to stop, the session stops with it, and the
-  // phase is recorded as failed with the signal (worldcrafter-7b2r).
-  const stopHandling = onTermination((signal) => {
-    record.interrupted = signal;
-    record.problems.push(`the runner was interrupted by ${signal}`);
-    writeJson(join(dir, "record.json"), record);
-    const run = readRound(round);
-    run.sessions.push(record);
-    saveRound(round, run);
-    for (const path of cleanup) rmSync(path, { recursive: true, force: true });
-    console.log(
-      `[${phase}] interrupted by ${signal}; its session was stopped.`,
-    );
-  });
+  // The phase's handler (withPhaseGuard) records it if the runner is
+  // stopped while it runs.
+  live.sessions.set(phase, { round, dir, record });
   const started = performance.now();
   try {
     record.exitCode = await spawnSandboxed(sandbox, command, timeoutSeconds, {
@@ -831,7 +861,7 @@ async function runSession({
       stderr: join(dir, "stderr.txt"),
     }).exited;
   } finally {
-    stopHandling();
+    live.sessions.delete(phase);
   }
   record.durationSeconds = Math.round((performance.now() - started) / 1000);
   record.credentials.after = sha256(credentialsPath());
@@ -1038,77 +1068,79 @@ export async function outline(
   }: { premise?: string | undefined; outlineSize?: string | undefined } = {},
 ): Promise<SessionRecord> {
   refuseIfSessionsRunning();
-  const round = resolve(roundArg);
-  const p = paths(round);
-  if (existsSync(p.run))
-    throw new Error(`${p.run} exists; a round's outline is run once.`);
-  mkdirSync(round, { recursive: true });
-  mkdirSync(join(p.home, ".claude"), { recursive: true });
-  mkdirSync(p.work, { recursive: true });
-  must(["git", "init", "-q", "-b", "main"], p.work);
-  const commit = must(["git", "rev-parse", "HEAD"]).trim();
-  const uncommitted = must([
-    "git",
-    "status",
-    "--porcelain",
-    "--",
-    ...TOOL_PATHS,
-  ]).trim();
-  buildTool(p.tool, REPO);
-  must(["chmod", "-R", "a-w", p.tool]);
-  const tool = Object.fromEntries(
-    filesUnder(p.tool).map((f) => [f, sha256(join(p.tool, f))]),
-  );
-  const record: RoundRecord = {
-    premise,
-    outlineSize,
-    model: MODEL,
-    claudeVersion: must(["claude", "--version"]).trim(),
-    commit,
-    uncommitted,
-    builtAt: new Date().toISOString(),
-    tool,
-    sessionId: randomUUID(),
-    sessions: [],
-  };
-  saveRound(round, record);
-  const skillDir = join(p.tool, "story-sketch");
-  const prompt = outlinePrompt({
-    premise,
-    outlineSize,
-    craft: readFileSync(join(skillDir, "craft.md"), "utf8"),
-    skill: readFileSync(join(skillDir, "SKILL.md"), "utf8"),
-  });
-  const { record: session, dir } = await runSession({
-    round,
-    phase: "outline",
-    prompt,
-    command: ["claude", "-p", prompt, ...writerArgs(record.sessionId, false)],
-    sandbox: writerSandbox(round, which("claude"), process.execPath),
-    cwd: p.work,
-    sandboxCwd: STORY_MOUNT,
-    timeoutSeconds: TIMEOUTS.outline,
-    check: writerCheck,
-  });
-  if (readRepoFile(p.work, STORY_FILE) === undefined)
-    session.problems.push(`${STORY_FILE} is missing`);
-  else {
-    try {
-      const story = readStory(round);
-      writeFileSync(join(round, "beats.md"), beatsText(story));
-      if (story.scenes.length === 0)
-        session.problems.push("the outline has no scenes");
-    } catch (error) {
-      session.problems.push(
-        error instanceof Error ? error.message : String(error),
-      );
+  return withPhaseGuard(async () => {
+    const round = resolve(roundArg);
+    const p = paths(round);
+    if (existsSync(p.run))
+      throw new Error(`${p.run} exists; a round's outline is run once.`);
+    mkdirSync(round, { recursive: true });
+    mkdirSync(join(p.home, ".claude"), { recursive: true });
+    mkdirSync(p.work, { recursive: true });
+    must(["git", "init", "-q", "-b", "main"], p.work);
+    const commit = must(["git", "rev-parse", "HEAD"]).trim();
+    const uncommitted = must([
+      "git",
+      "status",
+      "--porcelain",
+      "--",
+      ...TOOL_PATHS,
+    ]).trim();
+    buildTool(p.tool, REPO);
+    must(["chmod", "-R", "a-w", p.tool]);
+    const tool = Object.fromEntries(
+      filesUnder(p.tool).map((f) => [f, sha256(join(p.tool, f))]),
+    );
+    const record: RoundRecord = {
+      premise,
+      outlineSize,
+      model: MODEL,
+      claudeVersion: must(["claude", "--version"]).trim(),
+      commit,
+      uncommitted,
+      builtAt: new Date().toISOString(),
+      tool,
+      sessionId: randomUUID(),
+      sessions: [],
+    };
+    saveRound(round, record);
+    const skillDir = join(p.tool, "story-sketch");
+    const prompt = outlinePrompt({
+      premise,
+      outlineSize,
+      craft: readFileSync(join(skillDir, "craft.md"), "utf8"),
+      skill: readFileSync(join(skillDir, "SKILL.md"), "utf8"),
+    });
+    const { record: session, dir } = await runSession({
+      round,
+      phase: "outline",
+      prompt,
+      command: ["claude", "-p", prompt, ...writerArgs(record.sessionId, false)],
+      sandbox: writerSandbox(round, which("claude"), process.execPath),
+      cwd: p.work,
+      sandboxCwd: STORY_MOUNT,
+      timeoutSeconds: TIMEOUTS.outline,
+      check: writerCheck,
+    });
+    if (readRepoFile(p.work, STORY_FILE) === undefined)
+      session.problems.push(`${STORY_FILE} is missing`);
+    else {
+      try {
+        const story = readStory(round);
+        writeFileSync(join(round, "beats.md"), beatsText(story));
+        if (story.scenes.length === 0)
+          session.problems.push("the outline has no scenes");
+      } catch (error) {
+        session.problems.push(
+          error instanceof Error ? error.message : String(error),
+        );
+      }
     }
-  }
-  session.problems.push(...snapshot(round, dir));
-  writeJson(join(dir, "record.json"), session);
-  record.sessions.push(session);
-  saveRound(round, record);
-  return session;
+    session.problems.push(...snapshot(round, dir));
+    writeJson(join(dir, "record.json"), session);
+    record.sessions.push(session);
+    saveRound(round, record);
+    return session;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1121,73 +1153,80 @@ export async function scenes(
   }: { sceneWords?: string | undefined } = {},
 ): Promise<SessionRecord[]> {
   refuseIfSessionsRunning();
-  const round = resolve(roundArg);
-  const p = paths(round);
-  const record = readRound(round);
-  const points = pointsInOrder(readStory(round), readPoints(round));
-  if (points.length === 0)
-    throw new Error("No points are chosen; use choose or choose-random.");
-  mkdirSync(p.scenes, { recursive: true });
-  writeJson(
-    join(round, "scene-order.json"),
-    points.map((pt) => ({ n: pt.index, sceneId: pt.sceneId })),
-  );
-  const done: SessionRecord[] = [];
-  for (const point of points) {
-    const out = join(p.scenes, `${point.index}.md`);
-    if (existsSync(out)) {
-      console.log(`[scene-${point.index}] ${out} exists; skipping.`);
-      continue;
+  return withPhaseGuard(async () => {
+    const round = resolve(roundArg);
+    const p = paths(round);
+    const record = readRound(round);
+    const points = pointsInOrder(readStory(round), readPoints(round));
+    if (points.length === 0)
+      throw new Error("No points are chosen; use choose or choose-random.");
+    mkdirSync(p.scenes, { recursive: true });
+    writeJson(
+      join(round, "scene-order.json"),
+      points.map((pt) => ({ n: pt.index, sceneId: pt.sceneId })),
+    );
+    const done: SessionRecord[] = [];
+    for (const point of points) {
+      const out = join(p.scenes, `${point.index}.md`);
+      if (existsSync(out)) {
+        console.log(`[scene-${point.index}] ${out} exists; skipping.`);
+        continue;
+      }
+      const prompt = scenePrompt({
+        point,
+        index: point.index,
+        count: points.length,
+        sceneWords,
+      });
+      const {
+        record: session,
+        jsonl,
+        dir,
+      } = await runSession({
+        round,
+        phase: `scene-${point.index}`,
+        prompt,
+        command: [
+          "claude",
+          "-p",
+          prompt,
+          ...writerArgs(record.sessionId, true),
+        ],
+        sandbox: writerSandbox(round, which("claude"), process.execPath),
+        cwd: p.work,
+        sandboxCwd: STORY_MOUNT,
+        timeoutSeconds: TIMEOUTS.scene,
+        check: writerCheck,
+      });
+      const ids = sessionIds(jsonl);
+      if (ids.length !== 1 || ids[0] !== record.sessionId) {
+        session.problems.push(
+          `not the outline's session: the transcript names ${ids.join(", ") || "no session"}, not ${record.sessionId}`,
+        );
+      }
+      const prose = readRepoFile(p.work, join("scenes", `${point.sceneId}.md`));
+      if (prose === undefined || prose.trim() === "") {
+        session.problems.push(
+          `scenes/${point.sceneId}.md is missing, empty or not a plain file`,
+        );
+      } else {
+        writeFileSync(out, prose);
+      }
+      session.problems.push(...snapshot(round, dir));
+      writeJson(join(dir, "record.json"), session);
+      record.sessions.push(session);
+      saveRound(round, record);
+      done.push(session);
+      if (session.problems.some((pr) => !pr.startsWith("note:"))) {
+        console.log(
+          `[scene-${point.index}] failed; stopping, so later scenes keep their order.`,
+        );
+        break;
+      }
     }
-    const prompt = scenePrompt({
-      point,
-      index: point.index,
-      count: points.length,
-      sceneWords,
-    });
-    const {
-      record: session,
-      jsonl,
-      dir,
-    } = await runSession({
-      round,
-      phase: `scene-${point.index}`,
-      prompt,
-      command: ["claude", "-p", prompt, ...writerArgs(record.sessionId, true)],
-      sandbox: writerSandbox(round, which("claude"), process.execPath),
-      cwd: p.work,
-      sandboxCwd: STORY_MOUNT,
-      timeoutSeconds: TIMEOUTS.scene,
-      check: writerCheck,
-    });
-    const ids = sessionIds(jsonl);
-    if (ids.length !== 1 || ids[0] !== record.sessionId) {
-      session.problems.push(
-        `not the outline's session: the transcript names ${ids.join(", ") || "no session"}, not ${record.sessionId}`,
-      );
-    }
-    const prose = readRepoFile(p.work, join("scenes", `${point.sceneId}.md`));
-    if (prose === undefined || prose.trim() === "") {
-      session.problems.push(
-        `scenes/${point.sceneId}.md is missing, empty or not a plain file`,
-      );
-    } else {
-      writeFileSync(out, prose);
-    }
-    session.problems.push(...snapshot(round, dir));
-    writeJson(join(dir, "record.json"), session);
-    record.sessions.push(session);
-    saveRound(round, record);
-    done.push(session);
-    if (session.problems.some((pr) => !pr.startsWith("note:"))) {
-      console.log(
-        `[scene-${point.index}] failed; stopping, so later scenes keep their order.`,
-      );
-      break;
-    }
-  }
-  vocabulary(round);
-  return done;
+    vocabulary(round);
+    return done;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1198,112 +1237,117 @@ export const OPENING_SO_FAR = "Nothing yet: this scene opens the story.";
 
 export async function soFar(roundArg: string): Promise<SessionRecord[]> {
   refuseIfSessionsRunning();
-  const round = resolve(roundArg);
-  const p = paths(round);
-  const record = readRound(round);
-  const story = readStory(round);
-  const points = pointsInOrder(story, readPoints(round));
-  mkdirSync(p.soFar, { recursive: true });
-  const done: SessionRecord[] = [];
-  for (const point of points) {
-    const out = join(p.soFar, `${point.index}.md`);
-    if (existsSync(out)) {
-      console.log(`[so-far-${point.index}] ${out} exists; skipping.`);
-      continue;
-    }
-    if (story.scenes[0]?.id === point.sceneId) {
-      // Nothing comes before it, so there is nothing to summarise.
-      writeFileSync(out, `${OPENING_SO_FAR}\n`);
-      console.log(
-        `[so-far-${point.index}] the story's first scene: wrote "${OPENING_SO_FAR}"`,
-      );
-      continue;
-    }
-    const outlineText = outlineBefore(story, point.sceneId);
-    const runDir = realpathSync(mkdtempSync("/tmp/so-far."));
-    // The agent's home, kept only until its one revision is done.
-    const home = realpathSync(mkdtempSync(join(tmpdir(), "so-far-home.")));
-    mkdirSync(join(home, ".claude"));
-    const sessionId = randomUUID();
-    const sandbox = soFarSandbox(runDir, home, which("claude"));
-    try {
-      writeFileSync(join(runDir, "outline.md"), outlineText);
-      const ask = async (phase: string, prompt: string, resume: boolean) => {
-        const result = await runSession({
-          round,
-          phase,
-          prompt,
-          command: [
-            "claude",
-            "-p",
+  return withPhaseGuard(async () => {
+    const round = resolve(roundArg);
+    const p = paths(round);
+    const record = readRound(round);
+    const story = readStory(round);
+    const points = pointsInOrder(story, readPoints(round));
+    mkdirSync(p.soFar, { recursive: true });
+    const done: SessionRecord[] = [];
+    for (const point of points) {
+      const out = join(p.soFar, `${point.index}.md`);
+      if (existsSync(out)) {
+        console.log(`[so-far-${point.index}] ${out} exists; skipping.`);
+        continue;
+      }
+      if (story.scenes[0]?.id === point.sceneId) {
+        // Nothing comes before it, so there is nothing to summarise.
+        writeFileSync(out, `${OPENING_SO_FAR}\n`);
+        console.log(
+          `[so-far-${point.index}] the story's first scene: wrote "${OPENING_SO_FAR}"`,
+        );
+        continue;
+      }
+      const outlineText = outlineBefore(story, point.sceneId);
+      const runDir = realpathSync(mkdtempSync("/tmp/so-far."));
+      // The agent's home, kept only until its one revision is done.
+      const home = realpathSync(mkdtempSync(join(tmpdir(), "so-far-home.")));
+      mkdirSync(join(home, ".claude"));
+      live.cleanup.add(runDir);
+      live.cleanup.add(home);
+      const sessionId = randomUUID();
+      const sandbox = soFarSandbox(runDir, home, which("claude"));
+      try {
+        writeFileSync(join(runDir, "outline.md"), outlineText);
+        const ask = async (phase: string, prompt: string, resume: boolean) => {
+          const result = await runSession({
+            round,
+            phase,
             prompt,
-            ...soFarArgs(runDir, sessionId, resume),
-          ],
-          sandbox,
-          cwd: runDir,
-          sandboxCwd: runDir,
-          timeoutSeconds: TIMEOUTS.soFar,
-          check: (j) => judgeTranscript(j, runDir),
-          cleanup: [runDir, home],
-        });
-        const { record: rec, jsonl, dir } = result;
-        writeFileSync(join(dir, "outline.md"), outlineText);
-        if (filesUnder(runDir).join(",") !== "outline.md") {
-          rec.problems.push(
-            `the run dir holds ${filesUnder(runDir).join(", ")}`,
+            command: [
+              "claude",
+              "-p",
+              prompt,
+              ...soFarArgs(runDir, sessionId, resume),
+            ],
+            sandbox,
+            cwd: runDir,
+            sandboxCwd: runDir,
+            timeoutSeconds: TIMEOUTS.soFar,
+            check: (j) => judgeTranscript(j, runDir),
+          });
+          const { record: rec, jsonl, dir } = result;
+          writeFileSync(join(dir, "outline.md"), outlineText);
+          if (filesUnder(runDir).join(",") !== "outline.md") {
+            rec.problems.push(
+              `the run dir holds ${filesUnder(runDir).join(", ")}`,
+            );
+          }
+          const ids = sessionIds(jsonl);
+          if (ids.length !== 1 || ids[0] !== sessionId) {
+            rec.problems.push(
+              `the transcript names session ${ids.join(", ") || "none"}, not ${sessionId}`,
+            );
+          }
+          const reply = resultText(jsonl)?.trim();
+          if (reply === undefined || reply === "")
+            rec.problems.push("no final reply");
+          else writeFileSync(join(dir, "reply.md"), `${reply}\n`);
+          return { rec, dir, reply };
+        };
+        const first = await ask(`so-far-${point.index}`, soFarPrompt(), false);
+        const recs = [first.rec];
+        let text = first.reply;
+        if (text !== undefined && needsRevision(words(text))) {
+          const n = words(text);
+          first.rec.problems.push(
+            `note: ${n} words, so the agent was asked once to revise`,
           );
-        }
-        const ids = sessionIds(jsonl);
-        if (ids.length !== 1 || ids[0] !== sessionId) {
-          rec.problems.push(
-            `the transcript names session ${ids.join(", ") || "none"}, not ${sessionId}`,
+          const second = await ask(
+            `so-far-${point.index}-revise`,
+            soFarRevisionPrompt(n),
+            true,
           );
+          recs.push(second.rec);
+          if (second.reply !== undefined) text = second.reply;
         }
-        const reply = resultText(jsonl)?.trim();
-        if (reply === undefined || reply === "")
-          rec.problems.push("no final reply");
-        else writeFileSync(join(dir, "reply.md"), `${reply}\n`);
-        return { rec, dir, reply };
-      };
-      const first = await ask(`so-far-${point.index}`, soFarPrompt(), false);
-      const recs = [first.rec];
-      let text = first.reply;
-      if (text !== undefined && needsRevision(words(text))) {
-        const n = words(text);
-        first.rec.problems.push(
-          `note: ${n} words, so the agent was asked once to revise`,
-        );
-        const second = await ask(
-          `so-far-${point.index}-revise`,
-          soFarRevisionPrompt(n),
-          true,
-        );
-        recs.push(second.rec);
-        if (second.reply !== undefined) text = second.reply;
-      }
-      const last = recs[recs.length - 1];
-      if (text !== undefined && last !== undefined) {
-        writeFileSync(out, `${text}\n`);
-        const n = words(text);
-        if (n < SO_FAR_WORDS.min || n > SO_FAR_WORDS.max) {
-          last.problems.push(
-            `note: ${n} words, outside ${SO_FAR_WORDS.min} to ${SO_FAR_WORDS.max}`,
-          );
+        const last = recs[recs.length - 1];
+        if (text !== undefined && last !== undefined) {
+          writeFileSync(out, `${text}\n`);
+          const n = words(text);
+          if (n < SO_FAR_WORDS.min || n > SO_FAR_WORDS.max) {
+            last.problems.push(
+              `note: ${n} words, outside ${SO_FAR_WORDS.min} to ${SO_FAR_WORDS.max}`,
+            );
+          }
         }
+        for (const rec of recs) {
+          writeJson(join(paths(round).phases, rec.phase, "record.json"), rec);
+          record.sessions.push(rec);
+          done.push(rec);
+        }
+        saveRound(round, record);
+      } finally {
+        rmSync(runDir, { recursive: true });
+        rmSync(home, { recursive: true, force: true });
+        live.cleanup.delete(runDir);
+        live.cleanup.delete(home);
       }
-      for (const rec of recs) {
-        writeJson(join(paths(round).phases, rec.phase, "record.json"), rec);
-        record.sessions.push(rec);
-        done.push(rec);
-      }
-      saveRound(round, record);
-    } finally {
-      rmSync(runDir, { recursive: true });
-      rmSync(home, { recursive: true, force: true });
     }
-  }
-  vocabulary(round);
-  return done;
+    vocabulary(round);
+    return done;
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -438,6 +438,19 @@ export type ProbeResult = {
 
 /** A trivial, non-premise session per model, in the same sandbox. */
 export async function probe(): Promise<ProbeResult[]> {
+  refuseIfSessionsRunning();
+  // Its sessions stop with the runner, like runPart's; there is nothing to record.
+  const stopHandling = onTermination((signal) =>
+    console.log(`probe stopped by ${signal}; its sessions were stopped.`),
+  );
+  try {
+    return await probeAll();
+  } finally {
+    stopHandling();
+  }
+}
+
+async function probeAll(): Promise<ProbeResult[]> {
   ensureToken(600_000, hostToken);
   return Promise.all(
     JUDGE_NAMES.map(async (judge) => {

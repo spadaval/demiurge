@@ -139,8 +139,9 @@ SIGTERM, SIGINT or SIGHUP to `scenes.ts` or `panel.ts` stops every session
 under way (`terminate.ts`: SIGTERM to each session's `timeout`, which leads
 its own process group and passes it to bwrap; SIGKILL to the group after
 15 s), records each as failed with the signal, and exits 128 + its number.
-Neither runner starts while a sandboxed claude or grok session from an
-earlier run is still running.
+Neither runner, nor `panel.ts probe`, starts while a sandboxed claude or
+grok session of this user from an earlier run is still running; `probe`'s
+sessions stop with it too.
 
 ### Memory
 

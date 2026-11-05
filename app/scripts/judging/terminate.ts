@@ -126,11 +126,30 @@ export function isSandboxedSession(
   );
 }
 
-/** Every running sandboxed session on the host, from /proc. */
+/** A process's real uid and parent pid, from /proc, or undefined once it's gone. */
+function owner(pid: string): { uid: number; ppid: number } | undefined {
+  try {
+    const status = readFileSync(`/proc/${pid}/status`, "utf8");
+    const uid = /^Uid:\s+(\d+)/m.exec(status)?.[1];
+    const ppid = /^PPid:\s+(\d+)/m.exec(status)?.[1];
+    return uid === undefined || ppid === undefined
+      ? undefined
+      : { uid: Number(uid), ppid: Number(ppid) };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Every running sandboxed session of `uid` (this user, by default), from
+ * /proc: one entry per session, its outermost process (the `timeout`, not
+ * the bwrap processes under it). Other users' runs aren't counted.
+ */
 export function sandboxedSessions(
   names: readonly string[] = ["claude", "grok"],
+  uid: number = process.getuid?.() ?? -1,
 ): LiveSession[] {
-  const found: LiveSession[] = [];
+  const matches = new Map<number, { command: string; ppid: number }>();
   for (const entry of readdirSync("/proc")) {
     if (!/^\d+$/.test(entry)) continue;
     let argv: string[];
@@ -141,11 +160,17 @@ export function sandboxedSessions(
     } catch {
       continue;
     }
-    if (isSandboxedSession(argv, names)) {
-      found.push({ pid: Number(entry), command: argv.slice(0, 8).join(" ") });
-    }
+    if (!isSandboxedSession(argv, names)) continue;
+    const who = owner(entry);
+    if (who === undefined || who.uid !== uid) continue;
+    matches.set(Number(entry), {
+      command: argv.slice(0, 8).join(" "),
+      ppid: who.ppid,
+    });
   }
-  return found;
+  return [...matches]
+    .filter(([, m]) => !matches.has(m.ppid))
+    .map(([pid, m]) => ({ pid, command: m.command }));
 }
 
 /**
@@ -155,8 +180,12 @@ export function sandboxedSessions(
  */
 export function refuseIfSessionsRunning(
   names: readonly string[] = ["claude", "grok"],
+  uid?: number,
 ): void {
-  const live = sandboxedSessions(names);
+  const live =
+    uid === undefined
+      ? sandboxedSessions(names)
+      : sandboxedSessions(names, uid);
   if (live.length > 0) {
     throw new Error(
       `A sandboxed session from an earlier run is still running; stop it first (kill the pid's process group):\n${live.map((s) => `- pid ${s.pid}: ${s.command} ...`).join("\n")}`,
