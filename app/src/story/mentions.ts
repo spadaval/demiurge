@@ -363,11 +363,13 @@ const numberWordsPattern = (value: number) =>
 
 /**
  * The round numbers a text might state `value` as ("over five hundred" for
- * 540): it rounded down and to nearest, to each power of ten below it.
+ * 540): it rounded down and to nearest, to each power of ten from 100 up
+ * to it. Small values aren't rounded, since "ten" or "twenty" in prose is
+ * too common to suggest a count (finding worldcrafter-a6my).
  */
 function roundings(value: number): number[] {
   const found = new Set<number>();
-  for (let size = 10; size <= Math.abs(value); size *= 10) {
+  for (let size = 100; size <= Math.abs(value); size *= 10) {
     for (const r of [
       Math.floor(value / size) * size,
       Math.round(value / size) * size,

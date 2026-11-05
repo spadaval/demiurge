@@ -1211,23 +1211,55 @@ describe("story CLI", () => {
     expect(changed).not.toContain("fact:other");
   });
 
-  test("an edit's trace leaves out what its batch rewrote, and the scene being written", () => {
+  test("set-count rounds only values from 100 up, and keeps a note left out", () => {
+    ok("init", "A keeper keeps the light.");
+    ok("add-event", "storm", "The storm");
+    ok("add-count", "boats", "Boats afloat");
+    ok("set-count", "boats", "storm", "12", "--note", "Twelve after the storm");
+    ok("add-fact", "f4", "Ten men crew the lifeboat, and two more stand by");
+    // "Ten" doesn't state 12 roughly (finding worldcrafter-a6my).
+    expect(ok("set-count", "boats", "storm", "14")).not.toContain("fact:f4");
+    // Without --note, the note at that event stays (worldcrafter-d5wq);
+    // --note "" clears it.
+    expect(saved().counts[0]?.values).toEqual([
+      { at: "storm", value: 14, note: "Twelve after the storm" },
+    ]);
+    ok("set-count", "boats", "storm", "15", "--note", "");
+    expect(saved().counts[0]?.values).toEqual([
+      { at: "storm", value: 15, note: "" },
+    ]);
+  });
+
+  test("an edit's trace in a batch still lists what the batch rewrote, and leaves out the scene being written", () => {
     ok("init", "A keeper finds a letter.");
     ok(
       "add-event",
       "wreck",
       "The wreck",
       "--summary",
-      "The Alba sank off the northern reef in a gale",
+      "The ferry Ondine sinks off Gull Point in a black storm",
     );
+    ok(
+      "add-fact",
+      "f1",
+      "Everyone remembers the ferry Ondine going down off Gull Point in the storm",
+    );
+    ok("add-fact", "f2", "The lamp is lit at dusk");
     ok("add-scene", "harbour", "The harbour", "--summary", "Mara on the quay");
     ok("set-scene-events", "harbour", "wreck");
     const reword = [
       "describe-event",
       "wreck",
       "--summary",
-      "The Alba ran aground on the southern cape",
+      "A trawler founders near the harbour on a calm night",
     ];
+    const restore = () =>
+      ok(
+        "describe-event",
+        "wreck",
+        "--summary",
+        "The ferry Ondine sinks off Gull Point in a black storm",
+      );
     const batch = (...commands: string[][]) => {
       const script = commands
         .map((c) => ["bun", SCRIPT, file, ...c].map((a) => `'${a}'`).join(" "))
@@ -1236,35 +1268,32 @@ describe("story CLI", () => {
         stdout: "pipe",
       }).stdout.toString();
     };
-    const summary = [
+    // A fact rewritten earlier in the batch for another reason still states
+    // the old wreck (finding worldcrafter-gu8c), as does one left alone.
+    const other = ["update-fact", "f2", "--text", "The lamp is lit at dark"];
+    const still = [
+      "update-fact",
+      "f1",
+      "--text",
+      "Everyone still remembers the ferry Ondine going down off Gull Point in the storm",
+    ];
+    expect(batch(other, reword)).toContain("- fact:f1 (");
+    restore();
+    expect(batch(still, reword)).toContain("- fact:f1 (");
+    restore();
+    // The scene whose prose was written since the story was saved isn't
+    // listed, for the rest of the batch.
+    ok(
       "update-scene",
       "harbour",
       "--summary",
-      "Mara on the quay: the Alba sank off the northern reef in a gale",
-    ];
-    // In separate command lines, the scene rewritten first is a suspect.
-    ok(...summary);
+      "Mara on the quay, where the ferry Ondine went down off Gull Point in the storm",
+    );
     expect(ok(...reword)).toContain('- scene:harbour ("The harbour")');
-    ok(
-      "describe-event",
-      "wreck",
-      "--summary",
-      "The Alba sank off the northern reef in a gale",
-    );
-    ok("update-scene", "harbour", "--summary", "Mara on the quay");
-    // In one, it isn't.
-    expect(batch(summary, reword)).toBe("");
-    // Nor is the scene whose prose was written since the story was saved.
-    ok(
-      "describe-event",
-      "wreck",
-      "--summary",
-      "The Alba sank off the northern reef in a gale",
-    );
-    ok(...summary);
+    restore();
     mkdirSync(join(dir, "scenes"));
     writeFileSync(join(dir, "scenes", "harbour.md"), "Gulls.\n");
-    expect(ok(...reword)).toBe("");
+    expect(batch(other, reword)).not.toContain("scene:harbour");
     // trace on its own still lists it.
     expect(ok("trace", "event:wreck")).toContain("scene:harbour");
   });

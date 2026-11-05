@@ -282,13 +282,16 @@ export type StoryCommand =
     }
   /** Also clears it as another count's total, knowledge of it, and links. */
   | { type: "removeCount"; id: string }
-  /** The count's value from event `at`; value null removes it. */
+  /**
+   * The count's value from event `at`; value null removes it. Without
+   * `note`, a value already there keeps its note.
+   */
   | {
       type: "setCount";
       id: string;
       at: EventId;
       value: number | null;
-      note: string;
+      note?: string;
     }
   /**
    * An actor or object takes part in an event, with its part in words.
@@ -1404,6 +1407,8 @@ export function applyStoryCommand(
         .andThen((count) => resolve("event", [at], isEvent).map(() => count))
         .andThen((count) => {
           const others = count.values.filter((v) => v.at !== at);
+          const noteThen =
+            note ?? count.values.find((v) => v.at === at)?.note ?? "";
           if (value === null && others.length === count.values.length) {
             return refuse(
               "unknown_id",
@@ -1415,7 +1420,9 @@ export function applyStoryCommand(
             counts: replace(story.counts, id, (c) => ({
               ...c,
               values:
-                value === null ? others : [...others, { at, value, note }],
+                value === null
+                  ? others
+                  : [...others, { at, value, note: noteThen }],
             })),
           });
         });

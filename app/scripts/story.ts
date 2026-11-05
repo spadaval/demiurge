@@ -57,7 +57,7 @@ import {
   trueOrder,
   viewpointGap,
 } from "../src/story/learning";
-import { type Mention, storyTexts, whatMentions } from "../src/story/mentions";
+import { type Mention, whatMentions } from "../src/story/mentions";
 import { membershipsInStoryOrder } from "../src/story/order";
 import {
   eventTime,
@@ -1179,7 +1179,12 @@ export const EDITS: EditSpecs = {
   setCount: {
     group: "Counts: numbers that change at events",
     args: ["id", "event-id", "value"],
-    flags: { note: { value: "<text>", help: "why it is that, then" } },
+    flags: {
+      note: {
+        value: "<text>",
+        help: 'why it is that, then; left out, a value already there keeps its note, and "" clears it',
+      },
+    },
     summary:
       'Set a count\'s value from an event on, until its next value in story order; setting it again at that event replaces it, and "none" removes it.',
     example: [
@@ -1192,12 +1197,13 @@ export const EDITS: EditSpecs = {
     ],
     build: (a) => {
       const value = a.arg("value");
+      const note = a.text("note");
       return {
         type: "setCount",
         id: a.arg("id"),
         at: a.arg("event-id"),
         value: value === "none" ? null : a.number(value, "<value>"),
-        note: a.text("note") ?? "",
+        ...(note === undefined ? {} : { note }),
       };
     },
   },
@@ -1906,11 +1912,11 @@ export function helpText(): string {
     "scene prose, each with why; trace <ref> lists them all. Adding a record",
     "or placing an event for the first time prints none, since nothing can",
     "state an old version yet; a count traces only a changed value, looking",
-    "for the old value at that event in figures, words or rounded. Within one",
-    "shell command line, the trace leaves out records an earlier edit in it",
-    "rewrote and the scene whose prose was written since the story file was",
-    "last saved. touches (links only) and mentions (text naming it only) are",
-    "the narrower views trace builds on.",
+    "for the old value at that event in figures, words or, from 100 up,",
+    "rounded. Within one shell command line, the trace leaves out the record",
+    "of the scene whose prose was written since the story file was last",
+    "saved. touches (links only) and mentions (text naming it only) are the",
+    "narrower views trace builds on.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -2792,7 +2798,7 @@ function staleTextLines(
   after: Story,
   command: StoryCommand,
   storyPath: string,
-  rewritten: ReadonlySet<string> = new Set(),
+  writing: ReadonlySet<string> = new Set(),
 ): string[] {
   const ref = changedRef(before, after, command);
   // Nothing can state where an event was before it had a place.
@@ -2814,13 +2820,13 @@ function staleTextLines(
     was,
     prose: readProse(storyPath, after),
   }).unwrapOr([]);
-  // A record this batch has already rewritten states the new version, and
-  // the scene being written is about to be rewritten anyway. (Prose is still
-  // listed: a change after writing it can leave it stale.)
+  // The record of the scene being written is about to be rewritten anyway.
+  // (Its prose is still listed: a change after writing it can leave it
+  // stale.)
   const found = all.filter(
     ({ inText, target }) =>
       inText &&
-      !(target.kind === "record" && rewritten.has(formatRef(target.ref))),
+      !(target.kind === "record" && writing.has(formatRef(target.ref))),
   );
   if (found.length === 0) return [];
   const shown = found.slice(0, MAX_STALE_LINES);
@@ -2855,10 +2861,12 @@ function countWas(before: Story, command: StoryCommand): Story | undefined {
 
 // ---------------------------------------------------------------------------
 // The batch: edits run from one shell command line, such as a writer's
-// script of many edits. An edit's inline trace leaves out records whose
-// text earlier edits in the batch rewrote, and the record of a scene whose
-// prose was written since the story file was last saved before the batch:
-// the scene being worked on. `trace <ref>` still lists everything.
+// script of many edits. An edit's inline trace leaves out the record of a
+// scene whose prose was written since the story file was last saved before
+// the batch: the scene being worked on. `trace <ref>` still lists
+// everything. Records an earlier edit in the batch rewrote are still
+// listed, since the rewrite may have been for another reason and left the
+// old version standing (finding worldcrafter-gu8c).
 
 const tryRead = Result.fromThrowable(
   (path: string) => readFileSync(path, "utf8"),
@@ -2929,9 +2937,14 @@ function clearOldBatches(storyPath: string): void {
   }
 }
 
-/** What this batch has rewritten so far, as refs; seeded on its first edit. */
-function batchRewritten(story: Story, storyPath: string): Set<string> {
-  const saved = tryRead(batchFile(storyPath))
+/**
+ * The scenes this batch is writing, as refs: those whose prose file is newer
+ * than the story file at the batch's first edit, which saves them for the
+ * rest of the batch (each edit rewrites the story file).
+ */
+function batchWriting(story: Story, storyPath: string): Set<string> {
+  const file = batchFile(storyPath);
+  const saved = tryRead(file)
     .map((text): unknown => JSON.parse(text))
     .unwrapOr(undefined);
   if (Array.isArray(saved)) {
@@ -2939,7 +2952,7 @@ function batchRewritten(story: Story, storyPath: string): Set<string> {
   }
   clearOldBatches(storyPath);
   const storyTime = tryMtime(storyPath).unwrapOr(null);
-  return new Set(
+  const writing =
     storyTime === null
       ? []
       : story.scenes
@@ -2949,52 +2962,9 @@ function batchRewritten(story: Story, storyPath: string): Set<string> {
             );
             return prose !== null && prose > storyTime;
           })
-          .map((scene) => formatRef({ kind: "scene", id: scene.id })),
-  );
-}
-
-/** Adds the records whose text an edit changed (not added) to the batch's list. */
-function recordBatch(
-  storyPath: string,
-  rewritten: ReadonlySet<string>,
-  before: Story,
-  after: Story,
-): void {
-  const refs: Ref[] = [
-    ...before.actors.map((x): Ref => ({ kind: "actor", id: x.id })),
-    ...before.drives.map((x): Ref => ({ kind: "drive", id: x.id })),
-    ...before.facts.map((x): Ref => ({ kind: "fact", id: x.id })),
-    ...before.readerQuestions.map(
-      (x): Ref => ({ kind: "readerQuestion", id: x.id }),
-    ),
-    ...before.timeline.events.map((x): Ref => ({ kind: "event", id: x.id })),
-    ...before.scenes.map((x): Ref => ({ kind: "scene", id: x.id })),
-    ...before.openQuestions.map(
-      (x): Ref => ({ kind: "openQuestion", id: x.id }),
-    ),
-    ...before.versions.map((x): Ref => ({ kind: "version", id: x.id })),
-    ...before.knowledge.map((x): Ref => ({ kind: "knowledge", id: x.id })),
-    ...before.objects.map((x): Ref => ({ kind: "object", id: x.id })),
-    ...before.counts.map((x): Ref => ({ kind: "count", id: x.id })),
-  ];
-  // Rewritten means its text changed; new links or a new place don't count.
-  const text = (story: Story) =>
-    new Map(
-      storyTexts(story).map((t) => [`${formatRef(t.ref)} ${t.field}`, t.value]),
-    );
-  const was = text(before);
-  const now = text(after);
-  const changed = refs
-    .map(formatRef)
-    .filter((ref) =>
-      [...was.keys(), ...now.keys()].some(
-        (key) => key.startsWith(`${ref} `) && was.get(key) !== now.get(key),
-      ),
-    );
-  tryWrite(
-    batchFile(storyPath),
-    JSON.stringify([...new Set([...rewritten, ...changed])]),
-  );
+          .map((scene) => formatRef({ kind: "scene", id: scene.id }));
+  tryWrite(file, JSON.stringify(writing));
+  return new Set(writing);
 }
 
 function touchLines(groups: TouchGroups): string[] {
@@ -3252,8 +3222,7 @@ function runEdit(
       return applyStoryCommand(story, command)
         .mapErr((e) => refused(e.message))
         .map(({ story: next, problems }) => {
-          const rewritten = batchRewritten(story, path);
-          recordBatch(path, rewritten, story, next);
+          const writing = batchWriting(story, path);
           return {
             story: next,
             stdout: [
@@ -3270,7 +3239,7 @@ function runEdit(
                 ? []
                 : droppedLinkLines(story, next, command)),
               ...crossedLinkLines(story, next),
-              ...staleTextLines(story, next, command, path, rewritten),
+              ...staleTextLines(story, next, command, path, writing),
             ]
               .map((line) => `${line}\n`)
               .join(""),
