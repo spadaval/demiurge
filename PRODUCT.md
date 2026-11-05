@@ -12,28 +12,21 @@ The app is being rebuilt from a fresh skeleton (decision worldcrafter-zyc2). It 
 
 ## Users
 
-Demiurge is for writers and worldbuilders equally. Some users mostly draft prose, some mostly build the world, and many do both. It was built first for its author, a long-form speculative-fiction writer, and is meant for others later. The user is a team of a human and an agent, so the story model has to make sense to both (decision worldcrafter-2y4g).
+Demiurge is for writers and worldbuilders equally. Some users mostly draft prose, some mostly build the world, and many do both. It was built first for its author, a long-form speculative-fiction writer, and is meant for others later. The user is a team of a human and an agent, so whatever holds the story has to make sense to both (decision worldcrafter-2y4g).
 
 ## Product Purpose
 
-Demiurge exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We use AI to assist and enhance the creative process, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). Demiurge is a tool for building stories from the frame out. The story lives in a model that people and agents both read and change, not in a chat history. The world and the plot are the structure: actors and their drives, the questions the reader is waiting on, events and scenes, worked from a premise down to beats. The AI inspects that structure while it's still cheap to change. Prose is the finish: written by hand, drafted by AI, or both, and anchored to the scenes and beats it tells, so it moves with them and is flagged when they change. The manuscript is a view assembled from the arrangement, not a stored document (decision worldcrafter-ok5a, `docs/rebuild/story-model.md`).
+Demiurge exists to get to the best possible story. It makes that easier by making sure a story has what it needs to be interesting before final drafting begins. We use AI to assist and enhance the creative process, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged (decision worldcrafter-45an). The current approach is plain notes: an agent, with craft advice, keeps the story in readable markdown notes and drafts from them. An earlier bet that a typed story model would do better than plain notes lost two blind comparisons and has ended (decision worldcrafter-03rp, `docs/verdicts/`). Aids over plain notes are built only where judged runs show the notes falling short, and each is tested blind against plain notes (`docs/strategies/notes-first.md`).
 
 Stories get made by picking elements that seem interesting and weaving them into place, jigging things around until they fit. Fluidity is what keeps that possible: jump between levels and sides, rework in the abstract, try answers against the rest of the story, and leave things undecided or contradictory until a satisfying way through appears (`docs/rebuild/story-model.md`).
 
-Success means a story can grow outside the writer's head without being flattened onto the page too early, that changes made at the structural level reach everything they should, and that the team finds more satisfying answers than it would with plain notes.
+Success means a story can grow outside the writer's head without being flattened onto the page too early, and that any aid we build makes the team's stories better than plain notes do, as an independent panel judges them.
 
 The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The web app is the current plan and not a commitment: the form follows the results.
 
 ## Positioning
 
-Other tools either inject lore into prompts (Novelcrafter, NovelAI, Sudowrite), are wikis with AI added on (World Anvil, Campfire), or offer outlines and plot grids the app doesn't understand (Plottr, Dabble, Scrivener). Demiurge treats the story and the world as a typed model that the AI maintains and the writer controls:
-
-- the story is a graph of actors, drives, questions, events and scenes, and threads are writer-owned lenses over it
-- the app checks the structure: stale promises, drives that never collide, scenes that move nothing
-- facts change at events on a world-first timeline, with frames for stasis, dilation and dimensions
-- each scene knows what *holds* at that point and what has been *revealed* to the reader so far
-- AI bookkeeping is applied as attributed, inferred data that the writer can correct
-- every AI action is a typed command that an outside agent could also call
+Not yet earned. An earlier positioning around a typed story model the app checks was dropped with that bet (decision worldcrafter-03rp). Positioning waits for an aid that beats plain notes in a blind test.
 
 ## Operating Context
 
@@ -65,14 +58,14 @@ The name is Demiurge (decision worldcrafter-cogw): Plato's craftsman, who shapes
 
 ## Evidence on Hand
 
-There are no users, testimonials, metrics or sample worlds yet. Don't invent any. Design docs are in `docs/rebuild/`, and the current strategy is `docs/strategies/structure-first.md`.
+There are no users, testimonials, metrics or sample worlds yet. Don't invent any. Design docs are in `docs/rebuild/`, and the current strategy is `docs/strategies/notes-first.md`.
 
 ## Product Principles
 
-1. **The best story wins.** Whatever gets to the best story is what we build, whether that's a screen, a database or an agent. Human judgment decides what's good.
+1. **The best story wins.** Whatever gets to the best story is what we build, whether that's a screen, a database or an agent. An independent panel of judges decides what's good, and Sumeet can overturn it (decision worldcrafter-zybl).
 2. **Stories stay fluid.** Anything can be reworked at any time, in any order, and unfinished or contradictory is a normal state for a story to be in.
 3. **The structure is the stage.** Work happens at the highest level where a change applies. Prose is the finish, anchored to the structure rather than compiled from it.
 4. **The AI is an accountable teammate.** It can do the bookkeeping, drive a whole sketch or write the prose, and it signs its work. In the app it stays quiet and doesn't compete for attention.
 5. **The writer stays in control.** Context is visible and editable, AI changes are reversible, and the writer's corrections always win.
-6. **The story model is the truth.** The manuscript is one view of it, assembled from the arrangement in its own narrative order. World and story shape each other both ways.
+6. **Results decide the form.** What holds the story (notes, a model, an app) is whatever judged runs show works best; the typed model lost to plain notes (decision worldcrafter-03rp). World and story shape each other both ways.
 7. **Don't lose the writer's work.** Losing data is a bug, but this is a personal project: a schema version and a backup export are enough, and breaking changes are fine when they make the model better.
