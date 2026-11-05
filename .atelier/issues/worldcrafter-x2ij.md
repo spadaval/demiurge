@@ -14,9 +14,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T08:16:52.425749850+00:00"
+status: "done"
 title: "Writer and story-so-far runner"
-updated_at: "2026-11-05T07:44:18.712654262+00:00"
+updated_at: "2026-11-05T08:16:52.425749850+00:00"
 ---
 
 ## Goal
@@ -36,3 +37,7 @@ A script that runs one round: a fresh sandboxed Opus 5.5 writer session using th
 ## Notes
 
 - 2026-11-05 [note] From review finding worldcrafter-8och: the comparison harness prompts (app/scripts/comparison/prompts.ts:60,64,70) tell the writer to keep render's readable form to ~1,500 words and comparison.ts:472 treats render as the story. The round runner must not reuse those prompts or packets; judges get only scene prose and the story so far.
+
+## Close Reason
+
+Implementer report (commit 30520d0 on feature/worldcrafter-ql1d). Built app/scripts/round/round.ts (+README, tests): phases outline, beats, choose/choose-random (points.json with how each was chosen, seed + mulberry32 for random), scenes, so-far, vocab, recheck. Writer: claude-opus-5-5 in the comparison sandbox (systemMounts, spawnSandboxed) with its home bound from <round>/writer-home (not tmpfs) and ~/.claude/.credentials.json ro-bound over it (an empty placeholder file is left there), story repo <round>/work at /story, CLI+skill built from the working tree at outline time (buildTool, now exported) into <round>/tool, read-only at /opt/story-tool; run.json records commit, uncommitted tool sources, tool hashes, claude --version, session id. Prompts are new (8och): premise, craft.md and SKILL.md inlined, no length on the bible, render never named. Resume works in the sandbox: outline uses --session-id, each scene --resume, and fails if the transcript names another session; no fallback implemented. Story so far: fresh agent, Read only, given outline.md with the premise and the beats strictly before its scene, no IDs; reply saved as so-far/<n>.md; the outline's first scene gets the fixed line 'Nothing yet: this scene opens the story.' with no agent. Vocabulary check: refs kind:id, the CLI's hyphenated command names from --help, and story.json/STORY_CLI/model-gaps/Demiurge/gap ref/open-question/reader-question. Timeouts: outline 7200 s, scene 3600 s, so-far 900 s. Deviation/surprise: the first smoke's scene-2 failed on a transcript-check false positive (sed 's/..//; s/it'"'"'s//' read as naming //); fixed in comparison/transcript.ts (shellWordValue, tests) and added recheck. Smoke 2 (throwaway baker premise, 5-beat outline, 2 scenes at 400-600 words, /home/supadava/projects/demiurge-world/smoke-round/): all phases ok, no reads outside, both scenes in the outline's session 105ff5dd..., links set for every scene, model-gaps.md kept, vocabulary check no hits, credentials hash unchanged. Open: so-far-2 came out at 717 words (recorded as a note, not a failure; with a 5-beat outline the agent restated nearly every beat); review outstanding.
