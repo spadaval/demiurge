@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:02.365759326+00:00"
 id: "worldcrafter-r26d"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-r26d
 priority: "P1"
 relationships:
   blocks: []
@@ -17,9 +20,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Give open questions distinct states"
-updated_at: "2026-11-05T06:49:45.633012842+00:00"
+updated_at: "2026-11-05T06:51:16.565877419+00:00"
 ---
 
 ## Goal
