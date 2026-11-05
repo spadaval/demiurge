@@ -94,7 +94,10 @@ export function parseRef(text: string): Result<Ref, string> {
 // Command-line specs and parsing.
 
 /** `value` is the placeholder shown in usage, such as `<text>`. */
-type Flag = { value: string; help?: string } | { bool: true; help?: string };
+/** A `required` flag is shown without brackets in usage. */
+type Flag =
+  | { value: string; help?: string; required?: true }
+  | { bool: true; help?: string };
 
 type Spec = {
   group: string;
@@ -937,7 +940,9 @@ export const EDITS: EditSpecs = {
   markGapDeliberate: {
     group: "Gaps: what isn't woven in yet",
     args: ["gap", "ref"],
-    flags: { reason: { value: "<text>", help: "why it's fine; required" } },
+    flags: {
+      reason: { value: "<text>", help: "why it's fine", required: true },
+    },
     summary:
       "Mark one gap on one record as deliberate, so gaps stops listing it. The gap and ref are as gaps prints them; story stands for the whole story.",
     example: [
@@ -1087,7 +1092,11 @@ function usage(name: string, spec: Spec): string {
         : `<${arg}>`,
   );
   const flags = Object.entries(spec.flags ?? {}).map(([flag, f]) =>
-    "bool" in f ? `[--${flag}]` : `[--${flag} ${f.value}]`,
+    "bool" in f
+      ? `[--${flag}]`
+      : f.required === true
+        ? `--${flag} ${f.value}`
+        : `[--${flag} ${f.value}]`,
   );
   return [name, ...args, ...flags].join(" ");
 }

@@ -360,6 +360,9 @@ describe("story CLI", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-actor", "velan", "Velan");
     ok("add-drive", "calm", "Stay calm", "--actor", "velan");
+    expect(cli("--help").stdout).toContain(
+      "\n  mark-gap-deliberate <gap> <ref> --reason <text>\n",
+    );
     const gap = "[drive-without-origin drive:calm]";
     expect(ok("gaps")).toContain(
       `- The drive "Stay calm" doesn't come from any event yet. ${gap}\n`,
