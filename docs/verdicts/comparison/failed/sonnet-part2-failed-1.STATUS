@@ -1,0 +1,9 @@
+failed
+- outside the run dir: Bash: cd /tmp/judge.6ub61Q; cat > part2.md <<'EOF'
+# Part 2 (key open)
+
+Part 1 is untouched in `my-part1.md`. Here is what my Part 1 preferences look like once the key says who used what.
+
+| Pair | Tool | Notes | My Part 1 preference | Confidence |
+|---|---|---|---|---|
+| MGT 1 | A | B | B (notes) | mediu... (cut; whole in run.json)
