@@ -3,13 +3,13 @@ import {
   describeMismatch,
   describeMoment,
   describeSpan,
+  describeSpanRange,
   describeWhen,
-  describeYearRange,
   describeYears,
   isYear,
   parseSpan,
   parseWhen,
-  yearRange,
+  spanRange,
 } from "./calendar";
 
 describe("parseWhen", () => {
@@ -151,24 +151,24 @@ test("describeMismatch keeps a mismatch visible after rounding", () => {
   });
 });
 
-test("yearRange gives the time between events placed by year as a range", () => {
+test("spanRange gives the time between events placed by year as a range", () => {
   const year = (n: number) => parseWhen(String(n))._unsafeUnwrap();
   const day = parseWhen("1106-04-10")._unsafeUnwrap();
   // Neither a year: start to start, as before.
-  expect(yearRange(day, day)).toBeUndefined();
-  const on = yearRange(day, year(1118));
-  expect(on === undefined ? undefined : describeYearRange(on)).toBe(
+  expect(spanRange(day, day)).toBeUndefined();
+  const on = spanRange(day, year(1118));
+  expect(on === undefined ? undefined : describeSpanRange(on)).toBe(
     "11.7 to 12.7 years",
   );
-  const back = yearRange(year(1118), day);
+  const back = spanRange(year(1118), day);
   expect(back !== undefined && back.max <= 0).toBe(true);
-  expect(back === undefined ? undefined : describeYearRange(back)).toBe(
+  expect(back === undefined ? undefined : describeSpanRange(back)).toBe(
     "11.7 to 12.7 years",
   );
   // Two events in one year can fall either way round.
-  const same = yearRange(year(1103), year(1103));
+  const same = spanRange(year(1103), year(1103));
   expect(same).toEqual({ min: -1, max: 1 });
-  expect(same === undefined ? "" : describeYearRange(same)).toBeUndefined();
+  expect(same === undefined ? "" : describeSpanRange(same)).toBeUndefined();
 });
 
 test("describeMoment says a moment as a date when it can", () => {

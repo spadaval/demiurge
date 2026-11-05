@@ -1309,6 +1309,16 @@ describe("story CLI", () => {
     restore();
     expect(batch(still, reword)).toContain("- fact:f1 (");
     restore();
+    // One rewritten earlier in the line with words of the new version, and
+    // suspected by shared words alone, was written with the change in mind.
+    const agree = [
+      "update-fact",
+      "f1",
+      "--text",
+      "Everyone remembers the ferry Ondine going down off Gull Point in the storm, though some now say a trawler",
+    ];
+    expect(batch(agree, reword)).not.toContain("fact:f1");
+    restore();
     // The scene whose prose was written since the story was saved isn't
     // listed, for the rest of the batch.
     ok(
@@ -1460,6 +1470,47 @@ describe("story CLI", () => {
     );
   });
 
+  test("a month or a range of years is its span too, scene lists take --add and --remove, and precision text is quoted", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-event", "joins", "She joins");
+    ok("set-position", "joins", "201-04", "--precision", "late spring");
+    ok("add-event", "dream", "The dream");
+    ok("set-position", "dream", "186", "--end", "190");
+    ok("add-event", "confession", "The confession");
+    ok("set-position", "confession", "201-09-10");
+    expect(ok("span", "joins", "confession")).toBe(
+      'From event:joins ("She joins") at April 201, noted "late spring" to event:confession ("The confession") at 10 September 201: 4.3 to 5.3 months (an event placed by its month or year may be any part of it).\n',
+    );
+    expect(ok("span", "dream", "confession")).toContain(
+      ": 10.7 to 15.7 years (",
+    );
+    expect(ok("show", "event:joins")).toContain(
+      'position: April 201, noted "late spring"\n',
+    );
+
+    ok("add-actor", "mara", "Mara");
+    ok("add-actor", "ivo", "Ivo");
+    ok("add-drive", "find", "Find the sender", "--actor", "mara");
+    ok("add-scene", "post", "The post");
+    ok("set-scene-actors", "post", "mara");
+    ok("set-scene-actors", "post", "--add", "ivo", "mara");
+    expect(saved().scenes[0]?.actors).toEqual(["ivo", "mara"]);
+    ok("set-scene-actors", "post", "--remove", "mara");
+    expect(saved().scenes[0]?.actors).toEqual(["ivo"]);
+    expect(
+      cli(file, "set-scene-actors", "post", "--remove", "mara").stderr,
+    ).toContain("post actors doesn't include mara");
+    ok("set-scene-events", "post", "joins");
+    ok("set-scene-events", "post", "--add", "confession");
+    expect(saved().scenes[0]?.depicts).toEqual(["confession", "joins"]);
+    ok("set-scene-pressures", "post", "--add", "find");
+    expect(saved().scenes[0]?.pressures).toEqual(["find"]);
+    expect(
+      cli(file, "set-scene-pressures", "post", "--add", "--remove", "find")
+        .stderr,
+    ).toContain("give --add or --remove, not both");
+  });
+
   test("a year is its span: events in one year can be ordered, and span gives a range", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-event", "vow", "The vow");
@@ -1474,14 +1525,14 @@ describe("story CLI", () => {
     expect(ok("contradictions")).toBe("No contradictions.\n");
     expect(ok("show", "event:vow")).toContain("position: year 1103\n");
     expect(ok("span", "vow", "bound")).toBe(
-      'From event:vow ("The vow") at year 1103 to event:bound ("The binding") at year 1103: in the same year, either way round (a year without a date may be any part of it).\n',
+      'From event:vow ("The vow") at year 1103 to event:bound ("The binding") at year 1103: either way round (an event placed by its month or year may be any part of it).\n',
     );
     ok("add-event", "birth", "The birth");
     ok("set-position", "birth", "1106-04-10");
     ok("add-event", "razed", "The razing");
     ok("set-position", "razed", "1118");
     expect(ok("span", "birth", "razed")).toBe(
-      'From event:birth ("The birth") at 10 April 1106 to event:razed ("The razing") at year 1118: 11.7 to 12.7 years (a year without a date may be any part of it).\n',
+      'From event:birth ("The birth") at 10 April 1106 to event:razed ("The razing") at year 1118: 11.7 to 12.7 years (an event placed by its month or year may be any part of it).\n',
     );
     // A year as --end runs to that year's end, as a date does.
     ok("set-position", "razed", "1118", "--end", "1120");

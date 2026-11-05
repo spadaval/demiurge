@@ -362,6 +362,29 @@ test("after a heavy rewrite, three rare shared words still count in a text", () 
   expect(inText).toContain("actor:ivo");
 });
 
+test("a knowledge record's target, old or new, isn't its own suspect", () => {
+  const knowing = run(story, {
+    type: "addKnowledge",
+    id: "ivo-wreck",
+    actor: "ivo",
+    how: "knows",
+    what: wreck,
+  });
+  const changed = run(knowing, {
+    type: "updateKnowledge",
+    id: "ivo-wreck",
+    how: "believes",
+    what: { kind: "fact", id: "reef" },
+  });
+  const found = traceDependents(
+    changed,
+    { kind: "knowledge", id: "ivo-wreck" },
+    { was: knowing },
+  )._unsafeUnwrap();
+  expect(found.map(key)).not.toContain("event:wreck");
+  expect(found.map(key)).not.toContain("fact:reef");
+});
+
 test("common words don't count as shared", () => {
   const common = run(story, {
     type: "addFact",

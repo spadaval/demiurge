@@ -359,27 +359,31 @@ export function describeMismatch(
 /** The larger of two magnitudes. */
 const abs = (a: number, b: number) => Math.max(Math.abs(a), Math.abs(b));
 
+/** Whether a span lasts a month or more: a month, a year, a range of them. */
+export const isCoarse = ({ start, end }: Span): boolean =>
+  daysBetween(start, end) >= 28;
+
 /**
  * The time from somewhere in `from` to somewhere in `to`, in years, when
- * either is a whole year (`isYear`): a year end counts as all of it, any
- * other end as its start. Undefined when neither is a year, so the caller
- * measures start to start.
+ * either lasts a month or more (`isCoarse`): such an end counts as all of
+ * it, any other end as its start. Undefined when neither does, so the
+ * caller measures start to start.
  */
-export function yearRange(
+export function spanRange(
   from: Span,
   to: Span,
 ): { min: number; max: number } | undefined {
-  if (!isYear(from) && !isYear(to)) return undefined;
-  const last = (span: Span) => (isYear(span) ? span.end : span.start);
+  if (!isCoarse(from) && !isCoarse(to)) return undefined;
+  const last = (span: Span) => (isCoarse(span) ? span.end : span.start);
   return { min: to.start - last(from), max: last(to) - from.start };
 }
 
 /**
- * `11.7 to 12.7 years`, a `yearRange` in the unit its larger end reaches,
+ * `11.7 to 12.7 years`, a `spanRange` in the unit its larger end reaches,
  * its sign dropped; undefined when it runs both ways (the two can fall
- * either way round within the year).
+ * either way round).
  */
-export function describeYearRange({
+export function describeSpanRange({
   min,
   max,
 }: {

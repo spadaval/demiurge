@@ -23,13 +23,13 @@ import { err, ok, Result } from "neverthrow";
 import {
   describeBetween,
   describeSpan,
-  describeYearRange,
+  describeSpanRange,
   describeYears,
   isYear,
   parseSpan,
   parseWhen,
   type Span,
-  yearRange,
+  spanRange,
 } from "../src/story/calendar";
 import {
   applyStoryCommand,
@@ -63,7 +63,7 @@ import {
   trueOrder,
   viewpointGap,
 } from "../src/story/learning";
-import { type Mention, whatMentions } from "../src/story/mentions";
+import { type Mention, storyTexts, whatMentions } from "../src/story/mentions";
 import { membershipsInStoryOrder } from "../src/story/order";
 import {
   countTime,
@@ -104,7 +104,12 @@ import {
   type TouchGroups,
   whatThisTouches,
 } from "../src/story/touches";
-import { type Prose, type Suspect, traceDependents } from "../src/story/trace";
+import {
+  contentStems,
+  type Prose,
+  type Suspect,
+  traceDependents,
+} from "../src/story/trace";
 import {
   compileChronology,
   type TimelineProblem,
@@ -416,6 +421,55 @@ const refList = (help: string) =>
 const orNone = (value: string): string | null =>
   value === "none" ? null : value;
 
+/** `--add` and `--remove`, for a command that sets a list. */
+const LIST_FLAGS = {
+  add: {
+    bool: true,
+    help: "add these to the list instead of replacing it",
+  },
+  remove: { bool: true, help: "take these off the list" },
+} as const;
+
+/**
+ * The list a list-setting command leaves: `given` in place of `current`,
+ * or with `--add` added to it (once each), or with `--remove` taken off it.
+ * Removing what isn't there, or giving both flags, is a usage error.
+ */
+function editList<T>(
+  a: Reader,
+  current: readonly T[],
+  given: readonly T[],
+  key: (item: T) => string,
+  what: string,
+): T[] {
+  const add = a.bool("add") === true;
+  const remove = a.bool("remove") === true;
+  const has = (items: readonly T[], item: T) =>
+    items.some((x) => key(x) === key(item));
+  if (add && remove) a.errors.push("give --add or --remove, not both");
+  if (remove) {
+    for (const item of given.filter((item) => !has(current, item))) {
+      a.errors.push(`${what} doesn't include ${key(item)}`);
+    }
+  }
+  return add
+    ? [...current, ...given.filter((item) => !has(current, item))]
+    : remove
+      ? current.filter((item) => !has(given, item))
+      : [...given];
+}
+
+/** `editList` for a scene's list of IDs. */
+const listEdit = (a: Reader, current: readonly string[], what: string) =>
+  editList(a, current, a.rest(), (id) => id, `${a.arg("id")} ${what}`);
+
+/** A scene's list of actors, events or drives, empty if no such scene. */
+const sceneList = (
+  story: Story,
+  id: string,
+  list: "actors" | "depicts" | "pressures",
+): string[] => story.scenes.find((scene) => scene.id === id)?.[list] ?? [];
+
 const COUNT_FLAGS = {
   notes: text,
   total: { value: "<number>", help: "a fixed total it is out of" },
@@ -666,7 +720,10 @@ export const EDITS: EditSpecs = {
         value: "<year|date>",
         help: "default: the end of the start's span; it runs to the end of the year or date it names (1950 --end 1960 is 1950 through 1960)",
       },
-      precision: { value: "<text>", help: 'such as "roughly"' },
+      precision: {
+        value: "<text>",
+        help: 'your words on how exact it is, such as "roughly"; shown quoted beside the position, which it doesn\'t change',
+      },
     },
     summary:
       'Place an event in story time: a year (1954), month (1954-10), day (1954-10-12) or minute ("1954-10-12 21:00") is all of that span, so two events in one year or on one day can still be ordered with constrain; a fractional year (1954.8) is that moment. Start "none" unplaces it. A move that contradicts other events is kept and reported.',
@@ -1016,12 +1073,14 @@ export const EDITS: EditSpecs = {
   setSceneActors: {
     group: "Scenes: the telling",
     args: ["id", "actor-id..."],
-    summary: "Set who is in the scene (none clears them).",
+    flags: LIST_FLAGS,
+    summary:
+      "Set who is in the scene (none clears them); --add or --remove changes the list instead of replacing it.",
     example: ["set-scene-actors", "storm", "mara", "ivo"],
-    build: (a) => ({
+    build: (a, story) => ({
       type: "setSceneActors",
       id: a.arg("id"),
-      actors: a.rest(),
+      actors: listEdit(a, sceneList(story, a.arg("id"), "actors"), "actors"),
     }),
   },
   setSceneViewpoint: {
@@ -1038,35 +1097,37 @@ export const EDITS: EditSpecs = {
   setSceneEvents: {
     group: "Scenes: the telling",
     args: ["id", "event-id..."],
-    summary: "Set the events the scene shows (none clears them).",
+    flags: LIST_FLAGS,
+    summary:
+      "Set the events the scene shows (none clears them); --add or --remove changes the list instead of replacing it.",
     example: ["set-scene-events", "storm", "letter"],
-    build: (a) => ({
+    build: (a, story) => ({
       type: "setSceneEvents",
       id: a.arg("id"),
-      depicts: a.rest(),
+      depicts: listEdit(a, sceneList(story, a.arg("id"), "depicts"), "events"),
     }),
   },
   setScenePressures: {
     group: "Scenes: the telling",
     args: ["id", "drive-id..."],
-    summary: "Set the drives the scene puts under pressure (none clears them).",
+    flags: LIST_FLAGS,
+    summary:
+      "Set the drives the scene puts under pressure (none clears them); --add or --remove changes the list instead of replacing it.",
     example: ["set-scene-pressures", "storm", "find-sender"],
-    build: (a) => ({
+    build: (a, story) => ({
       type: "setScenePressures",
       id: a.arg("id"),
-      pressures: a.rest(),
+      pressures: listEdit(
+        a,
+        sceneList(story, a.arg("id"), "pressures"),
+        "pressures",
+      ),
     }),
   },
   setSceneLinks: {
     group: "Scenes: the telling",
     args: ["id", "how", "ref..."],
-    flags: {
-      add: {
-        bool: true,
-        help: "add the refs to the list instead of replacing it",
-      },
-      remove: { bool: true, help: "take the refs off the list" },
-    },
+    flags: LIST_FLAGS,
     summary:
       "Set the records the scene reveals (tells the reader), implies (lets the reader infer), withholds (keeps back where the reader would expect it), plants (sets up to matter later) or pays-off (brings back what was planted); none clears them. Any record or candidate can be linked. Without --add or --remove the refs replace the list, and the edit names any it dropped, and any ref the scene now both tells and withholds.",
     example: ["set-scene-links", "storm", "withholds", "--add", "event:letter"],
@@ -1074,27 +1135,12 @@ export const EDITS: EditSpecs = {
       const choice = a.choice(a.arg("how"), SCENE_LINK_NAMES, "<how>");
       const how = choice === "pays-off" ? "paysOff" : choice;
       const id = a.arg("id");
-      const given = a.restRefs();
-      const add = a.bool("add") === true;
-      const remove = a.bool("remove") === true;
       const linked = story.scenes.find((scene) => scene.id === id)?.[how] ?? [];
-      const has = (refs: readonly Ref[], ref: Ref) =>
-        refs.some((r) => formatRef(r) === formatRef(ref));
-      if (add && remove) a.errors.push("give --add or --remove, not both");
-      if (remove) {
-        for (const ref of given.filter((ref) => !has(linked, ref))) {
-          a.errors.push(`${id} ${choice} doesn't include ${formatRef(ref)}`);
-        }
-      }
       return {
         type: "setSceneLinks",
         id,
         how,
-        refs: add
-          ? [...linked, ...given.filter((ref) => !has(linked, ref))]
-          : remove
-            ? linked.filter((ref) => !has(given, ref))
-            : given,
+        refs: editList(a, linked, a.restRefs(), formatRef, `${id} ${choice}`),
       };
     },
   },
@@ -1788,7 +1834,7 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: ["from-event", "to-event"],
     summary:
-      "The time from one placed event to another, start to start: in days once it is a day or more, with years or months beside them past eight weeks, else in hours or minutes. When either is placed only by its year, the range it may be (11.7 to 12.7 years).",
+      "The time from one placed event to another, start to start: in days once it is a day or more, with years or months beside them past eight weeks, else in hours or minutes. When either is placed by a month, a year or a longer range, the range it may be (11.7 to 12.7 years), since such an event may be any part of it.",
     example: ["span", "wreck", "letter"],
   },
   trace: {
@@ -2550,10 +2596,10 @@ const positionOf = (story: Story, id: string) =>
 
 /**
  * `11.7 to 12.7 years before`-style words for the time from one placed
- * event to another when either is placed only by its year, else undefined.
+ * event to another when either is placed by a month or more, else undefined.
  * `back` and `on` say the two directions.
  */
-function yearRangeText(
+function rangeText(
   story: Story,
   from: string,
   to: string,
@@ -2563,11 +2609,11 @@ function yearRangeText(
   const a = positionOf(story, from);
   const b = positionOf(story, to);
   if (a === undefined || b === undefined) return undefined;
-  const range = yearRange(a, b);
+  const range = spanRange(a, b);
   if (range === undefined) return undefined;
-  const said = describeYearRange(range);
+  const said = describeSpanRange(range);
   return said === undefined
-    ? "in the same year, either way round"
+    ? "either way round"
     : `${said}${range.max <= 0 ? back : on}`;
 }
 
@@ -2579,9 +2625,9 @@ function spanLine(story: Story, from: string, to: string): string {
     const p = positionOf(story, id);
     return p !== undefined && describeSpan(p) === undefined && p.end > p.start;
   });
-  const years = yearRangeText(story, from, to, ", going back", "");
+  const years = rangeText(story, from, to, ", going back", "");
   if (years !== undefined) {
-    return `From ${placedEvent(story, from)} to ${placedEvent(story, to)}: ${years} (a year without a date may be any part of it).`;
+    return `From ${placedEvent(story, from)} to ${placedEvent(story, to)}: ${years} (an event placed by its month or year may be any part of it).`;
   }
   const gap =
     a === b
@@ -2650,7 +2696,7 @@ function toldBeforeLines(story: Story, index: number): string[] {
     const years =
       event === undefined || anchor === undefined
         ? undefined
-        : yearRangeText(story, event, anchor, " after", " before");
+        : rangeText(story, event, anchor, " after", " before");
     const ago =
       years !== undefined
         ? `, ${years}`
@@ -2879,7 +2925,11 @@ function staleTextLines(
   after: Story,
   command: StoryCommand,
   storyPath: string,
-  batch: Batch = { writing: new Set(), created: new Set() },
+  batch: Batch = {
+    writing: new Set(),
+    created: new Set(),
+    rewritten: new Map(),
+  },
 ): string[] {
   const ref = changedRef(before, after, command);
   // Nothing can state where an event was before it had a place.
@@ -2914,12 +2964,22 @@ function staleTextLines(
   }).unwrapOr([]);
   // The scene being written, record and prose, is what the writer has in
   // hand, and a record this batch added was written with the change known.
+  // So, likely, was one an earlier edit in it rewrote with words of the
+  // changed record's new text, when shared words are all that suspect it;
+  // one rewritten for another reason can still state the old version
+  // (finding worldcrafter-gu8c).
+  const newWords = contentStems(recordText(after, ref));
+  const rewrittenToMatch = (target: Ref, reasons: readonly string[]) =>
+    [...(batch.rewritten.get(formatRef(target)) ?? [])].some((s) =>
+      newWords.has(s),
+    ) && !reasons.some((r) => /"[^"]*" /.test(r));
   const found = all.filter(
-    ({ inText, target }) =>
+    ({ inText, target, reasons }) =>
       inText &&
       !(target.kind === "record"
         ? batch.writing.has(formatRef(target.ref)) ||
-          batch.created.has(formatRef(target.ref))
+          batch.created.has(formatRef(target.ref)) ||
+          rewrittenToMatch(target.ref, reasons)
         : batch.writing.has(formatRef({ kind: "scene", id: target.scene }))),
   );
   if (found.length === 0) return [];
@@ -3041,13 +3101,18 @@ function clearOldBatches(storyPath: string): void {
 }
 
 /** What an edit's inline trace leaves out for its batch, as refs. */
-type Batch = { writing: Set<string>; created: Set<string> };
+type Batch = {
+  writing: Set<string>;
+  created: Set<string>;
+  /** Records an earlier edit rewrote, with the word stems it added. */
+  rewritten: Map<string, Set<string>>;
+};
 
 /**
  * The batch's state: the scenes it is writing, those whose prose file is
  * newer than the story file at the batch's first edit, which saves them
- * for the rest of the batch (each edit rewrites the story file), and the
- * records its edits so far added.
+ * for the rest of the batch (each edit rewrites the story file), the
+ * records its edits so far added, and those they rewrote.
  */
 function batchState(story: Story, storyPath: string): Batch {
   const file = batchFile(storyPath);
@@ -3061,9 +3126,18 @@ function batchState(story: Story, storyPath: string): Batch {
         : [],
     );
   if (typeof saved === "object" && saved !== null && "writing" in saved) {
+    const rewritten =
+      "rewritten" in saved &&
+      typeof saved.rewritten === "object" &&
+      saved.rewritten !== null
+        ? saved.rewritten
+        : {};
     return {
       writing: strings(saved.writing),
       created: strings("created" in saved ? saved.created : []),
+      rewritten: new Map(
+        Object.entries(rewritten).map(([ref, stems]) => [ref, strings(stems)]),
+      ),
     };
   }
   clearOldBatches(storyPath);
@@ -3079,7 +3153,11 @@ function batchState(story: Story, storyPath: string): Batch {
             return prose !== null && prose > storyTime;
           })
           .map((scene) => formatRef({ kind: "scene", id: scene.id }));
-  const batch = { writing: new Set(writing), created: new Set<string>() };
+  const batch: Batch = {
+    writing: new Set(writing),
+    created: new Set(),
+    rewritten: new Map(),
+  };
   saveBatch(storyPath, batch);
   return batch;
 }
@@ -3090,6 +3168,9 @@ function saveBatch(storyPath: string, batch: Batch): void {
     JSON.stringify({
       writing: [...batch.writing],
       created: [...batch.created],
+      rewritten: Object.fromEntries(
+        [...batch.rewritten].map(([ref, stems]) => [ref, [...stems]]),
+      ),
     }),
   );
 }
@@ -3118,18 +3199,45 @@ function allRefs(story: Story): string[] {
   ];
 }
 
-/** Adds the records `after` has that `before` didn't to the batch. */
-function recordCreated(
+/** The free text a record states, as one string. */
+const recordText = (story: Story, ref: Ref) =>
+  storyTexts(story)
+    .filter((t) => formatRef(t.ref) === formatRef(ref))
+    .map((t) => t.value)
+    .join(" ");
+
+/**
+ * Adds to the batch the records `after` has that `before` didn't, and the
+ * record the edit rewrote with the words it added.
+ */
+function recordBatch(
   storyPath: string,
   batch: Batch,
   before: Story,
   after: Story,
+  command: StoryCommand,
 ): void {
   const had = new Set(allRefs(before));
   const added = allRefs(after).filter((ref) => !had.has(ref));
-  if (added.length === 0) return;
   for (const ref of added) batch.created.add(ref);
-  saveBatch(storyPath, batch);
+  const changed = changedRef(before, after, command);
+  const key = changed === undefined ? undefined : formatRef(changed);
+  const words =
+    changed === undefined || key === undefined || !had.has(key)
+      ? []
+      : (() => {
+          const was = contentStems(recordText(before, changed));
+          return [...contentStems(recordText(after, changed))].filter(
+            (s) => !was.has(s),
+          );
+        })();
+  if (key !== undefined && words.length > 0) {
+    batch.rewritten.set(
+      key,
+      new Set([...(batch.rewritten.get(key) ?? []), ...words]),
+    );
+  }
+  if (added.length > 0 || words.length > 0) saveBatch(storyPath, batch);
 }
 
 function touchLines(groups: TouchGroups): string[] {
@@ -3410,7 +3518,7 @@ function runEdit(
         .mapErr((e) => refused(e.message))
         .map(({ story: next, problems }) => {
           const batch = batchState(story, path);
-          recordCreated(path, batch, story, next);
+          recordBatch(path, batch, story, next, command);
           return {
             story: next,
             stdout: [

@@ -326,6 +326,12 @@ export function traceDependents(
       message: `${describeRef(ref)} does not exist`,
     });
   }
+  const knownTargets =
+    ref.kind === "knowledge"
+      ? [before, story].flatMap((s) =>
+          s.knowledge.filter((k) => k.id === ref.id).map((k) => k.what),
+        )
+      : [];
   const suspects = new Map<string, Suspect>();
   const suspect = (
     target: SuspectTarget,
@@ -334,6 +340,14 @@ export function traceDependents(
     inText: boolean,
   ) => {
     if (target.kind === "record" && sameRef(target.ref, ref)) return;
+    // Knowledge states its target's text, so the target, before or after a
+    // change, would match itself.
+    if (
+      target.kind === "record" &&
+      knownTargets.some((t) => sameRef(t, target.ref))
+    ) {
+      return;
+    }
     const key = targetKey(target);
     const found = suspects.get(key);
     const text = inText ? score : 0;

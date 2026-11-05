@@ -425,8 +425,10 @@ function unheldDriveLines(story: Story): string[] {
 function positionText(story: Story, position: Position | undefined): string {
   if (position === undefined) return "";
   const { worldUnit } = story.timeline;
+  // The writer's own words on how exact it is, quoted so they don't read
+  // as part of the position.
   const precision =
-    position.precision === null ? "" : `, ${position.precision}`;
+    position.precision === null ? "" : `, noted "${position.precision}"`;
   if (worldUnit === "year") return ` (${describeWhen(position)}${precision})`;
   const range =
     position.start === position.end
