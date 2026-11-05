@@ -4,6 +4,9 @@ id: "worldcrafter-5xig"
 issue_type: "task"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: task/worldcrafter-5xig
 priority: "P2"
 relationships:
   blocks: []
@@ -18,9 +21,9 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Point the docs and agent instructions at the notes-first mission"
-updated_at: "2026-11-05T05:35:41.423753588+00:00"
+updated_at: "2026-11-05T05:46:01.503518055+00:00"
 ---
 
 ## Goal
