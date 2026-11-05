@@ -239,8 +239,8 @@ function constraintText(story: Story, c: Constraint): string {
 
 /**
  * Events in the order story time gives them: by how many events are known to
- * come before each, then by position, then by label. Unordered events fall
- * where that puts them.
+ * come before each, then by position, then causes before their effects, then
+ * by label. Unordered events fall where that puts them.
  */
 function eventLines(story: Story): string[] {
   const { events, positions, constraints } = story.timeline;
@@ -255,11 +255,13 @@ function eventLines(story: Story): string[] {
       ).length,
     ]),
   );
+  const depth = causeDepths(story);
   const ordered = [...events].sort(
     (a, b) =>
       (earlier.get(a.id) ?? 0) - (earlier.get(b.id) ?? 0) ||
       (worldPosition(a.id)?.start ?? Number.POSITIVE_INFINITY) -
         (worldPosition(b.id)?.start ?? Number.POSITIVE_INFINITY) ||
+      depth(a.id) - depth(b.id) ||
       named(a.label).localeCompare(named(b.label)),
   );
   const placed = positionsOnly(story.timeline);
@@ -296,6 +298,29 @@ function becauseText(story: Story, id: string, afterSummary: boolean): string {
   return afterSummary
     ? ` ${sentence(`B${because}`)}`
     : `, ${sentence(`b${because}`)}`;
+}
+
+/**
+ * How long the longest chain of causes leading to each event is, so a cause
+ * sorts before its effects. A cycle is cut where it closes.
+ */
+function causeDepths(story: Story): (id: string) => number {
+  const depths = new Map<string, number>();
+  const visiting = new Set<string>();
+  const depth = (id: string): number => {
+    const known = depths.get(id);
+    if (known !== undefined) return known;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const causes = story.causes
+      .filter(({ effect, cause }) => effect === id && cause !== id)
+      .map(({ cause }) => cause);
+    const found = causes.length === 0 ? 0 : 1 + Math.max(...causes.map(depth));
+    visiting.delete(id);
+    depths.set(id, found);
+    return found;
+  };
+  return depth;
 }
 
 /** The order the timeline's positions alone give, without its constraints. */

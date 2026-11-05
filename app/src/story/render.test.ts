@@ -228,6 +228,44 @@ describe("renderStory", () => {
     );
   });
 
+  test("puts a cause before its effects when story time doesn't order them", () => {
+    const at = (event: string): StoryCommand => ({
+      type: "setPosition",
+      event,
+      frame: "world",
+      position: { start: 5, end: 5 },
+    });
+    // IDs and labels both sort the effects first.
+    const story = run(
+      newStory("P"),
+      { type: "addEvent", id: "a", label: "A flood", summary: "" },
+      { type: "addEvent", id: "b", label: "B famine", summary: "" },
+      { type: "addEvent", id: "c", label: "C storm", summary: "" },
+      at("a"),
+      at("b"),
+      at("c"),
+      { type: "addCause", cause: "c", effect: "a" },
+      { type: "addCause", cause: "a", effect: "b" },
+    );
+    const text = renderStory(story);
+    const order = ["C storm", "A flood", "B famine"].map((label) =>
+      text.indexOf(`**${label}**`),
+    );
+    expect(order[0]).toBeLessThan(order[1] ?? 0);
+    expect(order[1]).toBeLessThan(order[2] ?? 0);
+    // Without the causes, labels decide.
+    const plain = renderStory(
+      run(
+        story,
+        { type: "removeCause", cause: "c", effect: "a" },
+        { type: "removeCause", cause: "a", effect: "b" },
+      ),
+    );
+    expect(plain.indexOf("**A flood**")).toBeLessThan(
+      plain.indexOf("**C storm**"),
+    );
+  });
+
   test("describes an effect placed before its cause, and a circle of causes, in words", () => {
     const backwards = run(sketch, {
       type: "addCause",
