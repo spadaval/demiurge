@@ -17,7 +17,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Events can cause events"
-updated_at: "2026-11-05T01:12:52.583955705+00:00"
+updated_at: "2026-11-05T01:22:35.458558124+00:00"
 ---
 
 ## Goal
@@ -31,3 +31,8 @@ A team can record that one event happened because of another, and see when a cha
 - `whatThisTouches` follows causes in both directions, and from an event reaches what its effects reach one step on; a test shows it.
 - The CLI has the commands, `render` says what happened because of what, and `--help` shows an example.
 - `bun run check` passes.
+
+## Notes
+
+- 2026-11-04 [decision] Causes live on the story as a top-level causes list of {cause, effect} event IDs, not on the timeline's events, and the file leaves the key out when empty
+  Reason: A cause says why, not when, so it stays out of src/time (no change there) and the timeline parser stays the app's. Leaving the empty list out keeps files written before causes byte for byte the same. 'Strictly before' uses compareEvents on the full chronology (positions and constraints), so same-position, overlapping or unordered pairs aren't reported. The CLI prints a cause problem only when an edit adds it, keyed by event IDs, like timeline problems. Further touches carry forward from a cause to its effects' direct links, not backward from an effect.
