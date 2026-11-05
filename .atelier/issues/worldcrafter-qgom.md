@@ -17,7 +17,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Reach what free text mentions"
-updated_at: "2026-11-05T01:12:55.934842488+00:00"
+updated_at: "2026-11-05T01:26:40.256074469+00:00"
 ---
 
 ## Goal
@@ -30,3 +30,8 @@ After a change, a team can find the summaries, stakes, wants, facts and candidat
 - The CLI has `mentions <ref>`. After `set-position`, `describe-event`, `update-drive` or `update-actor`, the CLI prints the records whose text mentions the changed record, as a prompt, not an error.
 - Tests over a fixture find a stale year, a stale relative time ("twenty years ago" in a summary connected to a moved event) and a stale motive, and show that an unrelated record isn't listed.
 - `bun run check` passes.
+
+## Notes
+
+- 2026-11-04 [decision] whatMentions takes the story before a change (was) for the names and years it looks for, and the CLI prompt after set-position, describe-event, update-drive and update-actor passes it
+  Reason: Stale text states the old year, label or want, so searching for the new values would miss exactly what the issue asks for. A drive's text is reached through its holder's name as well as its want, since text states a motive in its own words (the stale-motive case). Spans and seasons are looked for in the event's own text and in what whatThisTouches reaches (direct and one step further), not the whole story, so an unrelated 'spring' isn't listed. The premise isn't a record and isn't searched. Matching is whole words, case-insensitive, with years as whole numbers, to keep 'Al' out of 'also' and 1203 out of 12030; it still lists coincidences, and it reads as a prompt.
