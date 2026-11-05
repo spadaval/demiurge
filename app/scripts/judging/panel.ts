@@ -90,7 +90,7 @@ function must(cmd: string[], cwd = REPO): string {
 const writeJson = (path: string, value: unknown) =>
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
-const sha256 = (path: string) =>
+export const sha256 = (path: string) =>
   createHash("sha256").update(readFileSync(path)).digest("hex");
 
 /** Every file under `dir`, relative to it, sorted. */
@@ -100,7 +100,7 @@ export function filesUnder(dir: string): string[] {
     .sort();
 }
 
-function availableGib(): number {
+export function availableGib(): number {
   const match = /^MemAvailable:\s+(\d+) kB/m.exec(
     readFileSync("/proc/meminfo", "utf8"),
   );
@@ -265,7 +265,11 @@ Work only with the files in this directory, and don't change any file other than
 export type Session = { args: string[]; sandbox: string[] };
 
 /** The `claude` flags and sandbox for one judge session. No tool mount. */
-export function judgeSession(model: string, workdir: string): Session {
+export function judgeSession(
+  model: string,
+  workdir: string,
+  tools: string = TOOLS,
+): Session {
   const env = {
     USER: "judge",
     LANG: "C.UTF-8",
@@ -280,7 +284,7 @@ export function judgeSession(model: string, workdir: string): Session {
     "--strict-mcp-config",
     "--disable-slash-commands",
     "--tools",
-    TOOLS,
+    tools,
     "--permission-mode",
     "bypassPermissions",
     "--no-session-persistence",
@@ -299,7 +303,7 @@ export function judgeSession(model: string, workdir: string): Session {
 }
 
 /** Refreshes the OAuth token with a one-line `claude -p` on the host. */
-function refreshTokenOnHost(): void {
+export function refreshTokenOnHost(): void {
   const dir = mkdtempSync(join(tmpdir(), "token-refresh."));
   sh(
     [
@@ -321,7 +325,7 @@ function refreshTokenOnHost(): void {
   rmSync(dir, { recursive: true });
 }
 
-const hostToken: TokenSource = {
+export const hostToken: TokenSource = {
   expiresAt: () => tokenExpiresAt(),
   now: () => Date.now(),
   sleep: (ms) => Bun.sleepSync(ms),
@@ -913,7 +917,7 @@ export function recheck(
 }
 
 /** This process's children: each session's `timeout`, while it runs. */
-function childPids(): number[] {
+export function childPids(): number[] {
   const tasks = `/proc/${process.pid}/task`;
   return readdirSync(tasks).flatMap((tid) =>
     readFileSync(join(tasks, tid, "children"), "utf8")

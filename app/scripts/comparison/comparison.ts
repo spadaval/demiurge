@@ -13,16 +13,13 @@
 
 import { createHash } from "node:crypto";
 import {
-  closeSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -42,9 +39,9 @@ import {
   stepPrompt,
 } from "./prompts";
 import {
-  BWRAP,
   ensureToken,
   sandboxArgs,
+  spawnSandboxed,
   TOOL_MOUNT,
   type TokenSource,
   tokenExpiresAt,
@@ -404,54 +401,19 @@ export function session(arm: Arm, workdir: string, frozenDir: string): Session {
   return { args, sandbox };
 }
 
-/**
- * Starts one session, bounded by `timeout`. bwrap reads its options, which
- * name host paths, from fd 3 (`--args 3`), so its command line, which a
- * session could see with `ps`, holds none of them. The options file is
- * removed as soon as it's open.
- */
+/** Starts one `claude -p` session in the sandbox; see `spawnSandboxed`. */
 export function spawnSession(
   { args, sandbox }: Session,
   prompt: string,
   timeoutSeconds: number,
   io: { cwd: string; stdout: string; stderr: string },
 ): { exited: Promise<number> } {
-  const dir = mkdtempSync(join(tmpdir(), "bwrap-args."));
-  const file = join(dir, "args");
-  writeFileSync(file, `${sandbox.join("\0")}\0`);
-  const fd = openSync(file, "r");
-  rmSync(dir, { recursive: true });
-  try {
-    const proc = Bun.spawn(
-      [
-        "/usr/bin/timeout",
-        "--kill-after=60",
-        String(timeoutSeconds),
-        BWRAP,
-        "--args",
-        "3",
-        "claude",
-        "-p",
-        prompt,
-        ...args,
-      ],
-      // Output goes through pipes, not straight to the files, so the
-      // session's /proc/<pid>/fd doesn't show where the key lives.
-      { cwd: io.cwd, env: {}, stdio: ["ignore", "pipe", "pipe", fd] },
-    );
-    const written = Promise.all([
-      Bun.write(io.stdout, new Response(proc.stdout)),
-      Bun.write(io.stderr, new Response(proc.stderr)),
-    ]);
-    return {
-      exited: proc.exited.then(async (code) => {
-        await written;
-        return code;
-      }),
-    };
-  } finally {
-    closeSync(fd);
-  }
+  return spawnSandboxed(
+    sandbox,
+    ["claude", "-p", prompt, ...args],
+    timeoutSeconds,
+    io,
+  );
 }
 
 /** The story as a reader sees it, or why it couldn't be read. */

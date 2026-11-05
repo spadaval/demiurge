@@ -7,14 +7,26 @@
  * this repository, other runs, the key and the rest of /tmp, isn't there.
  */
 
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export const BWRAP = "/usr/bin/bwrap";
 /** Where a tool run sees the frozen tool. */
 export const TOOL_MOUNT = "/opt/story-tool";
 /** The session's home: a fresh tmpfs. */
 export const SANDBOX_HOME = "/home/writer";
-const BIN = "/opt/bin";
+/** Where the sandbox sees its binaries. */
+export const BIN = "/opt/bin";
 
 export function credentialsPath(): string {
   return `${process.env.HOME ?? ""}/.claude/.credentials.json`;
@@ -48,17 +60,12 @@ export type SandboxInputs = {
 };
 
 /**
- * bwrap's options for one session. They hold host paths, so they go to
- * bwrap through `--args <fd>` and never appear on its command line, which a
- * session could see with `ps`.
+ * What every sandbox starts from: its own namespaces (the network shared, for
+ * the API), system directories read-only, a fresh /proc and /dev, and empty
+ * tmpfs /tmp and /home. Callers add a home's contents, their binaries and
+ * the run directory.
  */
-export function sandboxArgs({
-  workdir,
-  toolDir,
-  claude,
-  bun,
-  env,
-}: SandboxInputs): string[] {
+export function systemMounts(): string[] {
   const resolve = existsSync("/run/systemd/resolve")
     ? ["--ro-bind", "/run/systemd/resolve", "/run/systemd/resolve"]
     : [];
@@ -94,6 +101,43 @@ export function sandboxArgs({
     "/tmp",
     "--tmpfs",
     "/home",
+  ];
+}
+
+/** The run directory, read-write and the working directory, and a clean environment. */
+export function workdirAndEnv(
+  workdir: string,
+  env: Record<string, string>,
+): string[] {
+  return [
+    "--bind",
+    workdir,
+    workdir,
+    "--chdir",
+    workdir,
+    "--clearenv",
+    ...Object.entries({
+      ...env,
+      PATH: `${BIN}:/usr/bin:/bin`,
+      HOME: SANDBOX_HOME,
+    }).flatMap(([name, value]) => ["--setenv", name, value]),
+  ];
+}
+
+/**
+ * bwrap's options for one session. They hold host paths, so they go to
+ * bwrap through `--args <fd>` and never appear on its command line, which a
+ * session could see with `ps`.
+ */
+export function sandboxArgs({
+  workdir,
+  toolDir,
+  claude,
+  bun,
+  env,
+}: SandboxInputs): string[] {
+  return [
+    ...systemMounts(),
     "--dir",
     `${SANDBOX_HOME}/.claude`,
     // Read-only: the host's own sessions depend on this file, and
@@ -108,18 +152,55 @@ export function sandboxArgs({
     realpathSync(bun),
     `${BIN}/bun`,
     ...(toolDir === undefined ? [] : ["--ro-bind", toolDir, TOOL_MOUNT]),
-    "--bind",
-    workdir,
-    workdir,
-    "--chdir",
-    workdir,
-    "--clearenv",
-    ...Object.entries({
-      ...env,
-      PATH: `${BIN}:/usr/bin:/bin`,
-      HOME: SANDBOX_HOME,
-    }).flatMap(([name, value]) => ["--setenv", name, value]),
+    ...workdirAndEnv(workdir, env),
   ];
+}
+
+/**
+ * Starts one command in the sandbox, bounded by `timeout`. bwrap reads its
+ * options, which name host paths, from fd 3 (`--args 3`), so its command
+ * line, which a session could see with `ps`, holds none of them. The
+ * options file is removed as soon as it's open. Output goes through pipes,
+ * not straight to the files, so the session's /proc/<pid>/fd doesn't show
+ * where its output lives.
+ */
+export function spawnSandboxed(
+  sandbox: readonly string[],
+  command: readonly string[],
+  timeoutSeconds: number,
+  io: { cwd: string; stdout: string; stderr: string },
+): { exited: Promise<number> } {
+  const dir = mkdtempSync(join(tmpdir(), "bwrap-args."));
+  const file = join(dir, "args");
+  writeFileSync(file, `${sandbox.join("\0")}\0`);
+  const fd = openSync(file, "r");
+  rmSync(dir, { recursive: true });
+  try {
+    const proc = Bun.spawn(
+      [
+        "/usr/bin/timeout",
+        "--kill-after=60",
+        String(timeoutSeconds),
+        BWRAP,
+        "--args",
+        "3",
+        ...command,
+      ],
+      { cwd: io.cwd, env: {}, stdio: ["ignore", "pipe", "pipe", fd] },
+    );
+    const written = Promise.all([
+      Bun.write(io.stdout, new Response(proc.stdout)),
+      Bun.write(io.stderr, new Response(proc.stderr)),
+    ]);
+    return {
+      exited: proc.exited.then(async (code) => {
+        await written;
+        return code;
+      }),
+    };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export type TokenSource = {
