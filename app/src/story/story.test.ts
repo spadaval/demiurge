@@ -958,6 +958,24 @@ describe("answer history and deliberate gaps in the file", () => {
     );
   });
 
+  test("marks of retired gap kinds load and are dropped", () => {
+    const value = JSON.parse(serializeStory(withHistory));
+    value.deliberateGaps.push(
+      {
+        gap: "person_without_drive",
+        ref: { kind: "actor", id: "joel" },
+        reason: "A walk-on",
+      },
+      {
+        gap: "reader_question_never_answered",
+        ref: { kind: "readerQuestion", id: "who" },
+        reason: "Left hanging",
+      },
+    );
+    const story = parseStory(JSON.stringify(value))._unsafeUnwrap();
+    expect(serializeStory(story)).toBe(serializeStory(withHistory));
+  });
+
   test.each<[string, JsonValue, string]>([
     [
       "an unknown gap",

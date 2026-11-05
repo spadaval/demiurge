@@ -421,6 +421,13 @@ describe("story CLI", () => {
     expect(ok("gaps")).toContain(
       `- The drive "Stay calm" doesn't come from any event yet. ${gap}\n`,
     );
+    expect(ok("gaps")).toStartWith(
+      "Optional prompts, not problems: places you could add a link or a record. None is a reason to cut or merge anything true; a record can stay unlinked.\n- ",
+    );
+    // A person with no drive isn't a gap.
+    ok("add-actor", "oro", "Oro");
+    expect(ok("gaps")).not.toContain("actor:oro");
+    expect(cli("--help").stdout).not.toContain("person-without-drive");
     const noReason = cli(
       file,
       "mark-gap-deliberate",

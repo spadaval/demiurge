@@ -271,6 +271,10 @@ class Reader {
 /** `drive_without_origin` as the command line writes it: `drive-without-origin`. */
 const gapName = (kind: GapKind) => kind.replaceAll("_", "-");
 
+/** Printed above the gaps, so a list of them doesn't read as a to-do list. */
+const GAPS_ADVISORY =
+  "Optional prompts, not problems: places you could add a link or a record. None is a reason to cut or merge anything true; a record can stay unlinked.";
+
 type EditSpec<C extends StoryCommand> = Spec & {
   build: (a: Reader, story: Story) => C;
 };
@@ -1016,7 +1020,7 @@ export const EDITS: EditSpecs = {
   },
 
   markGapDeliberate: {
-    group: "Gaps: what isn't woven in yet",
+    group: "Gaps: optional prompts",
     args: ["gap", "ref"],
     flags: {
       reason: { value: "<text>", help: "why it's fine", required: true },
@@ -1038,7 +1042,7 @@ export const EDITS: EditSpecs = {
     }),
   },
   unmarkGapDeliberate: {
-    group: "Gaps: what isn't woven in yet",
+    group: "Gaps: optional prompts",
     args: ["gap", "ref"],
     summary: "Remove the mark, so gaps lists the gap again.",
     example: [
@@ -1139,7 +1143,7 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: [],
     summary:
-      "What isn't woven in yet, each with its [gap ref] for mark-gap-deliberate. Prompts, not a to-do list.",
+      "Optional prompts: what you could still link or add, each with its [gap ref] for mark-gap-deliberate. Advisory, not a to-do list, and never a reason to cut or merge anything true.",
     example: ["gaps"],
   },
   contradictions: {
@@ -1716,7 +1720,7 @@ function runRead(
       return ok([
         ...(gaps.length === 0
           ? ["No gaps found."]
-          : gaps.map((g) => `- ${g.message} ${where(g)}`)),
+          : [GAPS_ADVISORY, ...gaps.map((g) => `- ${g.message} ${where(g)}`)]),
         ...(marked.length === 0
           ? []
           : [

@@ -121,9 +121,13 @@ reread.
   someone did, run `mentions event:wreck` (or `actor:`, `drive:` and so on)
   yourself on what the change reaches. `mentions` doesn't read prose files;
   `scenes <ref>` lists the scenes whose prose may need rereading.
-- **`gaps` and `contradictions` are prompts, not a to-do list.** Run them now
-  and then to see what isn't woven in yet or still pulls against itself, and
-  act on what is worth acting on. When a gap is a choice, say so: each gap
+- **`gaps` is advisory: optional prompts, never a reason to delete.** Run it
+  now and then to see where you could add a link or a record, and act only on
+  what is worth acting on. Never cut, merge or unlink anything true to clear
+  a gap: a minor character with no drive, an event or fact that nothing else
+  refers to, and a want nobody opposes all belong in the bible if they are
+  true of the world. `contradictions` is the same: prompts, not a to-do list.
+  When a gap is a choice and you want it out of the list, say so: each gap
   ends with a `[gap ref]` to paste into `mark-gap-deliberate
   drive-without-origin drive:keep-quiet --reason "He has always kept his own
   counsel"`. The mark and its reason stay in the story file, and `gaps`

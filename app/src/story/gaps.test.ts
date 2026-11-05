@@ -107,11 +107,6 @@ const unopposed = (id: string): StoryCommand[] => [
 
 const cases: [GapKind, StoryCommand[], Ref | null][] = [
   [
-    "person_without_drive",
-    [{ type: "addActor", id: "c", name: "Aldric", kind: "person", notes: "" }],
-    { kind: "actor", id: "c" },
-  ],
-  [
     "drive_without_actor",
     [drive("loose", null)],
     { kind: "drive", id: "loose" },
@@ -329,22 +324,46 @@ describe("storyGaps", () => {
   });
 
   test("names the record in the message", () => {
-    const gaps = storyGaps(
-      run(woven, {
-        type: "addActor",
-        id: "c",
-        name: "Aldric",
-        kind: "person",
-        notes: "",
-      }),
-    );
-    expect(gaps).toEqual([
+    expect(storyGaps(run(woven, drive("idle", "a")))).toEqual([
       {
-        kind: "person_without_drive",
-        ref: { kind: "actor", id: "c" },
-        message: "Aldric has no drive yet: what do they want?",
+        kind: "drive_without_origin",
+        ref: { kind: "drive", id: "idle" },
+        message: `The drive "idle" doesn't come from any event yet.`,
+      },
+      {
+        kind: "drive_unopposed",
+        ref: { kind: "drive", id: "idle" },
+        message: `Nothing opposes the drive "idle" yet.`,
+      },
+      {
+        kind: "drive_without_scene",
+        ref: { kind: "drive", id: "idle" },
+        message: `No scene puts the drive "idle" under pressure yet.`,
       },
     ]);
+  });
+
+  test("a person with no drive is not a gap", () => {
+    const story = run(woven, {
+      type: "addActor",
+      id: "c",
+      name: "Aldric",
+      kind: "person",
+      notes: "",
+    });
+    expect(storyGaps(story)).toEqual([]);
+  });
+
+  test("no wording asks for a record to be cut, and loose records may stand", () => {
+    const messages = cases.flatMap(([, commands]) =>
+      storyGaps(run(woven, ...commands)).map(({ message }) => message),
+    );
+    for (const message of messages) {
+      expect(message).not.toMatch(/remove|delete|cut|drop|merge/i);
+    }
+    expect(
+      messages.filter((m) => m.includes("it can also stand on its own")),
+    ).toHaveLength(2);
   });
 });
 

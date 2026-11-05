@@ -1,7 +1,11 @@
 /**
  * What isn't woven into a story yet. Blank squares are normal in a crossword,
- * so a gap is a prompt, not an error (docs/rebuild/story-model.md,
- * Fluidity), and the wording says what isn't connected yet.
+ * so a gap is an optional prompt, not an error (docs/rebuild/story-model.md,
+ * Fluidity), and the wording says what isn't connected yet. A gap is never a
+ * reason to delete: each one asks for something to be added or linked, and a
+ * kind whose only honest fix is cutting true story doesn't belong here. A
+ * person with no drive was one (sessions deleted minor characters to clear
+ * it), so it is gone; see `RETIRED_GAP_KINDS` in `./story.ts`.
  *
  * The list is a first guess (docs/strategies/structure-first.md, Risks): each
  * kind of gap is one entry in `GAP_RULES`, so adding, dropping or rewording
@@ -45,20 +49,6 @@ const refersToEvent = (refs: readonly Ref[], id: string) =>
   refs.some((ref) => ref.kind === "event" && ref.id === id);
 
 const GAP_RULES: readonly GapRule[] = [
-  {
-    kind: "person_without_drive",
-    find: (story) =>
-      story.actors
-        .filter(
-          (actor) =>
-            actor.kind === "person" &&
-            !story.drives.some((drive) => drive.actorId === actor.id),
-        )
-        .map((actor) => ({
-          ref: { kind: "actor", id: actor.id },
-          message: `${refLabel(story, { kind: "actor", id: actor.id })} has no drive yet: what do they want?`,
-        })),
-  },
   {
     kind: "drive_without_actor",
     find: (story) =>
@@ -149,7 +139,7 @@ const GAP_RULES: readonly GapRule[] = [
         )
         .map(({ id }) => ({
           ref: { kind: "event", id },
-          message: `The event "${refLabel(story, { kind: "event", id })}" isn't woven in yet: no drive, scene, other event, fact or question refers to it.`,
+          message: `The event "${refLabel(story, { kind: "event", id })}" isn't linked to anything yet: no drive, scene, other event, fact or question refers to it. Link it to what it bears on, if anything; it can also stand on its own.`,
         }));
     },
   },
@@ -175,7 +165,7 @@ const GAP_RULES: readonly GapRule[] = [
         )
         .map((fact) => ({
           ref: { kind: "fact", id: fact.id },
-          message: `The fact "${refLabel(story, { kind: "fact", id: fact.id })}" isn't woven in yet: it's about nothing and nothing refers to it.`,
+          message: `The fact "${refLabel(story, { kind: "fact", id: fact.id })}" isn't linked to anything yet: it's about nothing and nothing refers to it. Link it to what it bears on, if anything; it can also stand on its own.`,
         }));
     },
   },
