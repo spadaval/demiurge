@@ -913,4 +913,34 @@ describe("marking an open question as working", () => {
     expect(serializeStory(cleared)).toBe(serializeStory(linked));
     expect(serializeStory(cleared)).not.toContain("working");
   });
+
+  test("answering clears the mark", () => {
+    const answered = run(
+      linked,
+      { type: "setOpenQuestionWorking", id: "why", working: true },
+      { type: "answerOpenQuestion", id: "why", candidateId: "cargo" },
+    );
+    expect(why(answered)?.answer).toBe("cargo");
+    expect(why(answered)?.working).toBeUndefined();
+  });
+
+  test("is refused for an answered question", () => {
+    const answered = run(linked, {
+      type: "answerOpenQuestion",
+      id: "why",
+      candidateId: "cargo",
+    });
+    for (const working of [true, false]) {
+      expect(
+        refusal(answered, {
+          type: "setOpenQuestionWorking",
+          id: "why",
+          working,
+        }),
+      ).toMatchObject({
+        kind: "invalid_command",
+        command: "setOpenQuestionWorking",
+      });
+    }
+  });
 });

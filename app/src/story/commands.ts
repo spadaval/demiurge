@@ -24,6 +24,7 @@ import {
   type ActorKind,
   type DriveRelationType,
   describeRef,
+  isAnswered,
   type OpenQuestion,
   type Ref,
   refExists,
@@ -132,14 +133,16 @@ export type StoryCommand =
   /** Clears the question's answer if this was the chosen candidate. */
   | { type: "removeCandidate"; questionId: string; id: string }
   /**
-   * Records the chosen candidate and changes nothing else: whoever answers
-   * makes what the answer implies as commands of their own.
+   * Records the chosen candidate, and clears the question's working mark, and
+   * changes nothing else: whoever answers makes what the answer implies as
+   * commands of their own.
    */
   | { type: "answerOpenQuestion"; id: string; candidateId: string }
   | { type: "unanswerOpenQuestion"; id: string }
   /**
    * Whether the question's candidates are being weighed. The readable form
-   * then shows the question in one line, without them.
+   * then shows the question in one line, without them. Refused for an
+   * answered question.
    */
   | { type: "setOpenQuestionWorking"; id: string; working: boolean }
   | { type: "addEvent"; id: EventId; label: string; summary: string }
@@ -732,7 +735,7 @@ export function applyStoryCommand(
           existing("candidate", q.candidates, command.candidateId),
         )
         .andThen(() =>
-          withQuestion(command.id, (q) => ({
+          withQuestion(command.id, ({ working: _, ...q }) => ({
             ...q,
             answer: command.candidateId,
           })),
@@ -744,10 +747,15 @@ export function applyStoryCommand(
       );
 
     case "setOpenQuestionWorking":
-      return question(command.id).andThen(() =>
-        withQuestion(command.id, ({ working: _, ...q }) =>
-          command.working ? { ...q, working: true } : q,
-        ),
+      return question(command.id).andThen((q) =>
+        isAnswered(q)
+          ? refuse(
+              "invalid_command",
+              `open question ${q.id} is answered: unanswer it to weigh its candidates again`,
+            )
+          : withQuestion(command.id, ({ working: _, ...q }) =>
+              command.working ? { ...q, working: true } : q,
+            ),
       );
 
     case "addEvent": {
