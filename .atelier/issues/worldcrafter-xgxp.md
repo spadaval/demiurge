@@ -12,9 +12,10 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T01:06:23.357204964+00:00"
+status: "done"
 title: "Render the story, not the links"
-updated_at: "2026-11-05T01:05:21.730218757+00:00"
+updated_at: "2026-11-05T01:06:23.357204964+00:00"
 ---
 
 ## Goal
@@ -41,3 +42,7 @@ The readable form says each thing once, so a sketch's length measures the story 
   Reason: Five words keep a relation (verb + name + want words) within the eight-words-per-link budget while staying readable; eight would make a relation cost up to eleven. The question stays so the answer has meaning
   Rejected: Always eight words
   Rejected: Actor name alone when the actor has one drive (the Done when asks for the want's first words)
+
+## Close Reason
+
+Render says each thing once: a want in full once under its actor, elsewhere actor plus the want's first 5-8 words; a relation once; candidates one line without touches; a working question (new OpenQuestion.working, command setOpenQuestionWorking, CLI set-open-question-working [--stop]) shows as one line with no candidates (per note from 4i9o); constraints the positions satisfy are left out, unsettled or violated ones printed; decided questions one line. On a 58-link fixture links add 221 words instead of 469 (3.8 per link). bun run check 879 pass (evidence worldcrafter-x40c). Choices: gap constraints count as settled only for equal-precision exact spacing; 'during' rarely omitted; mentions of facts/questions cut to 8 words; decided questions don't show what they concern. Open: positions still render wordily; answering doesn't clear the working mark.
