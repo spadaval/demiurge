@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Years as spans, counts at ranged events, output polish (Round 3 reading 5, 7, 9)"
-updated_at: "2026-11-05T14:15:00.701301092+00:00"
+updated_at: "2026-11-05T14:25:19.920071950+00:00"
 ---
 
 ## Goal
