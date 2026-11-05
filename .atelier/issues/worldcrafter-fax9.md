@@ -21,9 +21,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T02:12:53.307093731+00:00"
+status: "done"
 title: "Update the skill for the changed tool"
-updated_at: "2026-11-05T02:12:23.513977477+00:00"
+updated_at: "2026-11-05T02:12:53.307093731+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ The skill tells an agent how to use the changed tool, while `craft.md` stays exa
 
 - 2026-11-04 [note] From review finding worldcrafter-f5m4: SKILL.md must also cover set-open-question-working (weigh candidates in the file without spending render words), and the CLI help should say it's refused on an answered question.
 - 2026-11-04 [note] Fresh-session check: `cd app && bun scripts/comparison/comparison.ts skill-check /home/supadava/projects/demiurge-comparison/smoke/fax9-skill "A beekeeper in a mountain village finds her hives robbed at night, and the thief turns out to be someone she owes a debt to."` ran step 1 of the tool arm once, sandboxed as in the comparison, in 227s (18 turns, $0.80). All mechanical checks held (check.json): exit 0, story.json parses, 9 causes, 1 mentions call (`$S mentions actor:ruben`), model-gaps.md present, nothing outside, only claude-opus-5-5. It also used set-open-question-working 4 times. Not read for quality. Two earlier bun run check runs failed only on the generate "stays fast" timing tests while the host load was ~20 (qemu, ffmpeg); a rerun passed (worldcrafter-p3rr).
+
+## Close Reason
+
+SKILL.md teaches working questions, causes, mentions and the edit prompt, answer history, deliberate gaps, and the compact render, with neutral lighthouse examples; set-open-question-working help says it's refused on answered questions; CLI test extended. craft.md sha256 unchanged (worldcrafter-cb28). Fresh sandboxed session on a throwaway beekeeper premise passed every mechanical check (worldcrafter-q9z9): parses, 9 causes, 1 mentions call, model-gaps.md, nothing outside. New reusable skill-check subcommand in the comparison harness; buildTool() factored out of freeze; stepPrompt takes premise text. bun run check 958 pass (worldcrafter-p3rr; earlier runs eton, txw0 failed only on generate timing tests under host load ~20). Open: mentions use was thin (one call).
