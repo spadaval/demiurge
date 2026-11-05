@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:02.424101926+00:00"
 id: "worldcrafter-6m2v"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-6m2v
 priority: "P1"
 relationships:
   blocks: []
@@ -17,9 +20,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Model knowledge and belief, tied to reveals"
-updated_at: "2026-11-05T06:49:45.753559174+00:00"
+updated_at: "2026-11-05T07:07:12.165061329+00:00"
 ---
 
 ## Goal
