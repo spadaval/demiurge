@@ -3,6 +3,9 @@ created_at: "2026-11-05T16:59:56.219228336+00:00"
 id: "worldcrafter-hdly"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-hdly
 priority: "P1"
 relationships:
   blocks: []
@@ -20,9 +23,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round 5"
-updated_at: "2026-11-05T16:59:56.219228336+00:00"
+updated_at: "2026-11-05T17:28:21.137114448+00:00"
 ---
 
 ## Goal
