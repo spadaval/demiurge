@@ -15,7 +15,7 @@ schema_version: 2
 closed_at: "2026-11-05T01:06:23.357204964+00:00"
 status: "done"
 title: "Render the story, not the links"
-updated_at: "2026-11-05T01:06:23.357204964+00:00"
+updated_at: "2026-11-05T01:11:09.122132038+00:00"
 ---
 
 ## Goal
@@ -42,6 +42,8 @@ The readable form says each thing once, so a sketch's length measures the story 
   Reason: Five words keep a relation (verb + name + want words) within the eight-words-per-link budget while staying readable; eight would make a relation cost up to eleven. The question stays so the answer has meaning
   Rejected: Always eight words
   Rejected: Actor name alone when the actor has one drive (the Done when asks for the want's first words)
+- 2026-11-04 [decision] Amends the gap-constraint decision: the start-difference rule applies only when both spans are at most one unit long (points or whole years); otherwise every gap the positions allow must fit
+  Reason: Review finding worldcrafter-x38u: equal multi-year spans (1200-1210, 1220-1230) allow gaps of 10 to 30, so their start difference doesn't settle a stated gap
 
 ## Close Reason
 
