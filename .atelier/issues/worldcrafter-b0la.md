@@ -17,7 +17,7 @@ schema_version: 2
 closed_at: "2026-11-05T09:53:36.342619978+00:00"
 status: "done"
 title: "Cut CLI noise and friction (Round 1 reading 1, 4, 6, 7, 8, 10)"
-updated_at: "2026-11-05T09:53:36.342619978+00:00"
+updated_at: "2026-11-05T09:54:22.680996301+00:00"
 ---
 
 ## Goal
@@ -33,6 +33,10 @@ Make the CLI quiet enough that a writer making a thousand calls never needs to f
 - set-scene-links can add or remove refs without retyping the list, and a set that drops refs says which.
 - update-event works as an alias of describe-event (or the error suggests it).
 - SKILL.md and --help match; tests; bun run check passes.
+
+## Notes
+
+- 2026-11-05 [note] Orchestrator accepts the deviation: add-drive-turn keeps its trace, since a turn changes an existing drive (one of Round 1's six real traces came from it); the Done when's 'add-*' meant record creation.
 
 ## Close Reason
 
