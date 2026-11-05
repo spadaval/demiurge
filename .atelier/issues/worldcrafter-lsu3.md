@@ -31,6 +31,7 @@ The fourth judged round, from scratch with a fresh writer on the same prompt, af
 
 ## Done when
 
-- As Round 3 (worldcrafter-lxmj), with the same point rule; the two chosen turns are not adjacent to each other or to a likely random range, and at least one point falls in the last fifth of the arc if the rule allows.
+- As Round 3 (worldcrafter-lxmj), with the same random-point rule (one draw from beats 1..floor(n/2), one from floor(n/2)+1..n). For the two chosen turns: they are at least 3 beats apart, and one of them falls in beats ceil(0.8n)..n when the outline has a reveal, reversal or cost there; this is recorded before the draws. Random points may land next to chosen ones; that is kept as drawn.
+- The reading checks whether set-count's kept note states an old value (finding worldcrafter-mugi).
 - docs/rounds/round-4.md holds the round log, including how the writer's use of the tool changed from Round 3.
 - The reading's fixes are recorded as their own increment, or the mission stops if the round shows no meaningful tool or skill issues.
