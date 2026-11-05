@@ -198,6 +198,9 @@ function storyTexts(story: Story): Text[] {
       );
     }
   }
+  for (const v of story.versions) {
+    add({ kind: "version", id: v.id }, { text: v.text });
+  }
   return texts;
 }
 
@@ -229,6 +232,11 @@ function nameOf(story: Story, ref: Ref): { field: string; value: string } {
         field: "question",
         value: find(story.openQuestions)?.question ?? "",
       };
+    case "version":
+      return { field: "text", value: find(story.versions)?.text ?? "" };
+    // Knowledge has no text of its own to look for.
+    case "knowledge":
+      return { field: "", value: "" };
     case "candidate":
       return {
         field: "answer",

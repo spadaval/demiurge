@@ -18,13 +18,21 @@ import {
 } from "../src/story/commands";
 import { storyContradictions } from "../src/story/contradictions";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
+import {
+  type FirstTold,
+  knowledgeAlways,
+  tellingOrder,
+  trueOrder,
+} from "../src/story/learning";
 import { type Mention, whatMentions } from "../src/story/mentions";
-import { renderStory, wordCount } from "../src/story/render";
+import { eventTime, renderStory, wordCount } from "../src/story/render";
 import { scenesTouching } from "../src/story/scenes";
 import {
   type Candidate,
   GAP_KINDS,
   type GapKind,
+  KNOWLEDGE_HOWS,
+  type Knowledge,
   newStory,
   type OpenQuestion,
   parseStory,
@@ -57,6 +65,8 @@ const KIND_NAMES: Record<Ref["kind"], string> = {
   scene: "scene",
   openQuestion: "open-question",
   candidate: "candidate",
+  version: "version",
+  knowledge: "knowledge",
 };
 
 const REF_KIND_BY_NAME = new Map(
@@ -234,6 +244,20 @@ class Reader {
     return n;
   }
 
+  /** One ref; a bad one is recorded and an actor ref returned. */
+  ref(value: string): Ref {
+    const ref = parseRef(value);
+    if (ref.isOk()) return ref.value;
+    this.errors.push(ref.error);
+    return { kind: "actor", id: "" };
+  }
+
+  /** An event ID, or null for `none`. */
+  eventOrNone(flag: string): string | null | undefined {
+    const value = this.text(flag);
+    return value === undefined ? undefined : orNone(value);
+  }
+
   /** One ref, or null for `story`. */
   refOrStory(value: string): Ref | null {
     if (value === "story") return null;
@@ -251,6 +275,15 @@ class Reader {
       `<gap> must be one of ${GAP_KINDS.map(gapName).join(", ")}`,
     );
     return GAP_KINDS[0];
+  }
+
+  /** A comma-separated list of refs; an empty string is an empty list. */
+  /** A comma-separated list of IDs; an empty string is an empty list. */
+  list(flag: string): string[] | undefined {
+    return this.text(flag)
+      ?.split(",")
+      .map((part) => part.trim())
+      .filter((part) => part !== "");
   }
 
   /** A comma-separated list of refs; an empty string is an empty list. */
@@ -1019,6 +1052,126 @@ export const EDITS: EditSpecs = {
     },
   },
 
+  addVersion: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id", "event-id", "text"],
+    flags: { by: { value: "<actor,actor,...>", help: "who tells it" } },
+    summary:
+      "Add one account of an event, beside the event's own summary (what really happened) and any other versions. It can be true, partial or a lie.",
+    example: [
+      "add-version",
+      "ivo-wreck",
+      "wreck",
+      "The boat hit the rocks in the fog; nobody could have saved it",
+      "--by",
+      "ivo",
+    ],
+    build: (a) => ({
+      type: "addVersion",
+      id: a.arg("id"),
+      event: a.arg("event-id"),
+      text: a.arg("text"),
+      by: a.list("by") ?? [],
+    }),
+  },
+  updateVersion: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    flags: {
+      event: { value: "<event-id>" },
+      text,
+      by: { value: "<actor,actor,...>", help: '"" for nobody' },
+    },
+    summary: "Change a version's event, text or tellers.",
+    example: ["update-version", "ivo-wreck", "--by", "ivo,mara"],
+    build: (a) => {
+      const event = a.text("event");
+      const text = a.text("text");
+      const by = a.list("by");
+      return {
+        type: "updateVersion",
+        id: a.arg("id"),
+        ...(event === undefined ? {} : { event }),
+        ...(text === undefined ? {} : { text }),
+        ...(by === undefined ? {} : { by }),
+      };
+    },
+  },
+  removeVersion: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    summary: "Remove a version, knowledge of it, and links to both.",
+    example: ["remove-version", "ivo-wreck"],
+    build: (a) => ({ type: "removeVersion", id: a.arg("id") }),
+  },
+  addKnowledge: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id", "actor-id", "how", "ref"],
+    flags: {
+      since: { value: "<event-id>", help: "from when, in story time" },
+      until: { value: "<event-id>", help: "until when" },
+    },
+    summary:
+      "Say an actor knows or believes a record: a fact, a version of an event, an event, a candidate answer. Without --since it holds from the start. To tell the reader, have a scene reveal knowledge:<id>.",
+    example: [
+      "add-knowledge",
+      "mara-doubts",
+      "mara",
+      "believes",
+      "version:ivo-wreck",
+      "--since",
+      "letter",
+    ],
+    build: (a) => {
+      const since = a.text("since");
+      const until = a.text("until");
+      return {
+        type: "addKnowledge",
+        id: a.arg("id"),
+        actor: a.arg("actor-id"),
+        how: a.choice(a.arg("how"), KNOWLEDGE_HOWS, "<how>"),
+        what: a.ref(a.arg("ref")),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+      };
+    },
+  },
+  updateKnowledge: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    flags: {
+      how: { value: "knows|believes" },
+      what: { value: "<ref>" },
+      since: { value: "<event-id>", help: "none clears it" },
+      until: { value: "<event-id>", help: "none clears it" },
+    },
+    summary: "Change what an actor knows or believes, or from and until when.",
+    example: ["update-knowledge", "mara-doubts", "--until", "none"],
+    build: (a) => {
+      const how = a.text("how");
+      const what = a.text("what");
+      const since = a.eventOrNone("since");
+      const until = a.eventOrNone("until");
+      return {
+        type: "updateKnowledge",
+        id: a.arg("id"),
+        ...(how === undefined
+          ? {}
+          : { how: a.choice(how, KNOWLEDGE_HOWS, "--how") }),
+        ...(what === undefined ? {} : { what: a.ref(what) }),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+      };
+    },
+  },
+  removeKnowledge: {
+    group: "Knowledge: who knows or believes what, and the versions told",
+    args: ["id"],
+    summary: "Remove what an actor knows or believes, and links to it.",
+    example: ["remove-knowledge", "mara-doubts"],
+    build: (a) => ({ type: "removeKnowledge", id: a.arg("id") }),
+  },
+
   markGapDeliberate: {
     group: "Gaps: optional prompts",
     args: ["gap", "ref"],
@@ -1078,6 +1231,7 @@ type ReadName =
   | "list"
   | "touches"
   | "scenes"
+  | "reader-order"
   | "mentions"
   | "gaps"
   | "contradictions"
@@ -1093,6 +1247,8 @@ const LIST_KINDS = [
   "reader-question",
   "open-question",
   "candidate",
+  "version",
+  "knowledge",
 ] as const;
 
 export const READS: Record<ReadName, Spec> = {
@@ -1131,6 +1287,13 @@ export const READS: Record<ReadName, Spec> = {
     summary:
       "The scenes that touch a record, in telling order, and how: who is in them, what they depict, pressure, open or answer, and what they reveal, imply or withhold. For a scene's own links, use show scene:<id>.",
     example: ["scenes", "fact:seen-ashore"],
+  },
+  "reader-order": {
+    group: "Start and read",
+    args: [],
+    summary:
+      "The order the reader learns things in, beside the order they happen: each scene in telling order with what it shows, reveals, implies or withholds and when that is in story time; then events in story order, each with the first scene that tells the reader of it (itself, a version of it, or someone's knowledge of it) and the knowledge that starts then.",
+    example: ["reader-order"],
   },
   mentions: {
     group: "Start and read",
@@ -1224,6 +1387,13 @@ export function helpText(): string {
     "beside the story file (show scene:<id> prints the path); write it there",
     "with any editor. Link a scene to what it reveals, implies or withholds",
     "with set-scene-links, and see the scenes that touch a record with scenes.",
+    "",
+    "What a character knows or believes, and from when in story time, is",
+    "knowledge (add-knowledge); the accounts different people give of an event",
+    "are versions (add-version), held beside the event's own summary, which is",
+    "what really happened. A scene tells the reader one by revealing it, and",
+    "reader-order lists what the reader learns in telling order beside the",
+    "order things happen.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -1291,6 +1461,18 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           "drive",
           story.drives.filter((d) => d.actorId === actor.id).map((d) => d.id),
         ),
+        ...ids(
+          "knows or believes",
+          "knowledge",
+          story.knowledge.filter((k) => k.actor === actor.id).map((k) => k.id),
+        ),
+        ...ids(
+          "tells",
+          "version",
+          story.versions
+            .filter((v) => v.by.includes(actor.id))
+            .map((v) => v.id),
+        ),
       ];
     }
     case "drive": {
@@ -1357,6 +1539,21 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           "event",
           story.causes.filter((c) => c.cause === event.id).map((c) => c.effect),
         ),
+        ...ids(
+          "versions",
+          "version",
+          story.versions.filter((v) => v.event === event.id).map((v) => v.id),
+        ),
+        ...ids(
+          "knowledge from then",
+          "knowledge",
+          story.knowledge.filter((k) => k.since === event.id).map((k) => k.id),
+        ),
+        ...ids(
+          "knowledge until then",
+          "knowledge",
+          story.knowledge.filter((k) => k.until === event.id).map((k) => k.id),
+        ),
       ];
     }
     case "scene": {
@@ -1401,6 +1598,38 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           (old) =>
             `  ${old.candidate}: ${old.answer} (${old.by === undefined ? "unanswered" : `replaced by ${formatRef({ kind: "candidate", questionId: q.id, id: old.by })}`})`,
         ),
+      ];
+    }
+    case "version": {
+      const version = story.versions.find((v) => v.id === ref.id);
+      if (version === undefined) return head;
+      return [
+        ...head,
+        `text: ${version.text}`,
+        `event: ${describe(story, { kind: "event", id: version.event })}`,
+        ...ids("told by", "actor", version.by),
+        ...ids(
+          "held by",
+          "knowledge",
+          story.knowledge
+            .filter(
+              (k) => k.what.kind === "version" && k.what.id === version.id,
+            )
+            .map((k) => k.id),
+        ),
+      ];
+    }
+    case "knowledge": {
+      const k = story.knowledge.find((x) => x.id === ref.id);
+      if (k === undefined) return head;
+      return [
+        ...head,
+        `actor: ${describe(story, { kind: "actor", id: k.actor })}`,
+        `${k.how}: ${describe(story, k.what)}`,
+        k.since === undefined
+          ? "since: the start"
+          : `since: ${describe(story, { kind: "event", id: k.since })}`,
+        ...ids("until", "event", k.until === undefined ? [] : [k.until]),
       ];
     }
     case "candidate": {
@@ -1502,6 +1731,13 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
         (q) =>
           `${line({ kind: "openQuestion", id: q.id })} (${stateText(questionState(story, q))})${q.conflict ? " (conflict)" : ""}`,
       );
+    case "version":
+      return story.versions.map(
+        (v) =>
+          `${line({ kind: "version", id: v.id })} of ${formatRef({ kind: "event", id: v.event })}`,
+      );
+    case "knowledge":
+      return story.knowledge.map((k) => line({ kind: "knowledge", id: k.id }));
     case "candidate":
       return story.openQuestions.flatMap((q) =>
         q.candidates.map(
@@ -1510,6 +1746,84 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
         ),
       );
   }
+}
+
+/** ` at year 30`, or nothing for a record with no place in story time. */
+function storyTime(story: Story, ref: Ref): string {
+  const at = (id: string | undefined) => {
+    if (id === undefined) return undefined;
+    return eventTime(story, id) ?? "an unplaced time";
+  };
+  switch (ref.kind) {
+    case "event": {
+      const time = at(ref.id);
+      return time === undefined ? "" : ` at ${time}`;
+    }
+    case "version": {
+      const event = story.versions.find((v) => v.id === ref.id)?.event;
+      return event === undefined
+        ? ""
+        : `, of ${formatRef({ kind: "event", id: event })} at ${at(event)}`;
+    }
+    case "knowledge": {
+      const since = story.knowledge.find((k) => k.id === ref.id)?.since;
+      return since === undefined
+        ? ", held from the start"
+        : `, held from ${formatRef({ kind: "event", id: since })} at ${at(since)}`;
+    }
+    default:
+      return "";
+  }
+}
+
+function firstToldText(story: Story, first: FirstTold | undefined): string {
+  if (first === undefined) return "no scene tells the reader";
+  const scene = `${first.index + 1}. ${describe(story, { kind: "scene", id: first.scene.id })}`;
+  const account =
+    first.via.kind === "version"
+      ? " (an account, maybe not what happened)"
+      : "";
+  return `first told in ${scene}, which ${first.how} ${formatRef(first.via)}${account}`;
+}
+
+/** Telling order, then true order, as `reader-order` prints them. */
+function readerOrderLines(story: Story): string[] {
+  const telling = tellingOrder(story).flatMap(({ scene, index, told }) => [
+    `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}`,
+    ...(told.length === 0
+      ? ["   (tells nothing yet)"]
+      : told.map(
+          ({ how, ref }) =>
+            `   ${how} ${describe(story, ref)}${storyTime(story, ref)}`,
+        )),
+  ]);
+  const knowledgeLine = ({
+    knowledge,
+    first,
+  }: {
+    knowledge: Knowledge;
+    first?: FirstTold;
+  }) =>
+    `${describe(story, { kind: "knowledge", id: knowledge.id })}: ${firstToldText(story, first)}`;
+  const always = knowledgeAlways(story);
+  const truth = trueOrder(story).flatMap(({ event, first, knowledgeFrom }) => [
+    `- ${describe(story, { kind: "event", id: event.id })}${storyTime(story, { kind: "event", id: event.id })}: ${firstToldText(story, first)}`,
+    ...knowledgeFrom.map((k) => `    from then, ${knowledgeLine(k)}`),
+  ]);
+  return [
+    "In telling order, what each scene puts before the reader:",
+    ...(telling.length === 0 ? ["(no scenes yet)"] : telling),
+    "",
+    "In story order, where the reader first learns of each event:",
+    ...(truth.length === 0 ? ["(no events yet)"] : truth),
+    ...(always.length === 0
+      ? []
+      : [
+          "",
+          "Held from the start:",
+          ...always.map((k) => `- ${knowledgeLine(k)}`),
+        ]),
+  ];
 }
 
 /** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
@@ -1701,6 +2015,8 @@ function runRead(
                   `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}: ${how.join("; ")}`,
               ),
         );
+    case "reader-order":
+      return ok(readerOrderLines(story));
     case "mentions":
       return parseRef(a.arg("ref"))
         .mapErr(usageError)

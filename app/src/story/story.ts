@@ -176,6 +176,39 @@ export function questionState(story: Story, q: OpenQuestion): QuestionState {
  */
 export type Cause = { cause: EventId; effect: EventId };
 
+/**
+ * One account of an event, as `by` tell it, held beside the others and the
+ * event's own summary, which is what really happened. An account can be true,
+ * partial or a lie; what someone believes is a `Knowledge` record.
+ */
+export type Version = {
+  id: string;
+  event: EventId;
+  text: string;
+  /** The actors who tell it. */
+  by: string[];
+};
+
+export const KNOWLEDGE_HOWS = ["knows", "believes"] as const;
+
+export type KnowledgeHow = (typeof KNOWLEDGE_HOWS)[number];
+
+/**
+ * What one actor knows or believes, in story time: `what` is any record (a
+ * fact, a version of an event, an event, a candidate answer) and `since` and
+ * `until` are the events it holds from and to, absent when it always has or
+ * never stops. Time is told by events, so a finer timeline needs no change
+ * here. A scene tells the reader this by revealing the record.
+ */
+export type Knowledge = {
+  id: string;
+  actor: string;
+  how: KnowledgeHow;
+  what: Ref;
+  since?: EventId;
+  until?: EventId;
+};
+
 /** The kinds of gap `storyGaps` reports (`./gaps.ts`). */
 export const GAP_KINDS = [
   "drive_without_actor",
@@ -232,7 +265,9 @@ export type RefKind =
   | "readerQuestion"
   | "event"
   | "scene"
-  | "openQuestion";
+  | "openQuestion"
+  | "version"
+  | "knowledge";
 
 const REF_KINDS: readonly RefKind[] = [
   "actor",
@@ -242,6 +277,8 @@ const REF_KINDS: readonly RefKind[] = [
   "event",
   "scene",
   "openQuestion",
+  "version",
+  "knowledge",
 ];
 
 export type Ref =
@@ -262,6 +299,10 @@ export type Story = {
   causes: Cause[];
   /** Left out of the file when empty, as `causes` is. */
   deliberateGaps: DeliberateGap[];
+  /** Left out of the file when empty, as `causes` is. */
+  versions: Version[];
+  /** Left out of the file when empty, as `causes` is. */
+  knowledge: Knowledge[];
   timeline: Timeline;
 };
 
@@ -285,6 +326,10 @@ export function refExists(story: Story, ref: Ref): boolean {
       return has(story.scenes, ref.id);
     case "openQuestion":
       return has(story.openQuestions, ref.id);
+    case "version":
+      return has(story.versions, ref.id);
+    case "knowledge":
+      return has(story.knowledge, ref.id);
     case "candidate": {
       const { questionId, id } = ref;
       const question = story.openQuestions.find((q) => q.id === questionId);
@@ -317,6 +362,8 @@ export function newStory(premise: string): Story {
     openQuestions: [],
     causes: [],
     deliberateGaps: [],
+    versions: [],
+    knowledge: [],
     timeline: emptyTimeline,
   };
 }
@@ -573,6 +620,47 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
   );
 }
 
+function checkVersion(v: JsonRecord, at: string): Check<Version> {
+  const known = checkKeys(v, at, ["id", "event", "text", "by"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkString(v.id, `${at}.id`),
+    checkString(v.event, `${at}.event`),
+    checkString(v.text, `${at}.text`),
+    checkStrings(v.by, `${at}.by`),
+  ]).map(([id, event, text, by]) => ({ id, event, text, by }));
+}
+
+function checkKnowledge(v: JsonRecord, at: string): Check<Knowledge> {
+  const known = checkKeys(v, at, [
+    "id",
+    "actor",
+    "how",
+    "what",
+    "since",
+    "until",
+  ]);
+  if (known.isErr()) return err(known.error);
+  const what: Check<Ref> = isRecord(v.what)
+    ? checkRef(v.what, `${at}.what`)
+    : err(`${at}.what must be a ref`);
+  return Result.combine([
+    checkString(v.id, `${at}.id`),
+    checkString(v.actor, `${at}.actor`),
+    checkOneOf(v.how, KNOWLEDGE_HOWS, `${at}.how`),
+    what,
+    checkOptionalString(v.since, `${at}.since`),
+    checkOptionalString(v.until, `${at}.until`),
+  ]).map(([id, actor, how, what, since, until]) => ({
+    id,
+    actor,
+    how,
+    what,
+    ...(since === undefined ? {} : { since }),
+    ...(until === undefined ? {} : { until }),
+  }));
+}
+
 function checkCandidate(v: JsonRecord, at: string): Check<Candidate> {
   const known = checkKeys(v, at, ["id", "answer", "touches", "rejected"]);
   if (known.isErr()) return err(known.error);
@@ -817,6 +905,8 @@ function checkStory(value: JsonValue): Check<Story> {
     "openQuestions",
     "causes",
     "deliberateGaps",
+    "versions",
+    "knowledge",
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
@@ -839,6 +929,12 @@ function checkStory(value: JsonValue): Check<Story> {
     checkIdentified(value.openQuestions, "openQuestions", checkOpenQuestion),
     checkCauses(value.causes),
     checkDeliberateGaps(value.deliberateGaps),
+    value.versions === undefined
+      ? ok([])
+      : checkIdentified(value.versions, "versions", checkVersion),
+    value.knowledge === undefined
+      ? ok([])
+      : checkIdentified(value.knowledge, "knowledge", checkKnowledge),
     parseTimeline(value.timeline ?? null)
       .mapErr((message) => `timeline: ${message}`)
       .andThen(checkTimelineKeys),
@@ -853,6 +949,8 @@ function checkStory(value: JsonValue): Check<Story> {
       openQuestions,
       causes,
       deliberateGaps,
+      versions,
+      knowledge,
       timeline,
     ]): Story => ({
       version: STORY_VERSION,
@@ -865,6 +963,8 @@ function checkStory(value: JsonValue): Check<Story> {
       openQuestions,
       causes,
       deliberateGaps,
+      versions,
+      knowledge,
       timeline,
     }),
   );
@@ -942,6 +1042,13 @@ function normalized(story: Story): Story {
     ),
     causes: sortedBy(story.causes, CAUSE_KEY),
     deliberateGaps: sortedBy(story.deliberateGaps, GAP_MARK_KEY),
+    versions: byId(
+      story.versions.map((version) => ({
+        ...version,
+        by: sortedStrings(version.by),
+      })),
+    ),
+    knowledge: byId(story.knowledge),
     timeline: {
       ...timeline,
       events: byId(timeline.events),
@@ -981,6 +1088,8 @@ const KEY_ORDER = [
   "openQuestions",
   "causes",
   "deliberateGaps",
+  "versions",
+  "knowledge",
   "timeline",
   "id",
   "kind",
@@ -1015,6 +1124,9 @@ const KEY_ORDER = [
   "gap",
   "ref",
   "reason",
+  "actor",
+  "how",
+  "what",
 ];
 
 const keyRank = (key: string) => {
@@ -1035,7 +1147,8 @@ function withOrderedKeys(value: unknown): unknown {
 
 /** The file's text. Equal stories give equal text, however they were edited. */
 export function serializeStory(story: Story): string {
-  const { causes, deliberateGaps, scenes, ...rest } = normalized(story);
+  const { causes, deliberateGaps, versions, knowledge, scenes, ...rest } =
+    normalized(story);
   const written = {
     ...rest,
     scenes: scenes.map(({ reveals, implies, withholds, ...scene }) => ({
@@ -1046,6 +1159,8 @@ export function serializeStory(story: Story): string {
     })),
     ...(causes.length === 0 ? {} : { causes }),
     ...(deliberateGaps.length === 0 ? {} : { deliberateGaps }),
+    ...(versions.length === 0 ? {} : { versions }),
+    ...(knowledge.length === 0 ? {} : { knowledge }),
   };
   return `${JSON.stringify(withOrderedKeys(written), null, 2)}\n`;
 }

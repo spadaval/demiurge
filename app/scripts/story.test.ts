@@ -572,6 +572,83 @@ describe("story CLI", () => {
     expect(rendered).not.toMatch(/words\)/);
   });
 
+  test("holds who knows or believes what, versions side by side, and the reader's order apart from the true order", () => {
+    ok("init", "A warlock with hundreds of patrons.");
+    ok("add-actor", "vell", "Vell");
+    ok("add-actor", "oren", "Oren");
+    ok("add-event", "pact", "The first pact");
+    ok("set-position", "pact", "3");
+    ok(
+      "add-event",
+      "burning",
+      "The chapel burns",
+      "--summary",
+      "The patron burned it",
+    );
+    ok("set-position", "burning", "4");
+    ok("add-fact", "tithe", "Each patron takes a sliver of her luck");
+    ok(
+      "add-knowledge",
+      "vell-tithe",
+      "vell",
+      "knows",
+      "fact:tithe",
+      "--since",
+      "pact",
+    );
+    ok(
+      "add-version",
+      "lightning",
+      "burning",
+      "Lightning struck it",
+      "--by",
+      "oren",
+    );
+    ok("add-version", "arson", "burning", "Vell set the fire", "--by", "vell");
+    ok(
+      "add-knowledge",
+      "oren-lightning",
+      "oren",
+      "believes",
+      "version:lightning",
+      "--since",
+      "burning",
+    );
+    ok("add-scene", "ash", "Ash");
+    ok("add-scene", "stall", "The stall");
+    ok("set-scene-links", "ash", "reveals", "version:lightning");
+    ok("set-scene-links", "stall", "reveals", "knowledge:vell-tithe");
+
+    expect(ok("show", "knowledge:oren-lightning")).toBe(
+      'knowledge:oren-lightning\nactor: actor:oren ("Oren")\nbelieves: version:lightning ("Lightning struck it")\nsince: event:burning ("The chapel burns")\n',
+    );
+    expect(ok("show", "event:burning")).toContain(
+      'versions: version:arson ("Vell set the fire"), version:lightning ("Lightning struck it")\n',
+    );
+    const order = ok("reader-order");
+    expect(order).toContain(
+      'In telling order, what each scene puts before the reader:\n1. scene:ash ("Ash")\n   reveals version:lightning ("Lightning struck it"), of event:burning at year 4\n2. scene:stall ("The stall")\n   reveals knowledge:vell-tithe ("Vell knows: Each patron takes a sliver of her luck"), held from event:pact at year 3\n',
+    );
+    expect(order).toContain(
+      '- event:pact ("The first pact") at year 3: no scene tells the reader\n    from then, knowledge:vell-tithe ("Vell knows: Each patron takes a sliver of her luck"): first told in 2. scene:stall ("The stall"), which reveals knowledge:vell-tithe\n- event:burning ("The chapel burns") at year 4: first told in 1. scene:ash ("Ash"), which reveals version:lightning (an account, maybe not what happened)\n',
+    );
+    expect(ok("list", "knowledge")).toContain("knowledge:oren-lightning");
+
+    ok("remove-version", "lightning");
+    expect(saved().knowledge.map((k) => k.id)).toEqual(["vell-tithe"]);
+    expect(saved().scenes[0]?.reveals).toEqual([]);
+    const bad = cli(
+      file,
+      "add-knowledge",
+      "x",
+      "vell",
+      "suspects",
+      "fact:tithe",
+    );
+    expect(bad.code).toBe(2);
+    expect(bad.stderr).toContain("<how> must be one of knows, believes");
+  });
+
   test("--help lists every command with an example, and every example runs", () => {
     const help = cli("--help");
     expect(help.code).toBe(0);

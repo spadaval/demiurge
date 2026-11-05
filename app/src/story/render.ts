@@ -19,7 +19,12 @@ import {
   compileChronology,
   type PointOrder,
 } from "../time/chronology";
-import type { Constraint, Position, Timeline } from "../time/timeline";
+import type {
+  Constraint,
+  Position,
+  TimeEvent,
+  Timeline,
+} from "../time/timeline";
 import { storyContradictions } from "./contradictions";
 import {
   type OpenQuestion,
@@ -40,6 +45,7 @@ export function renderStory(story: Story): string {
       "The world",
       story.facts.map((fact) => `- ${sentence(fact.text)}`),
     ),
+    section("Who knows or believes what", knowledgeLines(story)),
     section("Scenes, in telling order", sceneLines(story)),
     section("What the reader is waiting to find out", readerLines(story)),
     section("Decided", decidedLines(story)),
@@ -160,6 +166,24 @@ function refName(story: Story, ref: Ref): string {
           .find((q) => q.id === ref.questionId)
           ?.candidates.find((c) => c.id === ref.id)?.answer,
       );
+    case "version": {
+      const version = story.versions.find((v) => v.id === ref.id);
+      if (version === undefined) return UNNAMED;
+      const event = eventLabel(story, version.event);
+      return version.by.length === 0
+        ? `an account of ${event}`
+        : `${tellers(story, version.by)}'s account of ${event}`;
+    }
+    case "knowledge": {
+      const k = story.knowledge.find((x) => x.id === ref.id);
+      if (k === undefined) return UNNAMED;
+      // Knowledge of knowledge is named one level deep.
+      const what =
+        k.what.kind === "knowledge"
+          ? `what ${named(actorName(story, story.knowledge.find((x) => x.id === k.what.id)?.actor ?? null))} holds`
+          : refName(story, k.what);
+      return `${named(actorName(story, k.actor))} ${k.how}: ${what}`;
+    }
   }
 }
 
@@ -252,8 +276,8 @@ function constraintText(story: Story, c: Constraint): string {
  * come before each, then by position, then causes before their effects, then
  * by label. Unordered events fall where that puts them.
  */
-function eventLines(story: Story): string[] {
-  const { events, positions, constraints } = story.timeline;
+export function eventsInStoryOrder(story: Story): TimeEvent[] {
+  const { events, positions } = story.timeline;
   const chronology = compileChronology(story.timeline, []);
   const worldPosition = (id: string) =>
     positions.find((p) => p.event === id && p.frame === "world");
@@ -266,7 +290,7 @@ function eventLines(story: Story): string[] {
     ]),
   );
   const depth = causeDepths(story);
-  const ordered = [...events].sort(
+  return [...events].sort(
     (a, b) =>
       (earlier.get(a.id) ?? 0) - (earlier.get(b.id) ?? 0) ||
       (worldPosition(a.id)?.start ?? Number.POSITIVE_INFINITY) -
@@ -274,8 +298,23 @@ function eventLines(story: Story): string[] {
       depth(a.id) - depth(b.id) ||
       named(a.label).localeCompare(named(b.label)),
   );
+}
+
+const worldPositionOf = (story: Story, id: string) =>
+  story.timeline.positions.find((p) => p.event === id && p.frame === "world");
+
+/** `year 30`, `year 1200 to 1210, spring`, or undefined if it has no place. */
+export function eventTime(story: Story, id: string): string | undefined {
+  const text = positionText(story, worldPositionOf(story, id));
+  return text === "" ? undefined : text.slice(2, -1);
+}
+
+function eventLines(story: Story): string[] {
+  const { constraints } = story.timeline;
+  const ordered = eventsInStoryOrder(story);
+  const worldPosition = (id: string) => worldPositionOf(story, id);
   const placed = positionsOnly(story.timeline);
-  return ordered.map((event) => {
+  return ordered.flatMap((event) => {
     const stated = constraints
       .filter(
         (c) => c.a === event.id && c.b !== event.id && !satisfiedBy(placed, c),
@@ -284,8 +323,45 @@ function eventLines(story: Story): string[] {
     const when = stated.length === 0 ? "" : ` [${stated.join("; ")}]`;
     const summary =
       event.summary.trim() === "" ? "" : `: ${sentence(event.summary)}`;
-    return `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}`;
+    return [
+      `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}`,
+      ...story.versions
+        .filter((v) => v.event === event.id)
+        .map(
+          (v) =>
+            `  - ${v.by.length === 0 ? "One account" : `As ${tellers(story, v.by)} tell${v.by.length === 1 ? "s" : ""} it`}: ${sentence(named(v.text))}`,
+        ),
+    ];
   });
+}
+
+/** `Lew`, `Lew and Ada`, `Lew, Ada and Tom`. */
+function tellers(story: Story, ids: readonly string[]): string {
+  const names = ids.map((id) => named(actorName(story, id)));
+  return names.length <= 1
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+/** `Mara knows: The lamp was out, from The wreck until The trial.` */
+function knowledgeLines(story: Story): string[] {
+  return [...story.knowledge]
+    .sort((a, b) =>
+      named(actorName(story, a.actor)).localeCompare(
+        named(actorName(story, b.actor)),
+      ),
+    )
+    .map((k) => {
+      const when = joined([
+        k.since === undefined
+          ? undefined
+          : `from ${eventLabel(story, k.since)}`,
+        k.until === undefined
+          ? undefined
+          : `until ${eventLabel(story, k.until)}`,
+      ]);
+      return `- ${sentence(`${refName(story, { kind: "knowledge", id: k.id })}${when === "" ? "" : `, ${when}`}`)}`;
+    });
 }
 
 /** "Because of" takes two of a link's eight words. */

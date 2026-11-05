@@ -97,6 +97,27 @@ reread.
   replaced it. `show open-question:who-wrote` lists that history, and
   `render` prints only the current answer. So rework an answer by answering
   again; don't delete the question or its other candidates.
+- **Who knows what, and the versions people tell.** An event's summary is
+  what really happened. What someone says happened is a version beside it:
+  `add-version fog wreck "The fog took her; nobody could have saved her"
+  --by ivo`. Hold as many versions of an event as there are tellers, whether
+  true, partial or lies. What a character knows or believes, from a point in
+  story time, is knowledge: `add-knowledge mara-fog mara believes
+  version:fog --since wreck --until letter`. It can be of a fact, a version,
+  an event or a candidate answer. Without `--since` it holds from the start,
+  and without `--until` it never stops. Times are events, so a belief starts
+  and ends with what happens. `show actor:mara` lists what she knows or
+  believes, and `show event:wreck` lists its versions.
+- **Telling order is not true order.** A scene tells the reader something by
+  revealing or implying it: the fact, a version (the reader may believe a
+  lie for a while), or the knowledge itself (`set-scene-links docks reveals
+  knowledge:mara-fog` tells the reader that Mara believes it). `reader-order`
+  lists each scene in telling order with what it shows, reveals, implies or
+  withholds and when that is in story time. Then it lists the events in
+  story order with the first scene that tells the reader of each, through
+  the event itself, a version of it or someone's knowledge of it, and when
+  each character's knowledge starts. Use it to plan what the reader learns
+  when, and to check a scene doesn't give away what a later scene reveals.
 - **Causes.** When one event happened because of another, record it with
   `add-cause wreck letter` (the wreck caused the letter). Positions and
   constraints only say what comes first; a cause says why. `render` says

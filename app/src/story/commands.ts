@@ -29,6 +29,7 @@ import {
   GAP_SUBJECTS,
   type GapKind,
   isAnswered,
+  type KnowledgeHow,
   type OpenQuestion,
   type Ref,
   refExists,
@@ -179,6 +180,46 @@ export type StoryCommand =
    * causes.
    */
   | { type: "removeEvent"; id: EventId }
+  /** An account of `event`, told by the actors in `by`. */
+  | {
+      type: "addVersion";
+      id: string;
+      event: EventId;
+      text: string;
+      by: string[];
+    }
+  | {
+      type: "updateVersion";
+      id: string;
+      event?: EventId;
+      text?: string;
+      by?: string[];
+    }
+  /** Also removes knowledge of it, and links to that. */
+  | { type: "removeVersion"; id: string }
+  /**
+   * `actor` knows or believes `what` from event `since` until event `until`;
+   * either absent means always. A record can't be knowledge of itself.
+   */
+  | {
+      type: "addKnowledge";
+      id: string;
+      actor: string;
+      how: KnowledgeHow;
+      what: Ref;
+      since?: EventId;
+      until?: EventId;
+    }
+  /** `since` or `until` null clears it. */
+  | {
+      type: "updateKnowledge";
+      id: string;
+      how?: KnowledgeHow;
+      what?: Ref;
+      since?: EventId | null;
+      until?: EventId | null;
+    }
+  | { type: "removeKnowledge"; id: string }
   /**
    * Marks one gap on one record (or, with `ref` null, on the whole story) as
    * judged fine, so `storyGaps` stops listing it. Marking it again replaces
@@ -960,6 +1001,128 @@ export function applyStoryCommand(
       );
     }
 
+    case "addVersion": {
+      const { id, event, text, by } = command;
+      return fresh("version", story.versions, id)
+        .andThen(() => resolve("event", [event], isEvent))
+        .andThen(() => resolve("actor", by, isActor))
+        .andThen(() =>
+          kept({
+            ...story,
+            versions: [...story.versions, { id, event, text, by: unique(by) }],
+          }),
+        );
+    }
+
+    case "updateVersion": {
+      const { id, event, text, by } = command;
+      return existing("version", story.versions, id)
+        .andThen((version) =>
+          resolve("event", event === undefined ? [] : [event], isEvent)
+            .andThen(() => resolve("actor", by ?? [], isActor))
+            .map(() => version),
+        )
+        .andThen((version) =>
+          kept({
+            ...story,
+            versions: replace(story.versions, id, () => ({
+              ...version,
+              event: event ?? version.event,
+              text: text ?? version.text,
+              by: by === undefined ? version.by : unique(by),
+            })),
+          }),
+        );
+    }
+
+    case "removeVersion": {
+      const { id } = command;
+      return existing("version", story.versions, id).andThen(() =>
+        kept(
+          withoutRefs(story, (ref) => ref.kind === "version" && ref.id === id),
+        ),
+      );
+    }
+
+    case "addKnowledge": {
+      const { id, actor, how, what, since, until } = command;
+      return fresh("knowledge", story.knowledge, id)
+        .andThen(() => resolve("actor", [actor], isActor))
+        .andThen(() =>
+          what.kind === "knowledge" && what.id === id
+            ? refuse("self_relation", `knowledge ${id} can't be of itself`)
+            : resolveRefs([what]),
+        )
+        .andThen(() =>
+          resolve(
+            "event",
+            [since, until].filter((e) => e !== undefined),
+            isEvent,
+          ),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            knowledge: [
+              ...story.knowledge,
+              {
+                id,
+                actor,
+                how,
+                what,
+                ...(since === undefined ? {} : { since }),
+                ...(until === undefined ? {} : { until }),
+              },
+            ],
+          }),
+        );
+    }
+
+    case "updateKnowledge": {
+      const { id, how, what, since, until } = command;
+      return existing("knowledge", story.knowledge, id)
+        .andThen((k) =>
+          (what !== undefined && what.kind === "knowledge" && what.id === id
+            ? refuse("self_relation", `knowledge ${id} can't be of itself`)
+            : resolveRefs(what === undefined ? [] : [what])
+          )
+            .andThen(() =>
+              resolve(
+                "event",
+                [since, until].filter((e) => typeof e === "string"),
+                isEvent,
+              ),
+            )
+            .map(() => k),
+        )
+        .andThen(({ since: oldSince, until: oldUntil, ...k }) => {
+          const from = since === undefined ? oldSince : (since ?? undefined);
+          const to = until === undefined ? oldUntil : (until ?? undefined);
+          return kept({
+            ...story,
+            knowledge: replace(story.knowledge, id, () => ({
+              ...k,
+              how: how ?? k.how,
+              what: what ?? k.what,
+              ...(from === undefined ? {} : { since: from }),
+              ...(to === undefined ? {} : { until: to }),
+            })),
+          });
+        });
+    }
+
+    case "removeKnowledge": {
+      const { id } = command;
+      return existing("knowledge", story.knowledge, id).andThen(() =>
+        kept(
+          withoutRefs(
+            story,
+            (ref) => ref.kind === "knowledge" && ref.id === id,
+          ),
+        ),
+      );
+    }
+
     case "addCause": {
       const { cause, effect } = command;
       return resolve("event", [cause, effect], isEvent)
@@ -1068,6 +1231,8 @@ const refKey = (ref: Ref) => [
   ref.id,
 ];
 
+const unique = (items: readonly string[]) => [...new Set(items)];
+
 const without = (items: readonly string[], id: string) =>
   items.filter((item) => item !== id);
 
@@ -1121,8 +1286,47 @@ function relationBetween(story: Story, a: string, b: string): boolean {
  * Drops the refs `gone` matches from every fact, scene link, open question and
  * candidate, and the deliberate gaps on them.
  */
-function withoutRefs(story: Story, gone: (ref: Ref) => boolean): Story {
+function withoutRefs(story: Story, removed: (ref: Ref) => boolean): Story {
+  // A version goes with its event, and knowledge with its actor or what it
+  // is of; whatever refers to those goes too, so repeat until nothing more.
+  let goneVersions = new Set<string>();
+  let goneKnowledge = new Set<string>();
+  const gone = (ref: Ref): boolean =>
+    removed(ref) ||
+    (ref.kind === "version" && goneVersions.has(ref.id)) ||
+    (ref.kind === "knowledge" && goneKnowledge.has(ref.id));
+  for (;;) {
+    const versions = new Set(
+      story.versions
+        .filter(
+          (v) =>
+            gone({ kind: "version", id: v.id }) ||
+            gone({ kind: "event", id: v.event }),
+        )
+        .map((v) => v.id),
+    );
+    const knowledge = new Set(
+      story.knowledge
+        .filter(
+          (k) =>
+            gone({ kind: "knowledge", id: k.id }) ||
+            gone({ kind: "actor", id: k.actor }) ||
+            gone(k.what),
+        )
+        .map((k) => k.id),
+    );
+    if (
+      versions.size === goneVersions.size &&
+      knowledge.size === goneKnowledge.size
+    ) {
+      break;
+    }
+    goneVersions = versions;
+    goneKnowledge = knowledge;
+  }
   const kept = (refs: readonly Ref[]) => refs.filter((ref) => !gone(ref));
+  const event = (id: string | undefined) =>
+    id === undefined || gone({ kind: "event", id }) ? undefined : id;
   return {
     ...story,
     deliberateGaps: story.deliberateGaps.filter(
@@ -1143,5 +1347,22 @@ function withoutRefs(story: Story, gone: (ref: Ref) => boolean): Story {
         touches: kept(candidate.touches),
       })),
     })),
+    versions: story.versions
+      .filter((v) => !goneVersions.has(v.id))
+      .map((v) => ({
+        ...v,
+        by: v.by.filter((actor) => !gone({ kind: "actor", id: actor })),
+      })),
+    knowledge: story.knowledge
+      .filter((k) => !goneKnowledge.has(k.id))
+      .map(({ since, until, ...k }) => {
+        const from = event(since);
+        const to = event(until);
+        return {
+          ...k,
+          ...(from === undefined ? {} : { since: from }),
+          ...(to === undefined ? {} : { until: to }),
+        };
+      }),
   };
 }
