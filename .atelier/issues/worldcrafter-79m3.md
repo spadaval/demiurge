@@ -25,9 +25,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T15:31:12.117379415+00:00"
+status: "done"
 title: "Round 3 fixes: viewpoint marks, reader context, years, traces"
-updated_at: "2026-11-05T14:17:33.386041924+00:00"
+updated_at: "2026-11-05T15:31:12.117379415+00:00"
 ---
 
 ## Goal
@@ -37,3 +38,7 @@ Fix what Round 3's reading (docs/rounds/round-3/reading.md, ranked issues 1 and 
 ## Done when
 
 - All children are closed, each independently reviewed, and merged into local master before Round 4 starts.
+
+## Close Reason
+
+Round 3 fixes done and reviewed (round1-fix-reviewer, approvals nyje, c72a): o0s0 viewpoint marks (false marks on Round 3 snapshots 7 and 11 -> 0) and each telling shown; 0u90 years as spans, --end year inclusive, counts 'from', output polish; vw1u trace noise (Round 3 replay 24 suspects -> 5, catching the off-by-one note); nkey skill: count the same thing, check reused lines, read reader-order whole every scene.
