@@ -483,7 +483,7 @@ describe("story CLI", () => {
     expect(dangling.stderr).toContain("actor nobody does not exist");
     const malformed = cli(file, "set-position", "x", "soon");
     expect(malformed.code).toBe(2);
-    expect(malformed.stderr).toContain("<start> must be a number");
+    expect(malformed.stderr).toContain('<start>: "soon" is not a time');
     const badRef = cli(file, "add-fact", "f", "Text", "--about", "joel");
     expect(badRef.code).toBe(2);
     expect(badRef.stderr).toContain("is not a ref");
@@ -657,6 +657,76 @@ describe("story CLI", () => {
     );
     expect(bad.code).toBe(2);
     expect(bad.stderr).toContain("<how> must be one of knows, believes");
+  });
+
+  test("holds dates, objects planted and paid off, participants and a drive's life", () => {
+    ok("init", "A son comes home for a funeral.");
+    ok("add-actor", "lew", "Lew");
+    ok("add-event", "death", "Dale dies");
+    ok("add-event", "burial", "Dale is buried");
+    ok("set-position", "death", "1954-10-12");
+    ok("set-position", "burial", "1954-10-12 23:30");
+    ok("constrain", "same-night", "death", "before", "burial");
+    expect(ok("contradictions")).toBe("No contradictions.\n");
+    expect(ok("show", "event:burial")).toContain(
+      "position: 12 October 1954, 23:30\n",
+    );
+    ok("add-event", "bus", "The morning bus");
+    ok("set-position", "bus", "1954-10-15");
+    ok("constrain", "after", "burial", "before", "bus", "--gap", "2d");
+    expect(saved().timeline.constraints[0]?.duration?.tolerance).toBeCloseTo(
+      0.5 / 365.2425,
+    );
+    expect(ok("render")).toContain(
+      "- **Dale dies** (12 October 1954) [before Dale is buried]\n- **Dale is buried** (12 October 1954, 23:30)",
+    );
+
+    ok("add-object", "hook", "The sack hook");
+    ok("add-scene", "dock", "The dock");
+    ok("add-scene", "barn", "The barn");
+    ok("set-scene-links", "dock", "plants", "object:hook");
+    ok("set-scene-links", "barn", "pays-off", "object:hook");
+    expect(ok("show", "object:hook")).toBe(
+      'object:hook\nname: The sack hook\nplanted in: scene:dock ("The dock")\npaid off in: scene:barn ("The barn")\n',
+    );
+
+    ok("set-participant", "death", "object:hook", "--role", "the weapon");
+    ok("set-participant", "death", "actor:lew", "--role", "found him");
+    expect(ok("show", "event:death")).toContain(
+      'participant: actor:lew ("Lew") (found him)\nparticipant: object:hook ("The sack hook") (the weapon)\n',
+    );
+    expect(ok("show", "object:hook")).toContain(
+      'in event: event:death ("Dale dies") (the weapon)\n',
+    );
+
+    ok("add-drive", "truth", "Learn the truth", "--actor", "lew");
+    ok("add-drive", "bury", "Bury it", "--actor", "lew");
+    ok("add-drive-turn", "truth", "satisfied", "--at", "burial");
+    ok("add-drive-turn", "truth", "flipped", "--into", "bury", "--at", "bus");
+    expect(ok("show", "drive:truth")).toContain(
+      'life, in order:\n  1. satisfied at event:burial ("Dale is buried")\n  2. flipped into drive:bury ("Bury it") at event:bus ("The morning bus")\n',
+    );
+    expect(ok("show", "drive:bury")).toContain(
+      'flipped from: drive:truth ("Learn the truth")\n',
+    );
+    const wrong = cli(
+      file,
+      "add-drive-turn",
+      "truth",
+      "satisfied",
+      "--into",
+      "bury",
+    );
+    expect(wrong.code).toBe(1);
+    expect(wrong.stderr).toContain(
+      "a drive satisfied doesn't turn into another drive",
+    );
+
+    expect(ok("remove-event", "death")).toBe(
+      "Saved.\nAlso removed: the part of actor:lew in event:death, the part of object:hook in event:death\n",
+    );
+    expect(ok("remove-drive-turn", "truth", "1")).toBe("Saved.\n");
+    expect(saved().drives.find((d) => d.id === "truth")?.turns).toHaveLength(1);
   });
 
   test("--help lists every command with an example, and every example runs", () => {

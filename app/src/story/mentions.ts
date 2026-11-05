@@ -11,6 +11,7 @@
 
 import { err, ok, type Result } from "neverthrow";
 import { WORLD_FRAME } from "../time/timeline";
+import { describeSpan } from "./calendar";
 import { describeRef, type Ref, refExists, type Story } from "./story";
 import {
   refLabel,
@@ -201,6 +202,17 @@ function storyTexts(story: Story): Text[] {
   for (const v of story.versions) {
     add({ kind: "version", id: v.id }, { text: v.text });
   }
+  for (const o of story.objects) {
+    add({ kind: "object", id: o.id }, { name: o.name, notes: o.notes });
+  }
+  for (const d of story.drives) {
+    add(
+      { kind: "drive", id: d.id },
+      Object.fromEntries(
+        d.turns.map((turn, i) => [`turn ${i + 1} note`, turn.note]),
+      ),
+    );
+  }
   return texts;
 }
 
@@ -237,6 +249,8 @@ function nameOf(story: Story, ref: Ref): { field: string; value: string } {
     // Knowledge has no text of its own to look for.
     case "knowledge":
       return { field: "", value: "" };
+    case "object":
+      return { field: "name", value: find(story.objects)?.name ?? "" };
     case "candidate":
       return {
         field: "answer",
@@ -289,10 +303,13 @@ function terms(story: Story, ref: Ref): Term[] {
     const position = story.timeline.positions.find(
       (p) => p.event === ref.id && p.frame === WORLD_FRAME,
     );
+    // A date is stored as a fractional year, and text states its year.
     const years =
       position === undefined
         ? []
-        : [...new Set([position.start, position.end])];
+        : describeSpan(position) === undefined
+          ? [...new Set([position.start, position.end])]
+          : [Math.floor(position.start)];
     for (const year of years) {
       found.push({
         pattern: numberPattern(year),

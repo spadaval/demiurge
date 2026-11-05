@@ -13,6 +13,7 @@ import {
   type Ref,
   refExists,
   SCENE_LINK_KINDS,
+  SCENE_LINK_WORDS,
   type Story,
 } from "./story";
 
@@ -30,6 +31,7 @@ export const TOUCH_KINDS: readonly TouchKind[] = [
   "candidate",
   "version",
   "knowledge",
+  "object",
 ];
 
 /** A record reached, its name for display, and each way it was reached. */
@@ -123,6 +125,8 @@ export function refLabel(story: Story, ref: Ref, depth = 0): string {
         );
       case "version":
         return story.versions.find((v) => v.id === ref.id)?.text ?? "";
+      case "object":
+        return story.objects.find((o) => o.id === ref.id)?.name ?? "";
       case "knowledge": {
         const k = story.knowledge.find((x) => x.id === ref.id);
         if (k === undefined || depth > 2) return "";
@@ -237,7 +241,7 @@ function directLinks(story: Story, ref: Ref): Link[] {
         add("a drive it puts under pressure", driveRef(drive));
       }
       for (const how of SCENE_LINK_KINDS) {
-        add(`what it ${how}`, ...(scene?.[how] ?? []));
+        add(`what it ${SCENE_LINK_WORDS[how]}`, ...(scene?.[how] ?? []));
       }
       for (const question of story.readerQuestions) {
         const qRef: Ref = { kind: "readerQuestion", id: question.id };
@@ -309,6 +313,45 @@ function directLinks(story: Story, ref: Ref): Link[] {
   }
 
   // Whatever refers to `ref` by a Ref.
+  for (const p of story.participants) {
+    if (sameRef(p.who, ref)) {
+      add(
+        `an event it takes part in${p.role.trim() === "" ? "" : ` (${p.role})`}`,
+        eventRef(p.event),
+      );
+    }
+    if (ref.kind === "event" && p.event === ref.id) {
+      add(`who takes part${p.role.trim() === "" ? "" : ` (${p.role})`}`, p.who);
+    }
+  }
+  for (const drive of story.drives) {
+    for (const turn of drive.turns) {
+      if (ref.kind === "drive" && drive.id === ref.id) {
+        if (turn.at !== undefined) {
+          add(`when it is ${turn.how}`, eventRef(turn.at));
+        }
+        if (turn.into !== undefined) {
+          add(
+            turn.how === "replaced"
+              ? "the drive that replaces it"
+              : "the drive it flips into",
+            driveRef(turn.into),
+          );
+        }
+      }
+      if (ref.kind === "event" && turn.at === ref.id) {
+        add(`a drive ${turn.how} then`, driveRef(drive.id));
+      }
+      if (ref.kind === "drive" && turn.into === ref.id) {
+        add(
+          turn.how === "replaced"
+            ? "a drive it replaces"
+            : "a drive that flips into it",
+          driveRef(drive.id),
+        );
+      }
+    }
+  }
   for (const k of story.knowledge) {
     if (sameRef(k.what, ref)) {
       add(`someone who ${k.how} it`, { kind: "knowledge", id: k.id });
@@ -317,7 +360,7 @@ function directLinks(story: Story, ref: Ref): Link[] {
   for (const scene of story.scenes) {
     for (const how of SCENE_LINK_KINDS) {
       if (scene[how].some((linked) => sameRef(linked, ref))) {
-        add(`a scene that ${how} it`, sceneRef(scene));
+        add(`a scene that ${SCENE_LINK_WORDS[how]} it`, sceneRef(scene));
       }
     }
   }
@@ -433,6 +476,7 @@ function grouped(story: Story, links: Link[], subject: Ref): TouchGroups {
     candidate: [],
     version: [],
     knowledge: [],
+    object: [],
   };
   const seen = new Map<string, Touch>();
   for (const { ref, how } of links) {

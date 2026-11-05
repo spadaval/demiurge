@@ -52,6 +52,11 @@ Say what each scene does with the bible:
   it without being told.
 - `set-scene-links storm withholds drive:keep-quiet`: what it keeps back
   where a reader would expect to learn it.
+- `set-scene-links storm plants object:knife` and `set-scene-links duel
+  pays-off object:knife`: what it sets up to matter later, and what it
+  brings back. Any record can be planted, but objects are the usual case:
+  `add-object knife "Doran's knife"` makes a thing the scenes can link to,
+  and `show object:knife` lists where it is planted and paid off.
 
 Each command sets that kind of link for the scene; `none` clears it. Any
 record or candidate can be linked. `show scene:<id>` lists a scene's links,
@@ -109,9 +114,10 @@ reread.
   and ends with what happens. `show actor:mara` lists what she knows or
   believes, and `show event:wreck` lists its versions. Removing a record
   takes with it the versions and knowledge that depend on it: an event's
-  versions, an actor's knowledge, and anyone's knowledge of the record. The
-  edit lists them under "Also removed", so rework by updating rather than
-  removing when the account or belief is still true. Knowledge that ends
+  versions and participants, an actor's knowledge and parts in events, and
+  anyone's knowledge of the record. The edit lists them under "Also
+  removed", so rework by updating rather than removing when the account or
+  belief is still true. Knowledge that ends
   before it starts is kept and reported by `contradictions`.
 - **Telling order is not true order.** A scene tells the reader something by
   revealing or implying it: the fact, a version (the reader may believe a
@@ -132,10 +138,30 @@ reread.
 - **Contradictions are kept.** A timeline edit that makes events contradict
   each other is saved and the problem printed. A clash that isn't about time
   can be an open question with `--conflict`.
+- **Who takes part in an event.** `set-participant wreck actor:ivo --role
+  "at the helm"` records who did it, who saw it, or which object was used
+  (`object:knife --role "the weapon"`), so a change of who did it can be
+  traced with `touches` instead of living only in a summary.
+- **A drive's life.** A want can end or change: `add-drive-turn find-sender
+  satisfied --at letter`, `renounced`, `replaced --into <drive>` (a new want
+  takes its place) or `flipped --into <drive>` (it turns into its opposite,
+  often against what it was allied with). Give the event where it turns
+  with `--at`, and a `--note`. A drive can turn more than once (met, then
+  given up) and one with no turns is still live. `show drive:<id>` lists
+  its life in order and `render` prints it under the want. So a want that
+  changes over the story is two drives, the first replaced by or flipped
+  into the second, each with its own relations.
+- **Time finer than a year.** `set-position` takes a year (`1954`, as
+  before) or a date: `1954-10` (that month), `1954-10-12` (that day) or
+  `"1954-10-12 21:00"` (that minute). A date is the span it names, so two
+  events on the same day can be ordered with `constrain ... before`, and
+  `render` prints dates, not fractions of a year. `constrain --gap` takes a
+  unit too: `--gap 3d`, `2w`, `6h`, `4mo`; without `--tolerance` it is give
+  or take half that unit. Knowledge `--since` and `--until` and drive turns
+  `--at` name events, so they follow the events wherever they are placed.
 - **Rework** a motive with `update-drive` or `set-drive-origins`, an event
   with `describe-event`, `set-position` or `constrain`, and see what it
-  reaches with `touches`. A want that changes over the story can be two
-  drives with different origins.
+  reaches with `touches`.
 - **Find the text a change left behind with `mentions`.** `touches` sees only
   declared links. Summaries, stakes, notes, facts and candidates can still
   state the old version in words: a name, a year, "ten years ago", "since

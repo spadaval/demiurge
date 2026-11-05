@@ -1,0 +1,191 @@
+/**
+ * Time finer than a year, for a story whose clock counts years. Positions stay
+ * fractional years, as the timeline stores them, so year-based files read the
+ * same; this turns dates and spans into those numbers and back.
+ *
+ * A date is a span in the Gregorian calendar: `1954-10` is that month,
+ * `1954-10-12` that day and `1954-10-12 21:00` that minute, each the half-open
+ * interval it covers. Two events placed on the same day can then be ordered
+ * with `before`. A plain number is a year, as it always was.
+ */
+
+import { err, ok, type Result } from "neverthrow";
+
+const MS_PER_MINUTE = 60_000;
+const DAYS_PER_YEAR = 365.2425;
+
+/** Milliseconds since the epoch at the start of that minute, any year. */
+function msAt(year: number, month = 1, day = 1, hour = 0, minute = 0): number {
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, 0, 0);
+  return date.getTime();
+}
+
+/** The fractional year of a moment given in milliseconds. */
+function yearOf(ms: number): number {
+  const year = new Date(ms).getUTCFullYear();
+  const start = msAt(year);
+  return year + (ms - start) / (msAt(year + 1) - start);
+}
+
+/** The moment, in milliseconds, of a fractional year. */
+function msOf(at: number): number {
+  const year = Math.floor(at);
+  const start = msAt(year);
+  return start + (at - year) * (msAt(year + 1) - start);
+}
+
+export type Span = { start: number; end: number };
+
+const DATE = /^(-?\d{1,6})-(\d{1,2})(?:-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?)?$/;
+
+/**
+ * `1954` (a year, exactly at its start, as a number always was),
+ * `1954.8`, `1954-10`, `1954-10-12` or `1954-10-12 21:00`.
+ */
+export function parseWhen(text: string): Result<Span, string> {
+  const trimmed = text.trim();
+  const n = Number(trimmed);
+  if (trimmed !== "" && Number.isFinite(n)) return ok({ start: n, end: n });
+  const match = DATE.exec(trimmed);
+  if (match === null) {
+    return err(
+      `"${text}" is not a time: write a year (1954 or 1954.8) or a date (1954-10, 1954-10-12, 1954-10-12 21:00)`,
+    );
+  }
+  const [, y, mo, d, h, mi] = match;
+  const year = Number(y);
+  const month = Number(mo);
+  const day = d === undefined ? undefined : Number(d);
+  const hour = h === undefined ? undefined : Number(h);
+  const minute = mi === undefined ? undefined : Number(mi);
+  const lastDay = new Date(msAt(year, month + 1) - 1).getUTCDate();
+  if (month < 1 || month > 12) return err(`month ${month} is not 1 to 12`);
+  if (day !== undefined && (day < 1 || day > lastDay)) {
+    return err(`day ${day} is not in ${year}-${month}`);
+  }
+  if (hour !== undefined && (hour > 23 || (minute ?? 0) > 59)) {
+    return err(`${h}:${mi} is not a time of day`);
+  }
+  if (day === undefined) {
+    return ok({
+      start: yearOf(msAt(year, month)),
+      end: yearOf(msAt(year, month + 1)),
+    });
+  }
+  if (hour === undefined) {
+    return ok({
+      start: yearOf(msAt(year, month, day)),
+      end: yearOf(msAt(year, month, day + 1)),
+    });
+  }
+  const at = msAt(year, month, day, hour, minute);
+  return ok({ start: yearOf(at), end: yearOf(at + MS_PER_MINUTE) });
+}
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** The moment if `at` falls on a whole minute, to within rounding. */
+function wholeMinute(at: number): Date | undefined {
+  const ms = Math.round(msOf(at) / MS_PER_MINUTE) * MS_PER_MINUTE;
+  return Math.abs(yearOf(ms) - at) < 1e-9 ? new Date(ms) : undefined;
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * The span as a date, when it is exactly a month, a day or a minute:
+ * `October 1954`, `12 October 1954`, `12 October 1954, 21:00`. Otherwise,
+ * including any single moment such as an older file's `1954.8`, undefined,
+ * and the caller says it in years.
+ */
+export function describeSpan({ start, end }: Span): string | undefined {
+  if (end <= start) return undefined;
+  const from = wholeMinute(start);
+  const to = wholeMinute(end);
+  if (from === undefined || to === undefined) return undefined;
+  const year = from.getUTCFullYear();
+  const month = from.getUTCMonth() + 1;
+  const day = from.getUTCDate();
+  const time = `${pad(from.getUTCHours())}:${pad(from.getUTCMinutes())}`;
+  const monthName = MONTHS[month - 1] ?? "";
+  const date = `${day} ${monthName} ${year}`;
+  const toMs = to.getTime();
+  const midnight = time === "00:00";
+  if (midnight && day === 1 && toMs === msAt(year, month + 1)) {
+    return `${monthName} ${year}`;
+  }
+  if (midnight && toMs === msAt(year, month, day + 1)) return date;
+  if (toMs === from.getTime() + MS_PER_MINUTE) {
+    return `${date}, ${time}`;
+  }
+  return undefined;
+}
+
+/** Units a gap can be given in, as years. */
+const UNITS: readonly {
+  names: readonly string[];
+  years: number;
+  word: string;
+}[] = [
+  { names: ["y", "year", "years"], years: 1, word: "year" },
+  { names: ["mo", "month", "months"], years: 1 / 12, word: "month" },
+  { names: ["w", "week", "weeks"], years: 7 / DAYS_PER_YEAR, word: "week" },
+  { names: ["d", "day", "days"], years: 1 / DAYS_PER_YEAR, word: "day" },
+  {
+    names: ["h", "hour", "hours"],
+    years: 1 / DAYS_PER_YEAR / 24,
+    word: "hour",
+  },
+  {
+    names: ["min", "minute", "minutes"],
+    years: 1 / DAYS_PER_YEAR / 24 / 60,
+    word: "minute",
+  },
+];
+
+/**
+ * A span of time in years: `3` (years, as before), `3d`, `2 weeks`, `6h`.
+ * `unit` is the size of the unit it was given in, in years.
+ */
+export function parseSpan(
+  text: string,
+): Result<{ years: number; unit: number }, string> {
+  const match = /^\s*(-?\d+(?:\.\d+)?)\s*([a-z]*)\s*$/i.exec(text);
+  const unit = UNITS.find(({ names }) =>
+    names.includes((match?.[2] ?? "").toLowerCase()),
+  );
+  if (match === null || (match[2] !== "" && unit === undefined)) {
+    return err(
+      `"${text}" is not a span: write a number of years, or one with a unit (3d, 2w, 6h, 4mo, 1y)`,
+    );
+  }
+  const size = unit?.years ?? 1;
+  return ok({ years: Number(match[1]) * size, unit: size });
+}
+
+/** A span in years in the largest unit that says it in a whole number: `3 days`. */
+export function describeYears(years: number): string {
+  for (const { years: size, word } of UNITS) {
+    const count = years / size;
+    const whole = Math.round(count);
+    if (whole !== 0 && Math.abs(count - whole) < 1e-6) {
+      return `${whole} ${word}${Math.abs(whole) === 1 ? "" : "s"}`;
+    }
+  }
+  return `${years} years`;
+}

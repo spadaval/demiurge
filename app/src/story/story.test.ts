@@ -38,6 +38,7 @@ const fullStory: Story = {
         { to: "leave", type: "competes" },
         { to: "leave", type: "allies" },
       ],
+      turns: [],
     },
     {
       id: "leave",
@@ -47,6 +48,7 @@ const fullStory: Story = {
       method: "",
       origins: [],
       relations: [],
+      turns: [],
     },
   ],
   facts: [
@@ -84,6 +86,8 @@ const fullStory: Story = {
       reveals: [],
       implies: [],
       withholds: [],
+      plants: [],
+      paysOff: [],
     },
     {
       id: "bar",
@@ -95,6 +99,8 @@ const fullStory: Story = {
       reveals: [],
       implies: [],
       withholds: [],
+      plants: [],
+      paysOff: [],
     },
   ],
   openQuestions: [
@@ -277,6 +283,7 @@ describe("parseStory", () => {
             method: "",
             origins: [],
             relations: [],
+            turns: [],
           },
         ],
       }),
@@ -306,6 +313,8 @@ describe("parseStory", () => {
             reveals: [],
             implies: [],
             withholds: [],
+            plants: [],
+            paysOff: [],
           },
         ],
       }),

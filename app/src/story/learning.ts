@@ -12,6 +12,7 @@ import {
   type Knowledge,
   type Ref,
   SCENE_LINK_KINDS,
+  SCENE_LINK_WORDS,
   type Scene,
   type SceneLinkKind,
   type Story,
@@ -64,7 +65,18 @@ export type TrueStep = {
   knowledgeFrom: { knowledge: Knowledge; first?: FirstTold }[];
 };
 
-const LEARNING: readonly TellingHow[] = ["shows", "reveals", "implies"];
+/** Planting a thing or paying it off puts it before the reader too. */
+const LEARNING: readonly TellingHow[] = [
+  "shows",
+  "reveals",
+  "implies",
+  "plants",
+  "paysOff",
+];
+
+/** `shows`, `reveals`, `pays off`. */
+export const tellingWords = (how: TellingHow): string =>
+  how === "shows" ? "shows" : SCENE_LINK_WORDS[how];
 
 const sameRef = (a: Ref, b: Ref) =>
   a.kind === b.kind &&
