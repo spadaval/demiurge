@@ -23,7 +23,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Update the skill for the changed tool"
-updated_at: "2026-11-05T02:00:11.480674188+00:00"
+updated_at: "2026-11-05T02:12:23.513977477+00:00"
 ---
 
 ## Goal
@@ -41,3 +41,4 @@ The skill tells an agent how to use the changed tool, while `craft.md` stays exa
 ## Notes
 
 - 2026-11-04 [note] From review finding worldcrafter-f5m4: SKILL.md must also cover set-open-question-working (weigh candidates in the file without spending render words), and the CLI help should say it's refused on an answered question.
+- 2026-11-04 [note] Fresh-session check: `cd app && bun scripts/comparison/comparison.ts skill-check /home/supadava/projects/demiurge-comparison/smoke/fax9-skill "A beekeeper in a mountain village finds her hives robbed at night, and the thief turns out to be someone she owes a debt to."` ran step 1 of the tool arm once, sandboxed as in the comparison, in 227s (18 turns, $0.80). All mechanical checks held (check.json): exit 0, story.json parses, 9 causes, 1 mentions call (`$S mentions actor:ruben`), model-gaps.md present, nothing outside, only claude-opus-5-5. It also used set-open-question-working 4 times. Not read for quality. Two earlier bun run check runs failed only on the generate "stays fast" timing tests while the host load was ~20 (qemu, ffmpeg); a rerun passed (worldcrafter-p3rr).
