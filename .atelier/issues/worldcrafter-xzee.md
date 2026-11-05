@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:35.528501580+00:00"
 id: "worldcrafter-xzee"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-xzee
 priority: "P1"
 relationships:
   blocks: []
@@ -23,9 +26,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round 1"
-updated_at: "2026-11-05T07:58:38.216483433+00:00"
+updated_at: "2026-11-05T08:35:47.674791866+00:00"
 ---
 
 ## Goal
