@@ -23,9 +23,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T16:59:56.741327487+00:00"
+status: "done"
 title: "Round 4"
-updated_at: "2026-11-05T15:37:42.202739296+00:00"
+updated_at: "2026-11-05T16:59:56.741327487+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ The fourth judged round, from scratch with a fresh writer on the same prompt, af
 ## Notes
 
 - 2026-11-05 [note] Failed attempt 1 (2026-11-05 15:31Z): the round runner (bun round.ts outline) was terminated by SIGTERM (exit 143) about 5 minutes into the outline phase, with no record written; cause not found (not the runner's own timeout). Its sandboxed writer kept running as an orphan and was stopped by the orchestrator. The partial directory is kept at /home/supadava/projects/demiurge-world/round-4-failed-1/ and is not used; the outline was rerun from scratch in round-4/. If it recurs, diagnose before a third attempt.
+
+## Close Reason
+
+Round 4 run (after one killed outline attempt, recorded and set aside), judged and read. Fresh writer built a 37-beat outline and four 1,753-1,976-word scenes; 16 reports (one Opus run replaced); criterion scores 5-9, overall 8-9, world aliveness 7-9. Round 3 fixes took (reader-order read whole every scene, no invented dates, first trace acted on, numbers right in value and meaning). Remaining: a retold night read from labels (ribbon slip), opening counts from memory, viewpoint marks half false late. Log: docs/rounds/round-4.md. Fixes: worldcrafter-qmq0. Next: Round 5 (worldcrafter-hdly), the last.

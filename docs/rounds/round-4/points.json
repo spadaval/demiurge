@@ -1,0 +1,48 @@
+[
+  {
+    "sceneId": "s24-i-did-this",
+    "title": "I Did This",
+    "position": 24,
+    "beats": 37,
+    "how": "chosen",
+    "reason": "Interesting turn (reveal): Tilly realises she herself, ridden while asleep, did the hollowings; chosen by the orchestrator, beat 24 of 37, at least 3 beats from the other turn per the lsu3 rule.",
+    "chosenAt": "2026-11-05T15:57:00.409Z"
+  },
+  {
+    "sceneId": "s33-tidying",
+    "title": "The Final Tidying",
+    "position": 33,
+    "beats": 37,
+    "how": "chosen",
+    "reason": "Interesting turn (cost paid): the Lidless cut her and stolen sight floods through her window, counted as Greyhand's; chosen by the orchestrator, beat 33 of 37, in beats ceil(0.8n)..n = 30..37 per the lsu3 rule.",
+    "chosenAt": "2026-11-05T15:57:00.466Z"
+  },
+  {
+    "sceneId": "s11-thread",
+    "title": "A Thread of Silk",
+    "position": 11,
+    "beats": 37,
+    "how": "random",
+    "reason": "Drawn uniformly from the 18 beats in 1-18 not already chosen, with seed 20261111 (mulberry32).",
+    "seed": 20261111,
+    "range": {
+      "from": 1,
+      "to": 18
+    },
+    "chosenAt": "2026-11-05T15:57:00.524Z"
+  },
+  {
+    "sceneId": "s36-queen-of-lamps",
+    "title": "The Queen of Lamps",
+    "position": 36,
+    "beats": 37,
+    "how": "random",
+    "reason": "Drawn uniformly from the 17 beats in 19-37 not already chosen, with seed 20261112 (mulberry32).",
+    "seed": 20261112,
+    "range": {
+      "from": 19,
+      "to": 37
+    },
+    "chosenAt": "2026-11-05T15:57:00.585Z"
+  }
+]
