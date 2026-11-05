@@ -164,21 +164,26 @@ function dateText(d: Date, time: boolean): string {
  * month, day or minute as `describeSpan` says it; a range whose ends fall on
  * whole minutes as dates, its end said inclusively (`1 to 3 November 612`,
  * `October to November 1954`, `12 October 1954, 21:00 to 13 October 1954,
- * 02:00`); otherwise in years (`year 1954`, `year 1200 to 1210`). Whole
- * years stay years, as a year-based file wrote them.
+ * 02:00`); whole years in years, a range by the last year it includes
+ * (`year 1954`, `year 1200 to 1210` for [1200, 1211)), and an older file's
+ * whole-year moment as `the start of 1954`; otherwise in fractional years.
  */
 export function describeWhen(span: Span): string {
   const exact = describeSpan(span);
   if (exact !== undefined) return exact;
   const { start, end } = span;
   if (isYear(span)) return `year ${start}`;
+  // A whole-year moment, as older files stored a year: not the year itself.
+  if (start === end && Number.isInteger(start)) return `the start of ${start}`;
+  // Whole years, said by the last year they include, as dates are.
+  if (Number.isInteger(start) && Number.isInteger(end) && end > start) {
+    return `year ${start} to ${end - 1}`;
+  }
   const inYears =
     start === end
       ? `year ${yearNumber(start)}`
       : `year ${yearNumber(start)} to ${yearNumber(end)}`;
-  if (end <= start || (Number.isInteger(start) && Number.isInteger(end))) {
-    return inYears;
-  }
+  if (end <= start) return inYears;
   const from = wholeMinute(start);
   const to = wholeMinute(end);
   if (from === undefined || to === undefined) return inYears;

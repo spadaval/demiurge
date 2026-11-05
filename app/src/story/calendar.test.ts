@@ -24,9 +24,10 @@ describe("parseWhen", () => {
       start: 1954.8,
       end: 1954.8,
     });
-    // An older file's whole year, stored as a moment, reads as before.
-    expect(describeWhen({ start: 1954, end: 1954 })).toBe("year 1954");
-    expect(describeWhen({ start: 1301, end: 1309 })).toBe("year 1301 to 1309");
+    // An older file's whole year, stored as a moment, reads as one, and
+    // a range of whole years by the last year it includes.
+    expect(describeWhen({ start: 1954, end: 1954 })).toBe("the start of 1954");
+    expect(describeWhen({ start: 1301, end: 1309 })).toBe("year 1301 to 1308");
   });
 
   test("a date is the month, day or minute it names", () => {
@@ -98,9 +99,9 @@ test("describeWhen says a range of dates as dates, its end inclusive", () => {
 });
 
 test("describeWhen leaves moments and whole years in years", () => {
-  expect(describeWhen({ start: 1954, end: 1954 })).toBe("year 1954");
+  expect(describeWhen({ start: 1954, end: 1954 })).toBe("the start of 1954");
   expect(describeWhen({ start: 1954.8, end: 1954.8 })).toBe("year 1954.8");
-  expect(describeWhen({ start: 1200, end: 1210 })).toBe("year 1200 to 1210");
+  expect(describeWhen({ start: 1200, end: 1211 })).toBe("year 1200 to 1210");
   expect(describeWhen({ start: 0.1 + 0.2, end: 0.1 + 0.2 })).toBe("year 0.3");
 });
 

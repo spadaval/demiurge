@@ -184,7 +184,7 @@ describe("versions and knowledge", () => {
   test("render lists versions under their event and who knows what", () => {
     const text = renderStory(base);
     expect(text).toContain(
-      "- **The wreck** (year 1): Ivo sank it.\n  - As Ivo tells it: The fog took it.\n",
+      "- **The wreck** (the start of 1): Ivo sank it.\n  - As Ivo tells it: The fog took it.\n",
     );
     expect(text).toContain(
       "## Who knows or believes what\n\n- Ivo knows: The lamp was out.\n- Mara believes: Ivo's account of The wreck, from The wreck until The letter.\n",

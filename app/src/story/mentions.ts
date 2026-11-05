@@ -428,7 +428,12 @@ export function terms(story: Story, ref: Ref, approximate = false): Term[] {
         : describeSpan(position) !== undefined || isYear(position)
           ? [Math.floor(position.start)]
           : Number.isInteger(position.start) && Number.isInteger(position.end)
-            ? [...new Set([position.start, position.end])]
+            ? [
+                ...new Set([
+                  position.start,
+                  Math.max(position.start, position.end - 1),
+                ]),
+              ]
             : [
                 ...new Set([
                   Math.floor(position.start),

@@ -1477,14 +1477,24 @@ describe("story CLI", () => {
     expect(ok("span", "birth", "razed")).toBe(
       'From event:birth ("The birth") at 10 April 1106 to event:razed ("The razing") at year 1118: 11.7 to 12.7 years (a year without a date may be any part of it).\n',
     );
-    // A year as --end is where the span stops, as before.
+    // A year as --end runs to that year's end, as a date does.
     ok("set-position", "razed", "1118", "--end", "1120");
     expect(
       saved().timeline.positions.find((p) => p.event === "razed"),
     ).toMatchObject({
       start: 1118,
-      end: 1120,
+      end: 1121,
     });
+    expect(ok("show", "event:razed")).toContain(
+      "position: year 1118 to 1120\n",
+    );
+    // So an event in its last year fits during it (finding worldcrafter-qqke).
+    ok("add-event", "war", "The war");
+    ok("set-position", "war", "1950", "--end", "1960");
+    ok("add-event", "battle", "The battle");
+    ok("set-position", "battle", "1960");
+    expect(ok("constrain", "c3", "battle", "during", "war")).toBe("");
+    expect(ok("show", "event:war")).toContain("position: year 1950 to 1960\n");
     // And a scene's told list says the same range.
     ok("add-scene", "hearth", "Hearth");
     ok("set-scene-events", "hearth", "birth");

@@ -414,9 +414,6 @@ const refList = (help: string) =>
 const orNone = (value: string): string | null =>
   value === "none" ? null : value;
 
-/** Where `--end` stops: a date at its end, a year at its start (1950 to 1960 is ten years). */
-const endOf = (span: Span) => (isYear(span) ? span.start : span.end);
-
 const COUNT_FLAGS = {
   notes: text,
   total: { value: "<number>", help: "a fixed total it is out of" },
@@ -665,7 +662,7 @@ export const EDITS: EditSpecs = {
     flags: {
       end: {
         value: "<year|date>",
-        help: "default: the end of the start's span; a date runs to its end, a year to its start (1950 --end 1960 is ten years)",
+        help: "default: the end of the start's span; it runs to the end of the year or date it names (1950 --end 1960 is 1950 through 1960)",
       },
       precision: { value: "<text>", help: 'such as "roughly"' },
     },
@@ -691,7 +688,7 @@ export const EDITS: EditSpecs = {
         frame: WORLD_FRAME,
         position: {
           start: from.start,
-          end: end === undefined ? from.end : endOf(a.when(end, "--end")),
+          end: end === undefined ? from.end : a.when(end, "--end").end,
           ...(precision === undefined ? {} : { precision }),
         },
       };

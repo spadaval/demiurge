@@ -506,7 +506,9 @@ describe("constraints in the render", () => {
       b: "b",
     };
     const text = renderStory(run(events, at("a", 1213), at("b", 1203), before));
-    expect(text).toContain("- **The flood** (year 1213) [before The famine]");
+    expect(text).toContain(
+      "- **The flood** (the start of 1213) [before The famine]",
+    );
     expect(text).toContain("can't all happen in the order given");
     // The order holds but the gap doesn't.
     expect(
