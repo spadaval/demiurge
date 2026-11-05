@@ -44,10 +44,10 @@ export type MentionMatch = "direct" | "holder" | "near";
 const MATCH_ORDER: readonly MentionMatch[] = ["direct", "holder", "near"];
 
 /** A record's free text, field by field. */
-type Text = { ref: Ref; field: string; value: string };
+export type Text = { ref: Ref; field: string; value: string };
 
 /** What to look for, and the field it came from, which isn't searched for it. */
-type Term = {
+export type Term = {
   pattern: RegExp;
   how: string;
   match: MentionMatch;
@@ -158,7 +158,7 @@ function sortedByMatch(texts: readonly Text[], mentions: Mention[]): Mention[] {
 }
 
 /** Every record's free text, records in `TOUCH_KINDS` order. */
-function storyTexts(story: Story): Text[] {
+export function storyTexts(story: Story): Text[] {
   const texts: Text[] = [];
   const add = (ref: Ref, fields: Record<string, string>) => {
     for (const [field, value] of Object.entries(fields)) {
@@ -276,7 +276,7 @@ const numberPattern = (value: number) =>
   new RegExp(`(?<![\\d.])${escaped(String(value))}(?!\\d|\\.\\d)`, "g");
 
 /** What names `ref` in `story`. */
-function terms(story: Story, ref: Ref): Term[] {
+export function terms(story: Story, ref: Ref): Term[] {
   const name = nameOf(story, ref);
   const found: Term[] = [];
   if (name.value.trim() !== "") {
@@ -332,7 +332,7 @@ const TAIL =
  * Text that states a span or a season: "twenty years ago", "three years
  * dead", "months", "spring", "the following winter".
  */
-const TIME_PHRASE = new RegExp(
+export const TIME_PHRASE = new RegExp(
   [
     `\\b(?:${COUNT}[\\s-]+){1,3}${UNIT}${TAIL}\\b`,
     `\\b(?:last|next|that|this|the same|the following|the previous|the next) (?:year|month|week|season|spring|summer|autumn|winter)\\b`,

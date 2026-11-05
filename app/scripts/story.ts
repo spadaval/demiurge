@@ -61,6 +61,7 @@ import {
   type TouchGroups,
   whatThisTouches,
 } from "../src/story/touches";
+import { type Prose, type Suspect, traceDependents } from "../src/story/trace";
 import { WORLD_FRAME } from "../src/time/timeline";
 
 // ---------------------------------------------------------------------------
@@ -1416,6 +1417,7 @@ type ReadName =
   | "touches"
   | "scenes"
   | "reader-order"
+  | "trace"
   | "mentions"
   | "gaps"
   | "contradictions"
@@ -1480,11 +1482,18 @@ export const READS: Record<ReadName, Spec> = {
       "The order the reader learns things in, beside the order they happen: each scene in telling order with what it shows, reveals, implies or withholds and when that is in story time; then events in story order, each with the first scene that tells the reader of it (itself, a version of it, or someone's knowledge of it) and the knowledge that starts then.",
     example: ["reader-order"],
   },
+  trace: {
+    group: "Start and read",
+    args: ["ref"],
+    summary:
+      'What may depend on a record, likeliest first, each with why it is suspected: declared links and one step on (touches), the text naming it (mentions), free text and scene prose sharing its distinctive words, the prose of scenes that touch it (with any span such as "ten years ago" for an event), and scenes revealing an answer since replaced. It suspects and never decides: read each and judge. Edits that change a record print the top of this list.',
+    example: ["trace", "event:wreck"],
+  },
   mentions: {
     group: "Start and read",
     args: ["ref"],
     summary:
-      "Free text that mentions a record: its name, a drive's holder, an event's year, and spans or seasons near an event. Edits that change a record print this too. Nothing is rewritten.",
+      "Free text that mentions a record: its name, a drive's holder, an event's year, and spans or seasons near an event. Records only, not prose; trace adds prose, shared words and links. Nothing is rewritten.",
     example: ["mentions", "event:wreck"],
   },
   gaps: {
@@ -1584,6 +1593,11 @@ export function helpText(): string {
     "(add-object) are things scenes plant and pay off; set-participant says who",
     "or what takes part in an event; add-drive-turn says a want was satisfied,",
     "renounced, replaced or flipped, and where.",
+    "",
+    "After an edit that changes a record, the CLI prints what may still state",
+    "its old version, records and lines of scene prose, each with why; trace",
+    "<ref> lists them all. touches (links only) and mentions (text naming it",
+    "only) are the narrower views it builds on.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -2088,84 +2102,156 @@ function mentionLines(story: Story, found: readonly Mention[]): string[] {
   );
 }
 
-/** The most mentions an edit prints; `mentions` lists them all. */
+/** The most suspects an edit prints; `trace` lists them all. */
 const MAX_STALE_LINES = 5;
 
-/**
- * The record whose old version free text may still state, when the edit
- * changed something text can state: an actor's name, a drive's want or
- * holder, an event's label or position. An edit that changes none of these
- * prompts nothing.
- */
+/** The record as stored, with an event's position, to see whether an edit changed it. */
+function recordState(story: Story, ref: Ref): string {
+  const find = <T extends { id: string }>(items: readonly T[]) =>
+    items.find((item) => item.id === ref.id);
+  switch (ref.kind) {
+    case "actor":
+      return JSON.stringify(find(story.actors));
+    case "drive":
+      return JSON.stringify(find(story.drives));
+    case "fact":
+      return JSON.stringify(find(story.facts));
+    case "readerQuestion":
+      return JSON.stringify(find(story.readerQuestions));
+    case "event":
+      return JSON.stringify([
+        find(story.timeline.events),
+        story.timeline.positions.find(
+          (p) => p.event === ref.id && p.frame === WORLD_FRAME,
+        ),
+      ]);
+    case "scene":
+      return JSON.stringify(find(story.scenes));
+    case "openQuestion":
+      return JSON.stringify(find(story.openQuestions));
+    case "version":
+      return JSON.stringify(find(story.versions));
+    case "knowledge":
+      return JSON.stringify(find(story.knowledge));
+    case "object":
+      return JSON.stringify(find(story.objects));
+    case "candidate":
+      return JSON.stringify(
+        story.openQuestions
+          .find((q) => q.id === ref.questionId)
+          ?.candidates.find((c) => c.id === ref.id),
+      );
+  }
+}
+
+/** The record an edit changes the content of, if it changed it. */
 function changedRef(
   before: Story,
   after: Story,
   command: StoryCommand,
 ): Ref | undefined {
-  const differs = <T>(find: (story: Story) => T) =>
-    JSON.stringify(find(before)) !== JSON.stringify(find(after));
-  switch (command.type) {
-    case "setPosition": {
-      const id = command.event;
-      return differs((story) =>
-        story.timeline.positions.find(
-          (p) => p.event === id && p.frame === WORLD_FRAME,
-        ),
-      )
-        ? { kind: "event", id }
-        : undefined;
+  const target = ((): Ref | undefined => {
+    switch (command.type) {
+      case "setPosition":
+        return { kind: "event", id: command.event };
+      case "describeEvent":
+        return { kind: "event", id: command.id };
+      case "updateActor":
+        return { kind: "actor", id: command.id };
+      case "updateDrive":
+        return { kind: "drive", id: command.id };
+      case "addDriveTurn":
+      case "removeDriveTurn":
+        return { kind: "drive", id: command.drive };
+      case "updateFact":
+        return { kind: "fact", id: command.id };
+      case "updateReaderQuestion":
+        return { kind: "readerQuestion", id: command.id };
+      case "updateOpenQuestion":
+      case "answerOpenQuestion":
+      case "unanswerOpenQuestion":
+        return { kind: "openQuestion", id: command.id };
+      case "updateCandidate":
+        return {
+          kind: "candidate",
+          questionId: command.questionId,
+          id: command.id,
+        };
+      case "updateVersion":
+        return { kind: "version", id: command.id };
+      case "updateKnowledge":
+        return { kind: "knowledge", id: command.id };
+      case "updateObject":
+        return { kind: "object", id: command.id };
+      default:
+        return undefined;
     }
-    case "describeEvent": {
-      const { id } = command;
-      return differs(
-        (story) => story.timeline.events.find((e) => e.id === id)?.label,
-      )
-        ? { kind: "event", id }
-        : undefined;
-    }
-    case "updateDrive": {
-      const { id } = command;
-      return differs((story) => {
-        const drive = story.drives.find((d) => d.id === id);
-        return [drive?.want, drive?.actorId];
-      })
-        ? { kind: "drive", id }
-        : undefined;
-    }
-    case "updateActor": {
-      const { id } = command;
-      return differs((story) => story.actors.find((a) => a.id === id)?.name)
-        ? { kind: "actor", id }
-        : undefined;
-    }
-    default:
-      return undefined;
-  }
+  })();
+  return target !== undefined &&
+    refExists(after, target) &&
+    recordState(before, target) !== recordState(after, target)
+    ? target
+    : undefined;
 }
 
+/** Each scene's prose file that exists, as `traceDependents` reads it. */
+function readProse(storyPath: string, story: Story): Prose[] {
+  return story.scenes.flatMap((scene) =>
+    readFile(proseFile(storyPath, scene.id))
+      .map((text) => [{ scene: scene.id, text }])
+      .unwrapOr([]),
+  );
+}
+
+/** `- 2. scenes/harbour.md:3 "Twenty years…": reason; reason`. */
+function suspectLines(
+  story: Story,
+  storyPath: string,
+  found: readonly Suspect[],
+): string[] {
+  return found.map(({ target, reasons }) => {
+    const what =
+      target.kind === "record"
+        ? describe(story, target.ref)
+        : target.line === 0
+          ? proseFile(storyPath, target.scene)
+          : `${proseFile(storyPath, target.scene)}:${target.line} "${excerpt(target.text)}"`;
+    return `- ${what}: ${reasons.join("; ")}`;
+  });
+}
+
+const EXCERPT_LENGTH = 60;
+const excerpt = (text: string) =>
+  text.length <= EXCERPT_LENGTH
+    ? text
+    : `${text.slice(0, EXCERPT_LENGTH).trimEnd()}…`;
+
 /**
- * A prompt listing text that may still state what the edit changed, at most
- * `MAX_STALE_LINES` of it.
+ * A prompt listing what may still state what the edit changed: suspects with
+ * a reason in their text, at most `MAX_STALE_LINES`.
  */
 function staleTextLines(
   before: Story,
   after: Story,
   command: StoryCommand,
+  storyPath: string,
 ): string[] {
   const ref = changedRef(before, after, command);
   if (ref === undefined) return [];
-  const found = whatMentions(after, ref, before).unwrapOr([]);
+  const all = traceDependents(after, ref, {
+    was: before,
+    prose: readProse(storyPath, after),
+  }).unwrapOr([]);
+  const found = all.filter((s) => s.inText);
   if (found.length === 0) return [];
   const shown = found.slice(0, MAX_STALE_LINES);
-  const more = found.length - shown.length;
+  const more = all.length - shown.length;
   return [
-    `Free text that mentions ${formatRef(ref)} and may still state the old version (nothing was rewritten):`,
-    ...mentionLines(after, shown),
+    `What may still state the old ${formatRef(ref)}, likeliest first (nothing was rewritten):`,
+    ...suspectLines(after, storyPath, shown),
     ...(more === 0
       ? []
-      : [
-          `...and ${more} more (${found.length} in all): run mentions ${formatRef(ref)} for all.`,
-        ]),
+      : [`...run trace ${formatRef(ref)} for all ${all.length}.`]),
   ];
 }
 
@@ -2272,6 +2358,23 @@ function runRead(
         );
     case "reader-order":
       return ok(readerOrderLines(story));
+    case "trace":
+      return parseRef(a.arg("ref"))
+        .mapErr(usageError)
+        .andThen((ref) =>
+          traceDependents(story, ref, {
+            prose: readProse(storyPath, story),
+          })
+            .mapErr((e) => refused(e.message))
+            .map((found) =>
+              found.length === 0
+                ? ["Nothing seems to depend on it."]
+                : [
+                    `What may depend on ${describe(story, ref)}, likeliest first:`,
+                    ...suspectLines(story, storyPath, found),
+                  ],
+            ),
+        );
     case "mentions":
       return parseRef(a.arg("ref"))
         .mapErr(usageError)
@@ -2383,7 +2486,7 @@ function runEdit(
                 `Cause problem (kept; see contradictions): ${message}`,
             ),
             ...alsoRemovedLines(story, next, command),
-            ...staleTextLines(story, next, command),
+            ...staleTextLines(story, next, command, path),
           ]
             .join("\n")
             .concat("\n"),

@@ -64,8 +64,8 @@ and `scenes <ref>` lists, in telling order, every scene that touches a
 record and how: who is in it, what it depicts or pressures, which reader
 questions it opens or answers, and what it reveals, implies or withholds.
 Before writing a scene, check what the scenes before it have already
-revealed; after changing a record, `scenes <ref>` shows whose prose to
-reread.
+revealed; after changing a record, `trace <ref>` lists the paragraphs of
+prose (and the records) that may need rereading.
 
 ## How the craft maps onto it
 
@@ -162,17 +162,23 @@ reread.
 - **Rework** a motive with `update-drive` or `set-drive-origins`, an event
   with `describe-event`, `set-position` or `constrain`, and see what it
   reaches with `touches`.
-- **Find the text a change left behind with `mentions`.** `touches` sees only
-  declared links. Summaries, stakes, notes, facts and candidates can still
-  state the old version in words: a name, a year, "ten years ago", "since
-  spring". After `set-position`, `describe-event`, `update-drive` or
-  `update-actor`, the CLI prints the free text that mentions the changed
-  record under "Free text that mentions ... may still state the old
-  version". Read it and fix what is now wrong; nothing is rewritten for you.
-  After other changes, such as answering a question that changes what
-  someone did, run `mentions event:wreck` (or `actor:`, `drive:` and so on)
-  yourself on what the change reaches. `mentions` doesn't read prose files;
-  `scenes <ref>` lists the scenes whose prose may need rereading.
+- **Find what a change left behind with `trace`.** After an edit that
+  changes a record (moving or rewording an event, updating an actor, drive,
+  fact, version, knowledge or object, re-answering a question, a drive
+  turn), the CLI prints the top of `trace` under "What may still state the
+  old ...": records and paragraphs of scene prose (`scenes/<id>.md:<line>`)
+  that may now be wrong, each with why it is suspected. It looks only for
+  what the change took away: the old name or year if those changed, words
+  the old text had that the new lacks, and for a moved event spans such as
+  "ten years since" (and says when the span matches the gap to another
+  event). `trace <ref>` on its own lists everything that may depend on a
+  record, likeliest first: its declared links and one step on, consequences
+  through causes, versions and knowledge of it, text naming it, free text
+  and prose sharing its distinctive words, the prose of scenes that touch
+  it, and scenes revealing an answer since replaced. These are suspects, not
+  verdicts: read each, fix what the change made wrong, and leave the rest.
+  Nothing is rewritten for you. `touches` (declared links only) and
+  `mentions` (text naming it only) are the narrower views `trace` builds on.
 - **`gaps` is advisory: optional prompts, never a reason to delete.** Run it
   now and then to see where you could add a link or a record, and act only on
   what is worth acting on. Never cut, merge or unlink anything true to clear
