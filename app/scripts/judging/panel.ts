@@ -703,11 +703,31 @@ export async function runJudge(
   return record;
 }
 
+/** This process's children: each session's `timeout`, while it runs. */
+function childPids(): number[] {
+  const tasks = `/proc/${process.pid}/task`;
+  return readdirSync(tasks).flatMap((tid) =>
+    readFileSync(join(tasks, tid, "children"), "utf8")
+      .split(/\s+/)
+      .filter((pid) => pid !== "")
+      .map(Number),
+  );
+}
+
 /**
- * Marks every session under way as failed if the runner is interrupted, so
- * none is left looking as if it might still finish.
+ * If the runner is interrupted, stops every session under way (`timeout`
+ * passes the signal on to bwrap, which takes claude with it), marks it
+ * failed, and removes its run dir, so none is left running, or looking as
+ * if it might still finish.
  */
 function onInterrupt(signal: "SIGINT" | "SIGTERM"): void {
+  for (const pid of childPids()) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Already gone.
+    }
+  }
   for (const [out, runDir] of running) {
     writeStatus(out, [`the runner was interrupted by ${signal}`]);
     if (runDir !== undefined) rmSync(runDir, { recursive: true, force: true });
