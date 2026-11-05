@@ -87,7 +87,7 @@ every line, and a serious scene can still fit if the premise's comedy is felt
 in it. Stakes needn't be high for the humour to fit; a purely comic scene can
 score 8.
 - 8: Humour comes out of the situation and the characters, lands, and sits
-  alongside real stakes; the tone holds steady or shifts on purpose.
+  alongside whatever stakes the scene has; the tone holds steady or shifts on purpose.
 - 5: Some of it lands; some is generic or undercuts the stakes, or the scene
   is serviceable but makes little of what is funny or strange in the premise.
 - 2: The tone fights the premise, or the jokes fall flat or are filler.
