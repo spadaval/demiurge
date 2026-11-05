@@ -19,7 +19,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Make gap reports advisory"
-updated_at: "2026-11-05T06:49:45.686721107+00:00"
+updated_at: "2026-11-05T07:01:29.602462567+00:00"
 ---
 
 ## Goal
@@ -31,3 +31,7 @@ Gap reports are advisory and never push deletion. 'Actor with no drive is a gap'
 - gaps output is framed as optional prompts; the actor-without-drive gap and any gap that would push removing true story are dropped or demoted.
 - The skill says gaps are advisory and never a reason to delete.
 - Tests; bun run check passes; independently reviewed and merged locally.
+
+## Notes
+
+- 2026-11-05 [note] From review finding worldcrafter-qr19: deliberate-gap marks of retired gap kinds (reader_question_never_answered, and any wefn retires) should be dropped on load, not refused (app/src/story/story.ts:188).
