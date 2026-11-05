@@ -27,9 +27,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T17:28:19.633112555+00:00"
+status: "done"
 title: "Round 4 fixes: retold events, opening counts, viewpoint marks"
-updated_at: "2026-11-05T17:23:36.092081262+00:00"
+updated_at: "2026-11-05T17:28:19.633112555+00:00"
 ---
 
 ## Goal
@@ -39,3 +40,7 @@ Fix what Round 4's reading (docs/rounds/round-4/reading.md, ranked issues 1-6) f
 ## Done when
 
 - All children are closed, each independently reviewed, and merged into local master before Round 5 starts.
+
+## Close Reason
+
+Round 4 fixes done and reviewed (round1-fix-reviewer, approvals w4pl, zqqn): 7b2r runners stop their sandboxes on SIGTERM/SIGINT/SIGHUP and refuse to start over a live one; b0pg counts as the scene opens and at each change, viewpoint marks for present characters (with mnm0: not the viewpoint's own secrets; versions still heard); yyki trace and span polish, --add/--remove on all scene lists; l55e and hibo skill guidance and catch-up.
