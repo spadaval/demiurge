@@ -53,8 +53,10 @@ can't be credited to the tool. Every criterion is 1–10.
 | 5 | grok | 8.25 | 8.00 | 7.50 | 8.00 | 8.25 | 8.25 | 8.00 | 7.75 | 8.25 |
 
 The scores are flat: overall 8.0–8.75 per judge in every round, world
-aliveness 7.0–8.5 with no trend. Subtext is the lowest criterion in every
-round, and in every round nearly every judge's worst moment was narration or
+aliveness 7.0–8.5 with no trend. By mean over each round's 16 reports, the
+lowest criterion was subtext in Rounds 1 and 3, world aliveness in Round 2
+(7.44, just under subtext's 7.50) and tone and humour in Rounds 4 and 5
+(7.38); subtext was never above 7.6. In every round nearly every judge's worst moment was narration or
 a character explaining what the scene had already shown, a craft issue the
 mission deliberately left out of `craft.md` so the rounds kept measuring the
 tool.
@@ -97,9 +99,15 @@ section across all five rounds):
 | Viewpoint marks | none | none | 11 of 12 false late | about half false late | 8 of 8 true for the main viewpoint |
 | Continuity errors in judged prose | 4 (two counts, two clocks, a day count) | 2 (unchecked numbers) | 1 meaning error, 1 misplaced line | 1 object state on a retold night | none confirmed |
 
-Each class of continuity error went away in the round after its fix and
-didn't come back: arithmetic (counts and `span`), two clocks (memberships),
-what a number counts (skill), misplaced lines (skill). The judges' continuity
+In the readings, each class of continuity error went away in the round
+after its fix and didn't come back: count arithmetic (counts), two clocks
+(memberships), what a number counts (skill), misplaced lines (skill). One
+qualification: Round 5's reading found `span`'s day counts off by one between
+whole-day events, latent since Round 2 (17 of 144 on Round 2's model, 47 of
+186 on Round 3's, 39 of 119 on Round 5's). The readings' "day counts all
+right" checks for Rounds 2–5 used the same function and are therefore
+unverified; worldcrafter-yxfp re-checks the day counts stated in those
+rounds' judged prose. The judges' continuity
 scores don't show this: the panel read one scene at a time against a short
 story so far, and noticed one of the logged errors in five rounds.
 

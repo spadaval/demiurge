@@ -28,4 +28,4 @@ span's day counts between whole-day events are often off by one (rounding error 
 
 ## Done when
 
-- Round each moment to the whole minute (or count calendar dates) before counting midnights; a test with 30 October to 1 November 1187; the per-round counts above re-run show 0 wrong; bun run check passes.
+- Round each moment to the whole minute (or count calendar dates) before counting midnights; a test with 30 October to 1 November 1187; the per-round counts above re-run show 0 wrong; every day count stated in Rounds 2-5's judged prose (docs/rounds/round-<n>/scenes/) is re-checked against the fixed span and any error listed; bun run check passes.
