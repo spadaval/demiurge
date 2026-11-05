@@ -35,9 +35,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T04:05:38.450327529+00:00"
+status: "done"
 title: "Change the tool from the verdict, then compare again on a fresh premise"
-updated_at: "2026-11-05T03:50:11.683495226+00:00"
+updated_at: "2026-11-05T04:05:38.450327529+00:00"
 ---
 
 ## Goal
@@ -64,3 +65,7 @@ Verdict and reports: `docs/verdicts/comparison/` (verdict change: opus change, s
 
 - 2026-11-04 [decision] Deferred from the judges' asks, not in this increment: finer-than-year time units, flagging constraints whose gap went to zero after a move, and new types (plant and payoff, mirrors, drive outcomes, intended ambiguity, between-scene events)
   Reason: Review finding worldcrafter-x2pm. The increment takes the judges' top priorities only, so the second comparison tests them without more change; same-position cause and effect isn't reported (h1be), which removes the commonest false alarm. The rest is for the verdict after this one to choose.
+
+## Close Reason
+
+Delivered the panel's named changes: compact render with working questions (xgxp), cause links (h1be), mentions and the edit prompt (qgom), answer history and deliberate gaps (iyt9), the skill update (fax9), the panel runner fixes (1wrn); and the second comparison on Thukker plus a sealed fresh premise (ac45: frozen at 7a937111, 8 runs, 1 failed on a safety-classifier refusal, not rerun). Each child independently reviewed. Verdict is worldcrafter-iu6l, a panel over docs/verdicts/comparison-2-rubric.md.
