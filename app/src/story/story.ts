@@ -91,6 +91,33 @@ export type Drive = {
  */
 export type StoryObject = { id: string; name: string; notes: string };
 
+/** A count's value from an event on, with a note on why it is that. */
+export type CountValue = { at: EventId; value: number; note: string };
+
+/** Which way a count may move in story time, if the writer says. */
+export const COUNT_DIRECTIONS = ["rises", "falls"] as const;
+export type CountDirection = (typeof COUNT_DIRECTIONS)[number];
+
+/**
+ * A number that changes at events: parts of a pact held, soldiers left, days
+ * of food. Each value holds from its event until the next one in story
+ * order. `total` is a fixed number it is out of, or `of` another count whose
+ * value at the time is (a total that itself changes). `threshold` is a value
+ * that matters, or more than half of the total. With `direction`, a value
+ * that moves the other way is a contradiction.
+ */
+export type Count = {
+  id: string;
+  label: string;
+  notes: string;
+  total?: number;
+  of?: string;
+  threshold?: number | "more_than_half";
+  direction?: CountDirection;
+  /** One per event; their order in the file means nothing. */
+  values: CountValue[];
+};
+
 /**
  * An actor or object taking part in an event, with its part in it in words:
  * "did it", "witness", "the weapon". One per event and participant.
@@ -328,7 +355,8 @@ export type RefKind =
   | "openQuestion"
   | "version"
   | "knowledge"
-  | "object";
+  | "object"
+  | "count";
 
 export const REF_KINDS: readonly RefKind[] = [
   "actor",
@@ -341,6 +369,7 @@ export const REF_KINDS: readonly RefKind[] = [
   "version",
   "knowledge",
   "object",
+  "count",
 ];
 
 export type Ref =
@@ -369,6 +398,8 @@ export type Story = {
   objects: StoryObject[];
   /** Left out of the file when empty, as `causes` is. */
   participants: Participant[];
+  /** Left out of the file when empty, as `causes` is. */
+  counts: Count[];
   timeline: Timeline;
 };
 
@@ -398,6 +429,8 @@ export function refExists(story: Story, ref: Ref): boolean {
       return has(story.knowledge, ref.id);
     case "object":
       return has(story.objects, ref.id);
+    case "count":
+      return has(story.counts, ref.id);
     case "candidate": {
       const { questionId, id } = ref;
       const question = story.openQuestions.find((q) => q.id === questionId);
@@ -434,6 +467,7 @@ export function newStory(premise: string): Story {
     knowledge: [],
     objects: [],
     participants: [],
+    counts: [],
     timeline: emptyTimeline,
   };
 }
@@ -659,6 +693,69 @@ function checkParticipant(v: JsonRecord, at: string): Check<Participant> {
 }
 
 /** One participant per event and record, so the file's text doesn't depend on the edit. */
+function checkNumber(value: unknown, at: string): Check<number> {
+  return typeof value === "number" && Number.isFinite(value)
+    ? ok(value)
+    : err(`${at} must be a number`);
+}
+
+function checkCountValue(v: JsonRecord, at: string): Check<CountValue> {
+  const known = checkKeys(v, at, ["at", "value", "note"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkString(v.at, `${at}.at`),
+    checkNumber(v.value, `${at}.value`),
+    checkString(v.note, `${at}.note`),
+  ]).map(([when, value, note]) => ({ at: when, value, note }));
+}
+
+function checkCount(v: JsonRecord, at: string): Check<Count> {
+  const known = checkKeys(v, at, [
+    "id",
+    "label",
+    "notes",
+    "total",
+    "of",
+    "threshold",
+    "direction",
+    "values",
+  ]);
+  if (known.isErr()) return err(known.error);
+  const threshold: Check<Count["threshold"]> =
+    v.threshold === undefined || v.threshold === "more_than_half"
+      ? ok(v.threshold)
+      : checkNumber(v.threshold, `${at}.threshold`);
+  return Result.combine([
+    checkString(v.id, `${at}.id`),
+    checkString(v.label, `${at}.label`),
+    checkString(v.notes, `${at}.notes`),
+    v.total === undefined ? ok(undefined) : checkNumber(v.total, `${at}.total`),
+    checkOptionalString(v.of, `${at}.of`),
+    threshold,
+    v.direction === undefined
+      ? ok(undefined)
+      : checkOneOf(v.direction, COUNT_DIRECTIONS, `${at}.direction`),
+    checkRecords(v.values, `${at}.values`, checkCountValue),
+  ]).andThen(([id, label, notes, total, of, threshold, direction, values]) => {
+    if (total !== undefined && of !== undefined) {
+      return err(`${at} has both total and of`);
+    }
+    if (new Set(values.map((x) => x.at)).size !== values.length) {
+      return err(`${at}.values has two values at one event`);
+    }
+    return ok({
+      id,
+      label,
+      notes,
+      ...(total === undefined ? {} : { total }),
+      ...(of === undefined ? {} : { of }),
+      ...(threshold === undefined ? {} : { threshold }),
+      ...(direction === undefined ? {} : { direction }),
+      values,
+    });
+  });
+}
+
 function checkParticipants(value: unknown): Check<Participant[]> {
   if (value === undefined) return ok([]);
   return checkRecords(value, "participants", checkParticipant).andThen(
@@ -1054,6 +1151,7 @@ function checkStory(value: JsonValue): Check<Story> {
     "knowledge",
     "objects",
     "participants",
+    "counts",
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
@@ -1086,6 +1184,9 @@ function checkStory(value: JsonValue): Check<Story> {
       ? ok([])
       : checkIdentified(value.objects, "objects", checkObject),
     checkParticipants(value.participants),
+    value.counts === undefined
+      ? ok([])
+      : checkIdentified(value.counts, "counts", checkCount),
     parseTimeline(value.timeline ?? null)
       .mapErr((message) => `timeline: ${message}`)
       .andThen(checkTimelineKeys),
@@ -1104,6 +1205,7 @@ function checkStory(value: JsonValue): Check<Story> {
       knowledge,
       objects,
       participants,
+      counts,
       timeline,
     ]): Story => ({
       version: STORY_VERSION,
@@ -1120,6 +1222,7 @@ function checkStory(value: JsonValue): Check<Story> {
       knowledge,
       objects,
       participants,
+      counts,
       timeline,
     }),
   );
@@ -1210,6 +1313,12 @@ function normalized(story: Story): Story {
     knowledge: byId(story.knowledge),
     objects: byId(story.objects),
     participants: sortedBy(story.participants, PARTICIPANT_KEY),
+    counts: byId(
+      story.counts.map((count) => ({
+        ...count,
+        values: sortedBy(count.values, ({ at }) => [at]),
+      })),
+    ),
     timeline: {
       ...timeline,
       events: byId(timeline.events),
@@ -1253,6 +1362,7 @@ const KEY_ORDER = [
   "knowledge",
   "objects",
   "participants",
+  "counts",
   "timeline",
   "id",
   "kind",
@@ -1317,6 +1427,7 @@ export function serializeStory(story: Story): string {
     knowledge,
     objects,
     participants,
+    counts,
     scenes,
     drives,
     ...rest
@@ -1343,6 +1454,7 @@ export function serializeStory(story: Story): string {
     ...(knowledge.length === 0 ? {} : { knowledge }),
     ...(objects.length === 0 ? {} : { objects }),
     ...(participants.length === 0 ? {} : { participants }),
+    ...(counts.length === 0 ? {} : { counts }),
   };
   return `${JSON.stringify(withOrderedKeys(written), null, 2)}\n`;
 }

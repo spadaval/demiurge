@@ -19,14 +19,11 @@ import {
   compileChronology,
   type PointOrder,
 } from "../time/chronology";
-import type {
-  Constraint,
-  Position,
-  TimeEvent,
-  Timeline,
-} from "../time/timeline";
+import type { Constraint, Position, Timeline } from "../time/timeline";
 import { describeWhen, describeYears } from "./calendar";
 import { storyContradictions } from "./contradictions";
+import { countSeries, stepText } from "./counts";
+import { eventsInStoryOrder } from "./order";
 import {
   type DriveTurn,
   type OpenQuestion,
@@ -60,6 +57,7 @@ const SECTIONS: readonly Section[] = [
     lines: unheldDriveLines,
   },
   { name: "events", title: "Events, in story order", lines: eventLines },
+  { name: "counts", title: "Counts, as they change", lines: countLines },
   {
     name: "world",
     title: "The world",
@@ -256,6 +254,8 @@ function refName(story: Story, ref: Ref): string {
     }
     case "object":
       return named(story.objects.find((o) => o.id === ref.id)?.name);
+    case "count":
+      return named(story.counts.find((c) => c.id === ref.id)?.label);
   }
 }
 
@@ -422,35 +422,6 @@ function constraintText(story: Story, c: Constraint): string {
   }
 }
 
-/**
- * Events in the order story time gives them: by how many events are known to
- * come before each, then by position, then causes before their effects, then
- * by label. Unordered events fall where that puts them.
- */
-export function eventsInStoryOrder(story: Story): TimeEvent[] {
-  const { events, positions } = story.timeline;
-  const chronology = compileChronology(story.timeline, []);
-  const worldPosition = (id: string) =>
-    positions.find((p) => p.event === id && p.frame === "world");
-  const earlier = new Map(
-    events.map(({ id }) => [
-      id,
-      events.filter(
-        (other) => compareEvents(chronology, other.id, id) === "before",
-      ).length,
-    ]),
-  );
-  const depth = causeDepths(story);
-  return [...events].sort(
-    (a, b) =>
-      (earlier.get(a.id) ?? 0) - (earlier.get(b.id) ?? 0) ||
-      (worldPosition(a.id)?.start ?? Number.POSITIVE_INFINITY) -
-        (worldPosition(b.id)?.start ?? Number.POSITIVE_INFINITY) ||
-      depth(a.id) - depth(b.id) ||
-      named(a.label).localeCompare(named(b.label)),
-  );
-}
-
 const worldPositionOf = (story: Story, id: string) =>
   story.timeline.positions.find((p) => p.event === id && p.frame === "world");
 
@@ -458,6 +429,24 @@ const worldPositionOf = (story: Story, id: string) =>
 export function eventTime(story: Story, id: string): string | undefined {
   const text = positionText(story, worldPositionOf(story, id));
   return text === "" ? undefined : text.slice(2, -1);
+}
+
+/** Each count, then its values in story order, a line apiece. */
+function countLines(story: Story): string[] {
+  return story.counts.flatMap((count) => {
+    const of = story.counts.find((c) => c.id === count.of);
+    const head = joined([
+      `- **${named(count.label)}**${of === undefined ? "" : `, out of ${named(of.label)}`}${count.direction === undefined ? "" : `, only ${count.direction === "rises" ? "rising" : "falling"}`}.`,
+      count.notes.trim() === "" ? undefined : sentence(count.notes),
+    ]);
+    return [
+      head,
+      ...countSeries(story, count).map((step) => {
+        const when = eventTime(story, step.at);
+        return `  - ${eventLabel(story, step.at)}${when === undefined ? "" : ` (${when})`}: ${sentence(joined([stepText(count, step), step.note.trim() === "" ? undefined : `(${step.note.trim()})`]))}`;
+      }),
+    ];
+  });
 }
 
 function eventLines(story: Story): string[] {
@@ -535,29 +524,6 @@ function becauseText(story: Story, id: string, afterSummary: boolean): string {
   return afterSummary
     ? ` ${sentence(`B${because}`)}`
     : `, ${sentence(`b${because}`)}`;
-}
-
-/**
- * How long the longest chain of causes leading to each event is, so a cause
- * sorts before its effects. A cycle is cut where it closes.
- */
-function causeDepths(story: Story): (id: string) => number {
-  const depths = new Map<string, number>();
-  const visiting = new Set<string>();
-  const depth = (id: string): number => {
-    const known = depths.get(id);
-    if (known !== undefined) return known;
-    if (visiting.has(id)) return 0;
-    visiting.add(id);
-    const causes = story.causes
-      .filter(({ effect, cause }) => effect === id && cause !== id)
-      .map(({ cause }) => cause);
-    const found = causes.length === 0 ? 0 : 1 + Math.max(...causes.map(depth));
-    visiting.delete(id);
-    depths.set(id, found);
-    return found;
-  };
-  return depth;
 }
 
 /** The order the timeline's positions alone give, without its constraints. */
@@ -771,6 +737,7 @@ function concerns(story: Story, about: readonly Ref[]): string {
 function contradictionLines(story: Story): string[] {
   return storyContradictions(story).flatMap((c) => {
     if (c.source === "openQuestion") return [];
+    if (c.source === "count") return [`- ${c.message}`];
     if (c.source === "knowledge") {
       const k = story.knowledge.find((x) => x.id === c.ref.id);
       return k?.since === undefined || k.until === undefined

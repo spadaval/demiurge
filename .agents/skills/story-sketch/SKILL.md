@@ -139,6 +139,10 @@ prose (and the records) that may need rereading.
   the event itself, a version of it or someone's knowledge of it, and when
   each character's knowledge starts. Use it to plan what the reader learns
   when, and to check a scene doesn't give away what a later scene reveals.
+  `reader-order --before <scene>` is the short form for one scene: each
+  thing the scenes before it have told the reader, once, in a short label,
+  with when it happened and how long before the scene (the latest event the
+  scene shows), and what they have held back.
 - **Causes.** When one event happened because of another, record it with
   `add-cause wreck letter` (the wreck caused the letter). Positions and
   constraints only say what comes first; a cause says why. `render` says
@@ -171,6 +175,22 @@ prose (and the records) that may need rereading.
   year. `constrain --gap` takes a unit too: `--gap 3d`, `2w`, `6h`, `4mo`;
   without `--tolerance` it is give or take half that unit. Knowledge `--since` and `--until` and drive turns
   `--at` name events, so they follow the events wherever they are placed.
+- **Counts.** A number the plot runs on, such as parts of a pact held,
+  soldiers left or days of food, is a count, not a fact:
+  `add-count crew "Hands aboard" --total 12 --direction falls`, then
+  `set-count crew wreck 3 --note "Nine drowned"` at each event where it
+  changes. A value holds until the next one in story order. A total that
+  itself changes is another count: `--of <count>`. `--threshold 6` or
+  `--threshold more-than-half` marks the value that matters, and each value
+  then says how far short of it it is. `show count:crew` and `render`
+  print the series; `show event:wreck` lists the counts set there; `trace`
+  follows a count to its events and to text stating its old values.
+  `contradictions` reports only two things: a value above its total, and,
+  with `--direction`, a value that moves the other way. Check the numbers
+  you write in prose against `show count:<id>`.
+- **How long between.** `span bakehouse heist` prints the time from one
+  placed event to the other in calendar days ("27 days"), with months or
+  years beside long spans. Use it before writing "twenty-six days later".
 - **Rework** a motive with `update-drive` or `set-drive-origins`, an event
   with `describe-event` (or its other name, `update-event`), `set-position`
   or `constrain`, and see what it reaches with `touches`.

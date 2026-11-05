@@ -12,6 +12,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { err, ok, Result } from "neverthrow";
 import {
+  describeBetween,
+  describeSpan,
   describeYears,
   parseSpan,
   parseWhen,
@@ -26,12 +28,16 @@ import {
   storyContradictions,
   timelineProblemMessage,
 } from "../src/story/contradictions";
+import { type CountStep, countSeries, stepText } from "../src/story/counts";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
 import {
   type FirstTold,
   knowledgeAlways,
+  type TellingHow,
+  type ToldSoFar,
   tellingOrder,
   tellingWords,
+  toldBefore,
   trueOrder,
 } from "../src/story/learning";
 import { type Mention, whatMentions } from "../src/story/mentions";
@@ -44,6 +50,9 @@ import {
 import { scenesTouching } from "../src/story/scenes";
 import {
   type Candidate,
+  COUNT_DIRECTIONS,
+  type Count,
+  type CountDirection,
   DRIVE_TURN_HOWS,
   GAP_KINDS,
   type GapKind,
@@ -87,6 +96,7 @@ export const KIND_NAMES: Record<Ref["kind"], string> = {
   version: "version",
   knowledge: "knowledge",
   object: "object",
+  count: "count",
 };
 
 const REF_KIND_BY_NAME = new Map(
@@ -374,6 +384,67 @@ const refList = (help: string) =>
 /** `null` for `none`. */
 const orNone = (value: string): string | null =>
   value === "none" ? null : value;
+
+const COUNT_FLAGS = {
+  notes: text,
+  total: { value: "<number>", help: "a fixed total it is out of" },
+  of: {
+    value: "<count-id>",
+    help: "another count whose value at the time is its total, for a total that changes",
+  },
+  threshold: {
+    value: "<number|more-than-half>",
+    help: "a value that matters; more-than-half is the smallest whole number above half the total",
+  },
+  direction: {
+    value: "<rises|falls>",
+    help: "it only goes this way in story time",
+  },
+} as const;
+
+type CountOptions = {
+  total?: number | null;
+  of?: string | null;
+  threshold?: number | "more_than_half" | null;
+  direction?: CountDirection | null;
+};
+
+/** A count's total, threshold and direction from the flags; "none" is null. */
+function countOptions(a: Reader): CountOptions {
+  const read = <T>(flag: string, parse: (value: string) => T) => {
+    const value = a.text(flag);
+    return value === undefined
+      ? undefined
+      : value === "none"
+        ? null
+        : parse(value);
+  };
+  const options: CountOptions = {};
+  const total = read("total", (v) => a.number(v, "--total"));
+  const of = read("of", (v) => v);
+  const threshold = read("threshold", (v): number | "more_than_half" =>
+    v === "more-than-half" ? "more_than_half" : a.number(v, "--threshold"),
+  );
+  const direction = read("direction", (v) =>
+    a.choice(v, COUNT_DIRECTIONS, "--direction"),
+  );
+  if (total !== undefined) options.total = total;
+  if (of !== undefined) options.of = of;
+  if (threshold !== undefined) options.threshold = threshold;
+  if (direction !== undefined) options.direction = direction;
+  return options;
+}
+
+/** As `countOptions`, for a new count, where "none" means leave it out. */
+function newCountOptions(a: Reader) {
+  const { total, of, threshold, direction } = countOptions(a);
+  return {
+    ...(total == null ? {} : { total }),
+    ...(of == null ? {} : { of }),
+    ...(threshold == null ? {} : { threshold }),
+    ...(direction == null ? {} : { direction }),
+  };
+}
 
 /**
  * Every story command, in help order. A key is the command's type; its name
@@ -969,6 +1040,82 @@ export const EDITS: EditSpecs = {
     build: (a) => ({ type: "removeObject", id: a.arg("id") }),
   },
 
+  addCount: {
+    group: "Counts: numbers that change at events",
+    args: ["id", "label"],
+    flags: COUNT_FLAGS,
+    summary:
+      "Add a number that changes at events: parts of a pact held, soldiers left, days of food. Set its values with set-count; show and render print them as a running series in story order, with the total and how far from the threshold each value is. contradictions reports a value above its total, and with --direction a value that moves the other way.",
+    example: [
+      "add-count",
+      "crew",
+      "Hands aboard the Alba",
+      "--total",
+      "12",
+      "--direction",
+      "falls",
+    ],
+    build: (a) => ({
+      type: "addCount",
+      id: a.arg("id"),
+      label: a.arg("label"),
+      notes: a.text("notes") ?? "",
+      ...newCountOptions(a),
+    }),
+  },
+  updateCount: {
+    group: "Counts: numbers that change at events",
+    args: ["id"],
+    flags: { label: text, ...COUNT_FLAGS },
+    summary:
+      'Change a count\'s label, notes, total, threshold or direction; "none" clears the last four.',
+    example: ["update-count", "crew", "--threshold", "6"],
+    build: (a) => {
+      const label = a.text("label");
+      const notes = a.text("notes");
+      return {
+        type: "updateCount",
+        id: a.arg("id"),
+        ...(label === undefined ? {} : { label }),
+        ...(notes === undefined ? {} : { notes }),
+        ...countOptions(a),
+      };
+    },
+  },
+  removeCount: {
+    group: "Counts: numbers that change at events",
+    args: ["id"],
+    summary:
+      "Remove a count, its values, and links to it; a count out of it loses its total.",
+    example: ["remove-count", "crew"],
+    build: (a) => ({ type: "removeCount", id: a.arg("id") }),
+  },
+  setCount: {
+    group: "Counts: numbers that change at events",
+    args: ["id", "event-id", "value"],
+    flags: { note: { value: "<text>", help: "why it is that, then" } },
+    summary:
+      'Set a count\'s value from an event on, until its next value in story order; setting it again at that event replaces it, and "none" removes it.',
+    example: [
+      "set-count",
+      "crew",
+      "wreck",
+      "3",
+      "--note",
+      "Nine drowned off the reef",
+    ],
+    build: (a) => {
+      const value = a.arg("value");
+      return {
+        type: "setCount",
+        id: a.arg("id"),
+        at: a.arg("event-id"),
+        value: value === "none" ? null : a.number(value, "<value>"),
+        note: a.text("note") ?? "",
+      };
+    },
+  },
+
   addFact: {
     group: "Facts: plain statements about the world",
     args: ["id", "text"],
@@ -1459,6 +1606,7 @@ type ReadName =
   | "touches"
   | "scenes"
   | "reader-order"
+  | "span"
   | "trace"
   | "mentions"
   | "gaps"
@@ -1478,6 +1626,7 @@ export const LIST_KINDS = [
   "version",
   "knowledge",
   "object",
+  "count",
 ] as const;
 
 export const READS: Record<ReadName, Spec> = {
@@ -1520,9 +1669,22 @@ export const READS: Record<ReadName, Spec> = {
   "reader-order": {
     group: "Start and read",
     args: [],
+    flags: {
+      before: {
+        value: "<scene-id>",
+        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens",
+      },
+    },
     summary:
       "The order the reader learns things in, beside the order they happen: each scene in telling order with what it shows, reveals, implies or withholds and when that is in story time; then events in story order, each with the first scene that tells the reader of it (itself, a version of it, or someone's knowledge of it) and the knowledge that starts then.",
-    example: ["reader-order"],
+    example: ["reader-order", "--before", "storm"],
+  },
+  span: {
+    group: "Start and read",
+    args: ["from-event", "to-event"],
+    summary:
+      "The time from one placed event to another, start to start: in days once it is a day or more, with years or months beside them past eight weeks, else in hours or minutes.",
+    example: ["span", "wreck", "letter"],
   },
   trace: {
     group: "Start and read",
@@ -1639,10 +1801,14 @@ export function helpText(): string {
     "reader-order lists what the reader learns in telling order beside the",
     "order things happen.",
     "",
-    'Times are years (1954) or dates (1954-10-12, "1954-10-12 21:00"). Objects',
-    "(add-object) are things scenes plant and pay off; set-participant says who",
-    "or what takes part in an event; add-drive-turn says a want was satisfied,",
-    "renounced, replaced or flipped, and where.",
+    'Times are years (1954) or dates (1954-10-12, "1954-10-12 21:00"); span',
+    "gives the days between two events. Objects (add-object) are things scenes",
+    "plant and pay off; set-participant says who or what takes part in an",
+    "event; add-drive-turn says a want was satisfied, renounced, replaced or",
+    "flipped, and where. A count (add-count, set-count) is a number that",
+    "changes at events, shown as a running series against its total.",
+    "reader-order --before <scene> lists, briefly, what the reader has been",
+    "told before a scene and how long before it each thing happened.",
     "",
     "After an edit that changes a record, the CLI prints the top three",
     "suspects that may still state its old version, records and lines of",
@@ -1803,6 +1969,7 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
               `participant: ${describe(story, p.who)}${p.role.trim() === "" ? "" : ` (${p.role})`}`,
           ),
         ...turnsAt(story, event.id),
+        ...countsAt(story, event.id),
         ...story.timeline.constraints
           .filter((c) => c.a === event.id || c.b === event.id)
           .map((c) => `constraint ${constraintLine(story, c)}`),
@@ -1875,6 +2042,28 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           (old) =>
             `  ${old.candidate}: ${old.answer} (${old.by === undefined ? "unanswered" : `replaced by ${formatRef({ kind: "candidate", questionId: q.id, id: old.by })}`})`,
         ),
+      ];
+    }
+    case "count": {
+      const count = story.counts.find((c) => c.id === ref.id);
+      if (count === undefined) return head;
+      const threshold =
+        count.threshold === "more_than_half"
+          ? "more than half of the total"
+          : count.threshold === undefined
+            ? ""
+            : `${count.threshold}`;
+      const series = countSeries(story, count);
+      return [
+        ...head,
+        `label: ${count.label}`,
+        ...field("notes", count.notes),
+        ...(count.total === undefined ? [] : [`total: ${count.total}`]),
+        ...ids("of", "count", count.of === undefined ? [] : [count.of]),
+        ...field("threshold", threshold),
+        ...field("direction", count.direction ?? ""),
+        series.length === 0 ? "values: none yet" : "values, in story order:",
+        ...series.map((step) => `  ${countStepLine(story, count, step)}`),
       ];
     }
     case "object": {
@@ -1966,6 +2155,24 @@ function candidateMark(q: OpenQuestion, c: Candidate): string {
 }
 
 /** `in event: event:wreck ("The wreck") (at the helm)`, for each event it's in. */
+/** `event:wreck ("The wreck") at 12 October 1954: 3 of 12 (Nine drowned)`. */
+function countStepLine(story: Story, count: Count, step: CountStep): string {
+  const at = eventTime(story, step.at);
+  return `${describe(story, { kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}: ${stepText(count, step)}${step.note.trim() === "" ? "" : ` (${step.note})`}`;
+}
+
+/** The counts set at an event, with the value they take then. */
+function countsAt(story: Story, event: string): string[] {
+  return story.counts.flatMap((count) =>
+    countSeries(story, count)
+      .filter((step) => step.at === event)
+      .map(
+        (step) =>
+          `count: ${describe(story, { kind: "count", id: count.id })} = ${stepText(count, step)}${step.note.trim() === "" ? "" : ` (${step.note})`}`,
+      ),
+  );
+}
+
 function participations(story: Story, ref: Ref): string[] {
   return story.participants
     .filter((p) => p.who.kind === ref.kind && p.who.id === ref.id)
@@ -2063,6 +2270,11 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
       return story.knowledge.map((k) => line({ kind: "knowledge", id: k.id }));
     case "object":
       return story.objects.map((o) => line({ kind: "object", id: o.id }));
+    case "count":
+      return story.counts.map(
+        (c) =>
+          `${line({ kind: "count", id: c.id })} (${c.values.length} value${c.values.length === 1 ? "" : "s"})`,
+      );
     case "candidate":
       return story.openQuestions.flatMap((q) =>
         q.candidates.map(
@@ -2151,6 +2363,102 @@ function readerOrderLines(story: Story): string[] {
   ];
 }
 
+/** `event:wreck ("The wreck") at 12 October 1954`. */
+function placedEvent(story: Story, id: string): string {
+  const at = eventTime(story, id);
+  return `${shortDescribe(story, { kind: "event", id })}${at === undefined ? "" : ` at ${at}`}`;
+}
+
+/** The world position's start of an event, if it has one. */
+const startOf = (story: Story, id: string) =>
+  story.timeline.positions.find(
+    (p) => p.event === id && p.frame === WORLD_FRAME,
+  )?.start;
+
+/** `From … to …: 27 days.`, saying which way it runs. */
+function spanLine(story: Story, from: string, to: string): string {
+  const a = startOf(story, from) ?? 0;
+  const b = startOf(story, to) ?? 0;
+  const ranged = [from, to].some((id) => {
+    const p = story.timeline.positions.find(
+      (x) => x.event === id && x.frame === WORLD_FRAME,
+    );
+    return p !== undefined && describeSpan(p) === undefined && p.end > p.start;
+  });
+  const gap =
+    a === b
+      ? "they start at the same time"
+      : `${describeBetween(a, b)}${b < a ? ", going back" : ""}`;
+  return `From ${placedEvent(story, from)} to ${placedEvent(story, to)}: ${gap}${ranged ? " (start to start)" : ""}.`;
+}
+
+/** A ref with its label cut short: `fact:reef ("Nobody fishes the…")`. */
+function shortDescribe(story: Story, ref: Ref): string {
+  const label = refLabel(story, ref);
+  return label === ref.id
+    ? formatRef(ref)
+    : `${formatRef(ref)} ("${excerpt(label)}")`;
+}
+
+/** The event a told record happens at: itself, a version's, knowledge's start. */
+function eventOf(story: Story, ref: Ref): string | undefined {
+  switch (ref.kind) {
+    case "event":
+      return ref.id;
+    case "version":
+      return story.versions.find((v) => v.id === ref.id)?.event;
+    case "knowledge":
+      return story.knowledge.find((k) => k.id === ref.id)?.since;
+    default:
+      return undefined;
+  }
+}
+
+/** `revealed in 3`. */
+const TOLD_WORDS: Record<TellingHow, string> = {
+  shows: "shown",
+  reveals: "revealed",
+  implies: "implied",
+  withholds: "withheld",
+  plants: "planted",
+  paysOff: "paid off",
+};
+
+/** `reader-order --before`: what the scenes before it have told, briefly. */
+function toldBeforeLines(story: Story, index: number): string[] {
+  const scene = story.scenes[index];
+  if (scene === undefined) return [];
+  // The scene's now is the latest placed event it shows; earlier ones it
+  // shows are flashbacks.
+  const anchor = scene.depicts
+    .filter((id) => startOf(story, id) !== undefined)
+    .sort((a, b) => (startOf(story, b) ?? 0) - (startOf(story, a) ?? 0))[0];
+  const now = anchor === undefined ? undefined : startOf(story, anchor);
+  const { told, withheld } = toldBefore(story, index);
+  const line = ({ ref, how, index: at }: ToldSoFar) => {
+    const event = eventOf(story, ref);
+    const when = event === undefined ? undefined : eventTime(story, event);
+    const then = event === undefined ? undefined : startOf(story, event);
+    const ago =
+      now === undefined || then === undefined
+        ? ""
+        : then === now
+          ? ", at the same time"
+          : `, ${describeBetween(then, now)} ${then < now ? "before" : "after"}`;
+    return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${TOLD_WORDS[how]} in ${at + 1}`;
+  };
+  return [
+    `Before ${index + 1}. ${shortDescribe(story, { kind: "scene", id: scene.id })}${anchor === undefined ? "" : `, at ${placedEvent(story, anchor)} (the latest event it shows)`}, the reader has been told:`,
+    ...(told.length === 0 ? ["(nothing yet)"] : told.map(line)),
+    ...(withheld.length === 0
+      ? []
+      : [
+          "Held back and not told yet:",
+          ...withheld.map((ref) => `- ${shortDescribe(story, ref)}`),
+        ]),
+  ];
+}
+
 /** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
 function mentionLines(story: Story, found: readonly Mention[]): string[] {
   return found.map(
@@ -2191,6 +2499,8 @@ function recordState(story: Story, ref: Ref): string {
       return JSON.stringify(find(story.knowledge));
     case "object":
       return JSON.stringify(find(story.objects));
+    case "count":
+      return JSON.stringify(find(story.counts));
     case "candidate":
       return JSON.stringify(
         story.openQuestions
@@ -2239,6 +2549,9 @@ function changedRef(
         return { kind: "knowledge", id: command.id };
       case "updateObject":
         return { kind: "object", id: command.id };
+      case "updateCount":
+      case "setCount":
+        return { kind: "count", id: command.id };
       default:
         return undefined;
     }
@@ -2299,7 +2612,13 @@ function staleTextLines(
     !before.timeline.positions.some(
       (p) => p.event === command.event && p.frame === WORLD_FRAME,
     );
-  if (ref === undefined || firstPlacement) return [];
+  // Nor what a count was at an event before it had a value there.
+  const firstValue =
+    command.type === "setCount" &&
+    !before.counts.some(
+      (c) => c.id === command.id && c.values.some((v) => v.at === command.at),
+    );
+  if (ref === undefined || firstPlacement || firstValue) return [];
   const all = traceDependents(after, ref, {
     was: before,
     prose: readProse(storyPath, after),
@@ -2418,8 +2737,33 @@ function runRead(
                   `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}: ${how.join("; ")}`,
               ),
         );
-    case "reader-order":
-      return ok(readerOrderLines(story));
+    case "reader-order": {
+      const before = a.text("before");
+      if (before === undefined) return ok(readerOrderLines(story));
+      const index = story.scenes.findIndex((scene) => scene.id === before);
+      return index === -1
+        ? err(refused(`scene ${before} does not exist`))
+        : ok(toldBeforeLines(story, index));
+    }
+    case "span": {
+      const from = a.arg("from-event");
+      const to = a.arg("to-event");
+      const start = (id: string) =>
+        story.timeline.positions.find(
+          (p) => p.event === id && p.frame === WORLD_FRAME,
+        )?.start;
+      const missing = [from, to].find(
+        (id) => !refExists(story, { kind: "event", id }),
+      );
+      if (missing !== undefined) {
+        return err(refused(`event ${missing} does not exist`));
+      }
+      const unplaced = [from, to].find((id) => start(id) === undefined);
+      if (unplaced !== undefined) {
+        return err(refused(`event ${unplaced} has no position (set-position)`));
+      }
+      return ok([spanLine(story, from, to)]);
+    }
     case "trace":
       return parseRef(a.arg("ref"))
         .mapErr(usageError)
@@ -2473,7 +2817,7 @@ function runRead(
           ? ["No contradictions."]
           : found.map(
               (c) =>
-                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" ? ` [${formatRef(c.ref)}]` : ""}`,
+                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" || c.source === "count" ? ` [${formatRef(c.ref)}]` : ""}`,
             ),
       );
     }
@@ -2553,9 +2897,9 @@ function runEdit(
               (p) =>
                 `Timeline problem (kept; see contradictions): ${timelineProblemMessage(next, p)}`,
             ),
-            ...addedCauseProblems(story, next).map(
-              (message) =>
-                `Cause problem (kept; see contradictions): ${message}`,
+            ...addedProblems(story, next).map(
+              ({ source, message }) =>
+                `${source === "cause" ? "Cause" : "Count"} problem (kept; see contradictions): ${message}`,
             ),
             ...alsoRemovedLines(story, next, command),
             ...(a.bool("remove") === true
@@ -2604,10 +2948,26 @@ function alsoRemovedLines(
             (p) =>
               `${formatRef(p.who)} in ${formatRef({ kind: "event", id: p.event })}`,
           );
+  // A count's value goes with its event, unless the count itself was named.
+  const values =
+    command.type === "removeCount" || command.type === "setCount"
+      ? []
+      : before.counts.flatMap((c) => {
+          const kept = after.counts.find((x) => x.id === c.id);
+          return kept === undefined
+            ? []
+            : c.values
+                .filter((v) => !kept.values.some((w) => w.at === v.at))
+                .map(
+                  (v) =>
+                    `the value of ${formatRef({ kind: "count", id: c.id })} at ${formatRef({ kind: "event", id: v.at })}`,
+                );
+        });
   const removed = [
     ...gone("version", before.versions, after.versions),
     ...gone("knowledge", before.knowledge, after.knowledge),
     ...participants.map((p) => `the part of ${p}`),
+    ...values,
   ];
   return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
 }
@@ -2636,26 +2996,33 @@ function droppedLinkLines(
       ];
 }
 
-/** Cause contradictions in `after` that weren't in `before`. */
-function addedCauseProblems(before: Story, after: Story): string[] {
+/** Cause and count contradictions in `after` that weren't in `before`. */
+function addedProblems(
+  before: Story,
+  after: Story,
+): { source: "cause" | "count"; message: string }[] {
+  type Found = { source: "cause" | "count"; key: string; message: string };
   const found = (story: Story) =>
-    storyContradictions(story).flatMap((c) =>
-      c.source !== "cause"
-        ? []
-        : [
+    storyContradictions(story).flatMap((c): Found[] =>
+      c.source === "cause"
+        ? [
             {
+              source: c.source,
               key: JSON.stringify([
                 c.kind,
                 ...(c.kind === "cycle" ? c.events : [c.cause, c.effect]),
               ]),
               message: c.message,
             },
-          ],
+          ]
+        : c.source === "count"
+          ? [{ source: c.source, key: c.message, message: c.message }]
+          : [],
     );
   const old = new Set(found(before).map(({ key }) => key));
   return found(after)
     .filter(({ key }) => !old.has(key))
-    .map(({ message }) => message);
+    .map(({ source, message }) => ({ source, message }));
 }
 
 if (import.meta.main) {

@@ -205,6 +205,18 @@ export function storyTexts(story: Story): Text[] {
   for (const o of story.objects) {
     add({ kind: "object", id: o.id }, { name: o.name, notes: o.notes });
   }
+  for (const c of story.counts) {
+    add(
+      { kind: "count", id: c.id },
+      {
+        label: c.label,
+        notes: c.notes,
+        ...Object.fromEntries(
+          c.values.map(({ at, note }) => [`note at ${at}`, note]),
+        ),
+      },
+    );
+  }
   for (const d of story.drives) {
     add(
       { kind: "drive", id: d.id },
@@ -251,6 +263,8 @@ function nameOf(story: Story, ref: Ref): { field: string; value: string } {
       return { field: "", value: "" };
     case "object":
       return { field: "name", value: find(story.objects)?.name ?? "" };
+    case "count":
+      return { field: "label", value: find(story.counts)?.label ?? "" };
     case "candidate":
       return {
         field: "answer",
@@ -322,6 +336,16 @@ export function terms(story: Story, ref: Ref): Term[] {
       found.push({
         pattern: numberPattern(year),
         how: `states its ${story.timeline.worldUnit} ${year}`,
+        match: "direct",
+      });
+    }
+  }
+  if (ref.kind === "count") {
+    const count = story.counts.find((c) => c.id === ref.id);
+    for (const value of new Set(count?.values.map((v) => v.value))) {
+      found.push({
+        pattern: numberPattern(value),
+        how: `states its value ${value}`,
         match: "direct",
       });
     }

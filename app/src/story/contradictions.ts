@@ -13,6 +13,7 @@ import {
 import { timelineProblems } from "../time/commands";
 import type { EventId } from "../time/timeline";
 import { describeYears } from "./calendar";
+import { countProblems } from "./counts";
 import { questionState, type Ref, type Story } from "./story";
 import { refLabel } from "./touches";
 
@@ -37,7 +38,9 @@ export type Contradiction =
    * Knowledge whose `until` story time puts strictly before its `since`. Two
    * events not ordered against each other aren't listed.
    */
-  | { source: "knowledge"; ref: Ref; message: string };
+  | { source: "knowledge"; ref: Ref; message: string }
+  /** A count above its total or moving against its direction (`./counts.ts`). */
+  | { source: "count"; ref: Ref; at: EventId; message: string };
 
 /**
  * A timeline problem's message, with a duration in a year-based story said
@@ -68,7 +71,8 @@ export function timelineProblemMessage(
 
 /**
  * The timeline's problems, then the causes', then knowledge that ends before
- * it starts, then the open conflicts.
+ * it starts, then counts above their totals or moving against their
+ * direction, then the open conflicts.
  */
 export function storyContradictions(story: Story): Contradiction[] {
   // Story scenes aren't in the timeline, as in `applyStoryCommand`.
@@ -111,6 +115,14 @@ export function storyContradictions(story: Story): Contradiction[] {
     ...timeline,
     ...causeContradictions(story, chronology),
     ...knowledge,
+    ...countProblems(story).map(
+      ({ count, at, message }): Contradiction => ({
+        source: "count",
+        ref: { kind: "count", id: count },
+        at,
+        message,
+      }),
+    ),
     ...conflicts,
   ];
 }

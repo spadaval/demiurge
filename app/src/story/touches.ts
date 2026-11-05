@@ -32,6 +32,7 @@ export const TOUCH_KINDS: readonly TouchKind[] = [
   "version",
   "knowledge",
   "object",
+  "count",
 ];
 
 /** A record reached, its name for display, and each way it was reached. */
@@ -127,6 +128,8 @@ export function refLabel(story: Story, ref: Ref, depth = 0): string {
         return story.versions.find((v) => v.id === ref.id)?.text ?? "";
       case "object":
         return story.objects.find((o) => o.id === ref.id)?.name ?? "";
+      case "count":
+        return story.counts.find((c) => c.id === ref.id)?.label ?? "";
       case "knowledge": {
         const k = story.knowledge.find((x) => x.id === ref.id);
         if (k === undefined || depth > 2) return "";
@@ -312,6 +315,27 @@ function directLinks(story: Story, ref: Ref): Link[] {
     }
   }
 
+  // Counts: the events their values are set at, and the count they are of.
+  for (const count of story.counts) {
+    const countRef: Ref = { kind: "count", id: count.id };
+    for (const { at, value } of count.values) {
+      if (ref.kind === "count" && count.id === ref.id) {
+        add(`set to ${value} then`, eventRef(at));
+      }
+      if (ref.kind === "event" && at === ref.id) {
+        add(`a count set to ${value} then`, countRef);
+      }
+    }
+    if (count.of !== undefined) {
+      if (ref.kind === "count" && count.id === ref.id) {
+        add("the count it is out of", { kind: "count", id: count.of });
+      }
+      if (ref.kind === "count" && count.of === ref.id) {
+        add("a count out of it", countRef);
+      }
+    }
+  }
+
   // Whatever refers to `ref` by a Ref.
   for (const p of story.participants) {
     if (sameRef(p.who, ref)) {
@@ -477,6 +501,7 @@ function grouped(story: Story, links: Link[], subject: Ref): TouchGroups {
     version: [],
     knowledge: [],
     object: [],
+    count: [],
   };
   const seen = new Map<string, Touch>();
   for (const { ref, how } of links) {

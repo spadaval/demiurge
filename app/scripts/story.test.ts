@@ -864,6 +864,145 @@ describe("story CLI", () => {
     );
   });
 
+  test("a count runs as a series, out of a total that changes, and is checked", () => {
+    ok("init", "A debt comes due.");
+    for (const [id, when] of [
+      ["pact", "612-11-03"],
+      ["fade", "619-05-12"],
+      ["reading", "619-04-07"],
+      ["fair", "619-05-13"],
+      ["sells", "619-05-28 23:00"],
+      ["calls", "619-05-29 01:00"],
+    ] as const) {
+      ok("add-event", id, id);
+      ok("set-position", id, when);
+    }
+    expect(ok("add-count", "parts", "Parts of the pact")).toBe("");
+    ok("set-count", "parts", "pact", "1000");
+    ok("set-count", "parts", "fade", "992", "--note", "the Widow's eight");
+    expect(
+      ok(
+        "add-count",
+        "ledger",
+        "The Ledger's parts",
+        "--of",
+        "parts",
+        "--threshold",
+        "more-than-half",
+        "--direction",
+        "rises",
+      ),
+    ).toBe("");
+    // A first value at an event prints nothing.
+    expect(ok("set-count", "ledger", "reading", "180")).toBe("");
+    ok("set-count", "ledger", "fair", "452");
+    ok("set-count", "ledger", "sells", "488");
+    expect(ok("show", "count:ledger")).toBe(
+      [
+        "count:ledger",
+        "label: The Ledger's parts",
+        'of: count:parts ("Parts of the pact")',
+        "threshold: more than half of the total",
+        "direction: rises",
+        "values, in story order:",
+        "  event:reading at 7 April 619: 180 of 1000, 321 short of more than half (501)",
+        "  event:fair at 13 May 619: 452 of 992, 45 short of more than half (497)",
+        "  event:sells at 28 May 619, 23:00: 488 of 992, 9 short of more than half (497)",
+        "",
+      ].join("\n"),
+    );
+    expect(ok("show", "event:sells")).toContain(
+      'count: count:ledger ("The Ledger\'s parts") = 488 of 992, 9 short of more than half (497)\n',
+    );
+    expect(ok("render", "--section", "counts")).toContain(
+      "- **The Ledger's parts**, out of Parts of the pact, only rising.\n  - reading (7 April 619): 180 of 1000, 321 short of more than half (501).\n",
+    );
+
+    // A value against the direction, or above the total, is reported.
+    expect(ok("set-count", "ledger", "calls", "400")).toBe(
+      'Count problem (kept; see contradictions): "The Ledger\'s parts" falls from 488 at "sells" to 400 at "calls", though it only rises.\n',
+    );
+    ok("set-count", "ledger", "calls", "none");
+    ok("set-count", "ledger", "calls", "1200");
+    expect(ok("contradictions")).toBe(
+      '- "The Ledger\'s parts" is 1200 at "calls", above its total of 992. [count:ledger]\n',
+    );
+    ok("set-count", "ledger", "calls", "497");
+    expect(ok("contradictions")).toBe("No contradictions.\n");
+
+    // trace follows it, and a changed value prompts with text stating the old.
+    ok("add-fact", "tally", "The Ledger holds 452 parts by the fair");
+    expect(ok("trace", "count:ledger")).toContain(
+      '- fact:tally ("The Ledger holds 452 parts by the fair"): text "452" states its value 452',
+    );
+    expect(ok("trace", "event:fair")).toContain(
+      '- count:ledger ("The Ledger\'s parts"): linked: a count set to 452 then',
+    );
+    expect(ok("set-count", "ledger", "fair", "441")).toContain(
+      "What may still state the old count:ledger",
+    );
+
+    // Removing an event takes its values; removing a total clears it.
+    expect(ok("remove-event", "fair")).toBe(
+      "Also removed: the value of count:ledger at event:fair\n",
+    );
+    ok("remove-count", "parts");
+    expect(saved().counts.find((c) => c.id === "ledger")?.of).toBeUndefined();
+    const both = cli(
+      file,
+      "update-count",
+      "ledger",
+      "--total",
+      "10",
+      "--of",
+      "ledger",
+    );
+    expect(both.code).toBe(1);
+  });
+
+  test("span gives the time between two events, and reader-order --before what the reader has been told", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-event", "bakehouse", "The bakehouse");
+    ok("set-position", "bakehouse", "619-05-01");
+    ok("add-event", "heist", "The heist");
+    ok("set-position", "heist", "619-05-28 23:00");
+    ok("add-event", "unplaced", "Unplaced");
+    expect(ok("span", "bakehouse", "heist")).toBe(
+      'From event:bakehouse ("The bakehouse") at 1 May 619 to event:heist ("The heist") at 28 May 619, 23:00: 27 days.\n',
+    );
+    expect(ok("span", "heist", "bakehouse")).toContain(
+      ": 27 days, going back.\n",
+    );
+    expect(cli(file, "span", "heist", "unplaced").stderr).toContain(
+      "event unplaced has no position",
+    );
+
+    ok(
+      "add-fact",
+      "rule",
+      "A pact passes to whoever holds more than half its parts, by the old law of the Concordance",
+    );
+    ok("add-scene", "bake", "Bakehouse");
+    ok("set-scene-events", "bake", "bakehouse");
+    ok("set-scene-links", "bake", "reveals", "fact:rule");
+    ok("set-scene-links", "bake", "withholds", "event:heist");
+    ok("add-scene", "eye", "Into the Eye");
+    ok("set-scene-events", "eye", "heist");
+    expect(ok("reader-order", "--before", "eye")).toBe(
+      [
+        'Before 2. scene:eye ("Into the Eye"), at event:heist ("The heist") at 28 May 619, 23:00 (the latest event it shows), the reader has been told:',
+        '- event:bakehouse ("The bakehouse") at 1 May 619, 27 days before: shown in 1',
+        '- fact:rule ("A pact passes to whoever holds more than half its parts, by…"): revealed in 1',
+        "Held back and not told yet:",
+        '- event:heist ("The heist")',
+        "",
+      ].join("\n"),
+    );
+    expect(ok("reader-order", "--before", "bake")).toBe(
+      'Before 1. scene:bake ("Bakehouse"), at event:bakehouse ("The bakehouse") at 1 May 619 (the latest event it shows), the reader has been told:\n(nothing yet)\n',
+    );
+  });
+
   test("trace lists dependents mentions misses, scene prose among them, and edits print the top of it", () => {
     ok("init", "A keeper finds a letter.");
     ok(
@@ -935,6 +1074,7 @@ describe("story CLI", () => {
     ok("add-actor", "ivo", "Ivo");
     ok("add-drive", "keep-quiet", "Keep the wreck quiet");
     ok("add-event", "letter", "The letter arrives");
+    ok("set-position", "letter", "18");
     for (const spec of Object.values(EDITS)) {
       const [name] = spec.example;
       if (name?.startsWith("remove-") || name?.startsWith("unrelate-")) {

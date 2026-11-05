@@ -7,7 +7,7 @@
  */
 
 import type { TimeEvent } from "../time/timeline";
-import { eventsInStoryOrder } from "./render";
+import { eventsInStoryOrder } from "./order";
 import {
   type Knowledge,
   type Ref,
@@ -148,4 +148,36 @@ export function knowledgeAlways(
       const told = firstTold(story, [{ kind: "knowledge", id: knowledge.id }]);
       return { knowledge, ...(told === undefined ? {} : { first: told }) };
     });
+}
+
+/** A record the reader has been told before a scene, and where first. */
+export type ToldSoFar = { ref: Ref; how: TellingHow; index: number };
+
+/**
+ * What the scenes before the one at `index`, in telling order, have put
+ * before the reader: each record once, with the first scene that showed,
+ * revealed, implied, planted or paid it off. `withheld` is what those scenes
+ * held back and none of them has told yet.
+ */
+export function toldBefore(
+  story: Story,
+  index: number,
+): { told: ToldSoFar[]; withheld: Ref[] } {
+  const told: ToldSoFar[] = [];
+  const withheld: Ref[] = [];
+  const seen = (list: readonly { ref: Ref }[], ref: Ref) =>
+    list.some((x) => sameRef(x.ref, ref));
+  for (const step of tellingOrder(story).slice(0, Math.max(0, index))) {
+    for (const { how, ref } of step.told) {
+      if (LEARNING.includes(how)) {
+        if (!seen(told, ref)) told.push({ ref, how, index: step.index });
+      } else if (!withheld.some((r) => sameRef(r, ref))) {
+        withheld.push(ref);
+      }
+    }
+  }
+  return {
+    told,
+    withheld: withheld.filter((ref) => !seen(told, ref)),
+  };
 }

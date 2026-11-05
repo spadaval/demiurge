@@ -23,6 +23,8 @@ import {
 import type { EventId } from "../time/timeline";
 import {
   type ActorKind,
+  type Count,
+  type CountDirection,
   type DriveRelationType,
   type DriveTurnHow,
   describeRef,
@@ -226,6 +228,41 @@ export type StoryCommand =
   | { type: "updateObject"; id: string; name?: string; notes?: string }
   /** Also removes it as a participant, knowledge of it, and links to it. */
   | { type: "removeObject"; id: string }
+  /**
+   * A number that changes at events (`Count`). `total` and `of` are
+   * alternatives; `of` names another count, not this one.
+   */
+  | {
+      type: "addCount";
+      id: string;
+      label: string;
+      notes: string;
+      total?: number;
+      of?: string;
+      threshold?: number | "more_than_half";
+      direction?: CountDirection;
+    }
+  /** null clears an optional field. */
+  | {
+      type: "updateCount";
+      id: string;
+      label?: string;
+      notes?: string;
+      total?: number | null;
+      of?: string | null;
+      threshold?: number | "more_than_half" | null;
+      direction?: CountDirection | null;
+    }
+  /** Also clears it as another count's total, knowledge of it, and links. */
+  | { type: "removeCount"; id: string }
+  /** The count's value from event `at`; value null removes it. */
+  | {
+      type: "setCount";
+      id: string;
+      at: EventId;
+      value: number | null;
+      note: string;
+    }
   /**
    * An actor or object takes part in an event, with its part in words.
    * Setting it again replaces the role.
@@ -1191,6 +1228,93 @@ export function applyStoryCommand(
       );
     }
 
+    case "addCount":
+    case "updateCount": {
+      const { id } = command;
+      const found = story.counts.find((c) => c.id === id);
+      const checked: Checked<unknown> =
+        command.type === "addCount"
+          ? fresh("count", story.counts, id)
+          : existing("count", story.counts, id);
+      const base: Count = found ?? {
+        id,
+        label: "",
+        notes: "",
+        values: [],
+      };
+      // Given replaces, null clears, absent keeps.
+      const keep = <T>(given: T | null | undefined, was: T | undefined) =>
+        given === undefined ? was : (given ?? undefined);
+      const total = keep(command.total, base.total);
+      const of = keep(command.of, base.of);
+      const threshold = keep(command.threshold, base.threshold);
+      const direction = keep(command.direction, base.direction);
+      const next: Count = {
+        id,
+        label: command.label ?? base.label,
+        notes: command.notes ?? base.notes,
+        ...(total === undefined ? {} : { total }),
+        ...(of === undefined ? {} : { of }),
+        ...(threshold === undefined ? {} : { threshold }),
+        ...(direction === undefined ? {} : { direction }),
+        values: base.values,
+      };
+      return checked
+        .andThen(() =>
+          total !== undefined && of !== undefined
+            ? refuse(
+                "invalid_command",
+                "a count has a fixed total or is of another count, not both",
+              )
+            : of === id
+              ? refuse("self_relation", `count ${id} can't be of itself`)
+              : resolve("count", of === undefined ? [] : [of], (c) =>
+                  has(story.counts, c),
+                ),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            counts:
+              found === undefined
+                ? [...story.counts, next]
+                : replace(story.counts, id, () => next),
+          }),
+        );
+    }
+
+    case "removeCount": {
+      const { id } = command;
+      return existing("count", story.counts, id).andThen(() =>
+        kept(
+          withoutRefs(story, (ref) => ref.kind === "count" && ref.id === id),
+        ),
+      );
+    }
+
+    case "setCount": {
+      const { id, at, value, note } = command;
+      return existing("count", story.counts, id)
+        .andThen((count) => resolve("event", [at], isEvent).map(() => count))
+        .andThen((count) => {
+          const others = count.values.filter((v) => v.at !== at);
+          if (value === null && others.length === count.values.length) {
+            return refuse(
+              "unknown_id",
+              `count ${id} has no value at event ${at}`,
+            );
+          }
+          return kept({
+            ...story,
+            counts: replace(story.counts, id, (c) => ({
+              ...c,
+              values:
+                value === null ? others : [...others, { at, value, note }],
+            })),
+          });
+        });
+    }
+
     case "setParticipant": {
       const { event, who, role } = command;
       return resolve("event", [event], isEvent)
@@ -1554,5 +1678,13 @@ function withoutRefs(story: Story, removed: (ref: Ref) => boolean): Story {
           ...(to === undefined ? {} : { until: to }),
         };
       }),
+    // A value goes with its event; a total that was a removed count goes.
+    counts: story.counts
+      .filter((c) => !gone({ kind: "count", id: c.id }))
+      .map(({ of, ...c }) => ({
+        ...c,
+        ...(of === undefined || gone({ kind: "count", id: of }) ? {} : { of }),
+        values: c.values.filter((v) => !gone({ kind: "event", id: v.at })),
+      })),
   };
 }

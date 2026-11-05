@@ -258,3 +258,27 @@ export function describeYears(years: number): string {
   const count = Number((years / unit.years).toFixed(1));
   return `${count} ${unit.word}${Math.abs(count) === 1 ? "" : "s"}`;
 }
+
+/** Days from fractional year `from` to `to`, on the calendar: negative if `to` is earlier. */
+export function daysBetween(from: number, to: number): number {
+  return (msOf(to) - msOf(from)) / MS_PER_DAY;
+}
+
+/**
+ * The time from `from` to `to`, as a writer would count it: in calendar days
+ * once it is a day or more (`27 days`), with years or months beside them
+ * past eight weeks (`400 days, 1.1 years`), and in hours or minutes under a
+ * day. Its sign is dropped; say which way it runs around it.
+ */
+export function describeBetween(from: number, to: number): string {
+  const days = Math.abs(daysBetween(from, to));
+  if (days < 1) return describeYears(days / DAYS_PER_YEAR);
+  // Counted by the calendar, as a writer counts: 23:00 to 01:00 the day
+  // after is one day on.
+  const midnight = (at: number) => Math.floor(msOf(at) / MS_PER_DAY);
+  const count = Math.abs(midnight(to) - midnight(from));
+  const inDays = `${count} day${count === 1 ? "" : "s"}`;
+  return days < 56
+    ? inDays
+    : `${inDays}, ${describeYears(Math.abs(to - from))}`;
+}
