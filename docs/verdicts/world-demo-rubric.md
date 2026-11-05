@@ -28,19 +28,23 @@ close anything; judge it as a scene in a novel, not as a short story.
 
 1. Read the story so far, then the whole scene, in full and in order. Don't
    skim or sample. Read nothing else.
-2. Score each criterion below from 1 to 10 in whole numbers. The anchors at
+2. The story so far is context. Every criterion except continuity scores the
+   scene's own text: what the story so far says earns no credit unless the
+   scene itself carries it.
+3. Score each criterion below from 1 to 10 in whole numbers. The anchors at
    2, 5 and 8 are fixed points; a 1 is worse than the 2 anchor, a 10 is
    better than the 8 anchor and rare, and the numbers between fall between
    anchors. Score the page, not its potential or effort, and score each
    criterion on its own.
-3. For each criterion, quote one short line from the scene (at most about 25
+4. For each criterion, quote one short line from the scene (at most about 25
    words, verbatim) that best shows why you gave that score. It can show a
    strength or a weakness. Where a score is low because something is missing,
    quote the line where you most felt its absence.
 
 ### Criteria
 
-**Pacing.** Does each beat earn its space, and does the scene turn?
+**Pacing.** Does each beat earn its space, and does the scene turn? A quiet
+scene can score 8 if its change is internal or in what someone understands.
 - 8: Every beat carries weight; tension builds and releases under control;
   something has changed by the end.
 - 5: It mostly moves, but sags or rushes in places, or some beats repeat
@@ -61,7 +65,8 @@ close anything; judge it as a scene in a novel, not as a short story.
   narration explains what a line meant.
 - 2: Everything is on the nose.
 
-**Character.** Motive, interiority, distinct voices.
+**Character.** Motive, interiority, distinct voices. Judge distinct voices
+only where more than one character speaks.
 - 8: Wants are clear and pursued under pressure; inner life shows in choices
   and noticing, not only in being told; you could tell the speakers apart
   without tags.
@@ -79,7 +84,8 @@ close anything; judge it as a scene in a novel, not as a short story.
 **Tone and humour fit for this premise.** The premise is comic and odd; does
 the scene's tone suit it, and does its humour land? Humour needn't be in
 every line, and a serious scene can still fit if the premise's comedy is felt
-in it.
+in it. Stakes needn't be high for the humour to fit; a purely comic scene can
+score 8.
 - 8: Humour comes out of the situation and the characters, lands, and sits
   alongside real stakes; the tone holds steady or shifts on purpose.
 - 5: Some of it lands; some is generic or undercuts the stakes, or the scene
@@ -119,9 +125,11 @@ the scene, each as a short verbatim quote and a sentence on why.
 
 ### Your report
 
-Start with this block, filled in, exactly once. Keep its keys and structure,
-replace every `0` with your score and every empty string with your text, and
-use plain JSON (no comments).
+Start with this block, filled in, exactly once, inside a ```` ```json ````
+fence as shown. Keep exactly its keys at both levels, adding or removing none.
+Replace every `0` with a whole number from 1 to 10 and every empty string with
+your text; leave no string empty. Use plain JSON (no comments), and escape any
+double quote inside a string as `\"`, as quoted dialogue will need.
 
 ```json
 {
@@ -152,8 +160,12 @@ score on why you scored as you did. Keep it brief.
   with each evidence quote, the overall score and the best and worst moments.
   They are never combined into a vote or a pass or fail. Across rounds they
   are indicative only.
-- **Failed reports.** A report whose block is missing, isn't valid JSON, has
-  other keys, or has a score outside 1 to 10 as a whole number counts as a
-  failed run, as does a run that reads beyond its inputs; a fresh judge on the
+- **Failed reports.** A report fails unless it holds exactly one ```` ```json ````
+  fenced block that parses as JSON and has exactly the template's keys at both
+  levels (none missing, none added, including inside an entry), every score a
+  whole number from 1 to 10, and every string non-empty. A failed report, like
+  a run that reads beyond its inputs, counts as a failed run; a fresh judge on the
   same model replaces it (decision worldcrafter-zybl). An evidence quote that
-  isn't in the scene is recorded as such, not corrected.
+  isn't in the scene is recorded as such, not corrected; quotes are compared
+  to the scene after JSON unescaping and normalising quote marks and
+  whitespace.
