@@ -4,6 +4,9 @@ id: "worldcrafter-iu6l"
 issue_type: "validation"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: validation/worldcrafter-iu6l
 priority: "P1"
 relationships:
   blocks: []
@@ -24,9 +27,9 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Verdict on the changed tool: a judging panel reads the second comparison"
-updated_at: "2026-11-05T00:57:16.489393137+00:00"
+updated_at: "2026-11-05T04:13:49.600594661+00:00"
 ---
 
 ## Goal
