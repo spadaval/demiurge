@@ -15,6 +15,8 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-b0pg"
   - kind: "issue"
+    id: "worldcrafter-hibo"
+  - kind: "issue"
     id: "worldcrafter-l55e"
   - kind: "issue"
     id: "worldcrafter-yyki"
@@ -27,7 +29,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 4 fixes: retold events, opening counts, viewpoint marks"
-updated_at: "2026-11-05T17:03:03.164806534+00:00"
+updated_at: "2026-11-05T17:23:36.092081262+00:00"
 ---
 
 ## Goal
