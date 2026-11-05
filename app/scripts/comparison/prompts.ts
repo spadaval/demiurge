@@ -9,10 +9,9 @@ export type Arm = "tool" | "notes";
 export type Step = 1 | 2 | 3 | 4;
 export const STEPS: readonly Step[] = [1, 2, 3, 4];
 
-export type PremiseId = "thukker" | "magical-girl-therapist";
-
 export type Premise = {
-  id: PremiseId;
+  /** A slug, used in packet names and the key. */
+  id: string;
   /** Shown on packets so the reader knows which premise a pair is. */
   title: string;
   text: string;
@@ -20,22 +19,24 @@ export type Premise = {
   tunedOn: boolean;
 };
 
-/** As Sumeet gave them on 2026-10-30 (worldcrafter-04z5, worldcrafter-p4zf). */
-export const PREMISES: Record<PremiseId, Premise> = {
+/** As Sumeet gave it on 2026-10-30 (worldcrafter-04z5, worldcrafter-p4zf). */
+export const PREMISES = {
   thukker: {
     id: "thukker",
     title: "Thukker",
     tunedOn: true,
     text: "Fanfiction of EVE Online. An orphan is adopted by the Thukker tribe, grows up with them, eventually leaves and ends up in Syndicate space. There he runs into a Caldari girl who is there for similar reasons. Hijinks ensue, they decide to work together, and they track down her sister, who turns out to have been fused into a Titan-class ship (as in Homeworld). They then go gallivanting off, build a small armada and unravel a few conspiracies along the way. The Jovians were involved, somehow. Why he left the Thukker, who the girl's family is, what his background is and what he's looking for are all open.",
   },
-  // Held back: no run may use it until the tool is frozen (phase B).
-  "magical-girl-therapist": {
-    id: "magical-girl-therapist",
-    title: "Magical girl therapist",
-    tunedOn: false,
-    text: 'A story about a "magical girl therapist".',
-  },
-};
+} satisfies Record<string, Premise>;
+
+/**
+ * The held-back premise. Its text is read from a sealed file at run time and
+ * never committed (worldcrafter-ac45, worldcrafter-kkmy); the slug names it
+ * in packets and the key.
+ */
+export function heldBackPremise(slug: string, text: string): Premise {
+  return { id: slug, title: slug, text, tunedOn: false };
+}
 
 /** Files a session writes, relative to its run directory. */
 export const FILES = {

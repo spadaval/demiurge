@@ -1,4 +1,9 @@
-# Blind comparison harness (worldcrafter-04z5)
+# Blind comparison harness (worldcrafter-04z5, worldcrafter-ac45)
+
+This harness now runs the second comparison (worldcrafter-ac45): the first
+comparison's harness, changed only so that the held-back premise is a sealed
+file read at run time, in place of magical girl therapist, and so that runs
+and the key are labelled as the second comparison.
 
 Runs the comparison of the story tool against plain Markdown notes, and
 writes it up as blind packets for Sumeet to read (worldcrafter-i2uz). Both
@@ -6,25 +11,38 @@ arms get the same task text and the same craft advice, so the tool is the
 only difference. Blinding is partial: format may give an arm away, and
 that's accepted.
 
-Files: `prompts.ts` (the four step prompts and the two premises),
+Files: `prompts.ts` (the four step prompts and the Thukker premise),
 `comparison.ts` (freeze, runs, snapshots, packets, key), `sandbox.ts` (the
 bubblewrap sandbox each session runs in), `transcript.ts` (the check for
 reads and writes outside a run), `packet.ts` (the packet layout).
 
 ## Layout
 
-The root is `/home/supadava/projects/demiurge-comparison/`, outside this
-repository.
+The root is a parameter, outside this repository:
+`/home/supadava/projects/demiurge-comparison-2/` for the second comparison
+(the first's was `/home/supadava/projects/demiurge-comparison/`).
+
+- `sealed/`: the held-back premise (`premise.txt`) and its slug
+  (`slug.txt`), written by an agent that builds nothing, with their sha256s
+  in decision worldcrafter-kkmy. The harness reads them at run time, checks
+  the premise's sha256 against the one given on the command line, and puts
+  the text only into each step's prompt (saved as `key/raw/<run>/step-<n>/prompt.md`).
+  The text is never written to this repository, a commit, `FROZEN.json`,
+  `run.json` or the key; the slug names the premise everywhere else.
+  `sealed/` is never mounted into a session.
 
 - `frozen/`: `tool/` holds the frozen tool: `story.js` (the CLI built with
   `bun build --target=bun`) and `story-sketch/SKILL.md` and `craft.md`.
   Beside it, `FROZEN.json` holds the commit, the Claude Code version, the
   model and the sha256 of every file in `tool/`. Freezing makes all of it
   read-only (`chmod -R a-w`). Only `tool/` is ever mounted into a session.
-- `packets/`: one Markdown file per run, `<premise>-pair-<n>-<A|B>.md`.
+- `packets/`: one Markdown file per run, `<premise>-pair-<n>-<A|B>.md`,
+  where `<premise>` is `thukker` or the held-back premise's slug.
   Nothing in here says which arm a packet is.
 - `key/`: open only after the packets are judged. `key.md` and `key.json`
-  map packets to arms; `failures.md` lists every step's exit, duration,
+  map packets to arms, and say which comparison this is; `key.json` also
+  lists the models, Claude Code versions and frozen commits the runs used
+  (each run records `claude --version` when it starts); `failures.md` lists every step's exit, duration,
   problems and the transcript check's findings; `model-gaps/<run>.md` holds
   the tool runs' model-gaps logs; `raw/<run>/` holds `run.json` and, per
   step, the prompt, the transcript (`transcript.jsonl`), stderr, the git log,
@@ -44,13 +62,18 @@ From `app/`:
 ```sh
 # Freeze: refuses if the tool, skill or harness has uncommitted changes, or
 # the directory exists. Run it after the last commit to the harness.
-bun scripts/comparison/comparison.ts freeze /home/supadava/projects/demiurge-comparison/frozen
+bun scripts/comparison/comparison.ts freeze /home/supadava/projects/demiurge-comparison-2/frozen
 
 # Phase B: the eight runs in a random order, one at a time, then the packets.
-# Refuses if a key or packets already exist, if the tool, skill or harness
+# Refuses if a key or packets already exist, if the held-back premise's
+# sha256 isn't the expected one (or the file is under this repository or the
+# frozen tool), if its slug isn't a plain slug, if the tool, skill or harness
 # differs from the frozen commit or has uncommitted changes, or if the frozen
 # tool's hashes don't match.
-bun scripts/comparison/comparison.ts phase-b /home/supadava/projects/demiurge-comparison
+bun scripts/comparison/comparison.ts phase-b /home/supadava/projects/demiurge-comparison-2 \
+  --held-back /home/supadava/projects/demiurge-comparison-2/sealed/premise.txt \
+  --slug-file /home/supadava/projects/demiurge-comparison-2/sealed/slug.txt \
+  --sha256 <premise.txt's sha256 from worldcrafter-kkmy>
 
 # Smoke tests: one run (Thukker only), then packets for what's in <out>/key.
 bun scripts/comparison/comparison.ts run <out> <frozen> <tool|notes> thukker
@@ -76,7 +99,7 @@ neither comparison premise.
 
 ## The runs
 
-Two premises (Thukker; magical girl therapist), two tool runs and two notes
+Two premises (Thukker; the sealed held-back premise), two tool runs and two notes
 runs each: eight runs, all on `claude-opus-5-5`. Each run has four steps, and
 each step is a fresh `claude -p` session that sees only its prompt and what
 the run has saved so far:
@@ -230,5 +253,5 @@ If phase B stops partway, what to do is the human's call.
 ## Tuned-on
 
 The Thukker premise was used to build the tool, so its pairs are marked
-tuned-on in the key and weigh less in the verdict. The magical girl therapist
-premise is run only by `phase-b`, after the freeze; `run` refuses it.
+tuned-on in the key and weigh less in the verdict. The held-back premise is
+run only by `phase-b`, after the freeze; `run` refuses it.

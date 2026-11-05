@@ -7,7 +7,7 @@
  *   bun scripts/comparison/comparison.ts freeze <frozen-dir>
  *   bun scripts/comparison/comparison.ts run <out-dir> <frozen-dir> <tool|notes> thukker
  *   bun scripts/comparison/comparison.ts packets <out-dir>
- *   bun scripts/comparison/comparison.ts phase-b <root>
+ *   bun scripts/comparison/comparison.ts phase-b <root> --held-back <premise-file> --slug-file <slug-file> --sha256 <hex>
  *   bun scripts/comparison/comparison.ts skill-check <out-dir> <premise>
  */
 
@@ -27,16 +27,16 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseStory } from "../../src/story/story";
 import { diffHunks, packetMarkdown, sentenceLines } from "./packet";
 import {
   type Arm,
   FILES,
+  heldBackPremise,
   PREMISES,
   type Premise,
-  type PremiseId,
   STEPS,
   type Step,
   stepPrompt,
@@ -56,6 +56,8 @@ import {
 } from "./transcript";
 
 export const MODEL = "claude-opus-5-5";
+/** Which comparison this harness runs, on every run record and the key. */
+export const COMPARISON = "second comparison (worldcrafter-ac45)";
 /** Each step is bounded by `timeout`; this Claude Code has no --max-turns. */
 export const STEP_TIMEOUT_SECONDS = 2700;
 /** Wait before a session while less memory than this is available. */
@@ -105,12 +107,18 @@ type StepRecord = {
 };
 
 export type RunRecord = {
+  comparison: string;
   runId: string;
   arm: Arm;
-  premise: PremiseId;
+  /** The premise's slug; its text is never recorded here. */
+  premise: string;
+  premiseTitle: string;
+  tunedOn: boolean;
   workdir: string;
   frozenCommit: string;
   model: string;
+  /** `claude --version` on the host when the run started. */
+  claudeVersion: string;
   claudeArgs: string[];
   sandbox: string[];
   steps: StepRecord[];
@@ -499,12 +507,16 @@ export async function runOne(
     write: [workdir],
   };
   const record: RunRecord = {
+    comparison: COMPARISON,
     runId,
     arm,
     premise: premise.id,
+    premiseTitle: premise.title,
+    tunedOn: premise.tunedOn,
     workdir,
     frozenCommit: frozen.commit,
     model: MODEL,
+    claudeVersion: must(["claude", "--version"]).trim(),
     claudeArgs: args,
     sandbox,
     steps: [],
@@ -658,7 +670,7 @@ export function packetFor(
   const diff = (a: string | undefined, b: string | undefined) =>
     a === undefined || b === undefined ? undefined : lineDiff(a, b);
   return packetMarkdown({
-    premiseTitle: PREMISES[run.premise].title,
+    premiseTitle: run.premiseTitle,
     label,
     readable: { 1: r1, 2: r2, 3: r3 },
     diffs: { 2: diff(r1, r2), 3: diff(r2, r3) },
@@ -678,14 +690,23 @@ export function writePackets(outDirArg: string): void {
   }
   mkdirSync(packets);
   const runs = loadRuns(outDir);
-  const key: Record<string, unknown>[] = [];
+  const entries: Record<string, unknown>[] = [];
   const keyLines = [
-    "# Key",
+    `# Key: ${COMPARISON}`,
     "",
-    "Open only after the packets have been read and judged (worldcrafter-i2uz).",
+    "Open only after the packets have been read and judged.",
     "",
   ];
-  for (const premise of Object.values(PREMISES)) {
+  // Each premise the runs used, tuned-on first, as the runs record it.
+  const premises = [
+    ...new Map(
+      runs.map((r) => [
+        r.premise,
+        { id: r.premise, title: r.premiseTitle, tunedOn: r.tunedOn },
+      ]),
+    ).values(),
+  ].sort((a, b) => Number(b.tunedOn) - Number(a.tunedOn));
+  for (const premise of premises) {
     const tool = shuffle(
       runs.filter((r) => r.premise === premise.id && r.arm === "tool"),
     );
@@ -713,13 +734,14 @@ export function writePackets(outDirArg: string): void {
         const name = `${premise.id}-pair-${pair}-${letter}.md`;
         const label = `${premise.title}, pair ${pair}, packet ${letter}`;
         writeFileSync(join(packets, name), packetFor(outDir, run, label));
-        key.push({
+        entries.push({
           packet: name,
           runId: run.runId,
           arm: run.arm,
           premise: premise.id,
           tunedOn: premise.tunedOn,
           model: run.model,
+          claudeVersion: run.claudeVersion,
           frozenCommit: run.frozenCommit,
           failed: run.failed,
         });
@@ -730,7 +752,14 @@ export function writePackets(outDirArg: string): void {
     });
     keyLines.push("");
   }
-  writeJson(join(outDir, "key", "key.json"), key);
+  const distinct = (values: string[]) => [...new Set(values)].sort();
+  writeJson(join(outDir, "key", "key.json"), {
+    comparison: COMPARISON,
+    models: distinct(runs.map((r) => r.model)),
+    claudeVersions: distinct(runs.map((r) => r.claudeVersion)),
+    frozenCommits: distinct(runs.map((r) => r.frozenCommit)),
+    packets: entries,
+  });
   writeFileSync(join(outDir, "key", "key.md"), `${keyLines.join("\n")}\n`);
   writeFileSync(
     join(outDir, "key", "failures.md"),
@@ -758,11 +787,14 @@ function recheck(outDir: string, run: RunRecord, step: Step) {
 }
 
 function failuresReport(outDir: string, runs: readonly RunRecord[]): string {
-  const lines = ["# Failures and transcript checks", ""];
+  const lines = [`# Failures and transcript checks: ${COMPARISON}`, ""];
   const failed = runs.filter((r) => r.failed);
   lines.push(`${failed.length} of ${runs.length} runs failed.`, "");
   for (const run of runs) {
-    lines.push(`## Run ${run.runId} (${run.arm}, ${run.premise})`, "");
+    lines.push(
+      `## Run ${run.runId} (${run.arm}, ${run.premise}, ${run.model}, Claude Code ${run.claudeVersion})`,
+      "",
+    );
     for (const s of run.steps) {
       lines.push(
         `- Step ${s.step}: exit ${s.exitCode}, ${s.durationSeconds}s, models ${s.transcript.models.join(", ") || "none"}${s.problems.length > 0 ? `; problems: ${s.problems.join("; ")}` : ""}`,
@@ -788,7 +820,57 @@ function failuresReport(outDir: string, runs: readonly RunRecord[]): string {
 // ---------------------------------------------------------------------------
 // Phase B: all eight runs, then the packets.
 
-export async function phaseB(rootArg: string): Promise<void> {
+export type HeldBack = {
+  /** The sealed premise file. Its text reaches a session only in its prompt. */
+  premiseFile: string;
+  /** A file holding the premise's slug, its name in packets and the key. */
+  slugFile: string;
+  /** The premise file's expected sha256, from its decision record. */
+  sha256: string;
+};
+
+/**
+ * Reads the sealed held-back premise, refusing a file whose sha256 isn't the
+ * expected one, a slug that isn't a plain slug or clashes with Thukker, and
+ * a premise file inside this repository or the frozen tool (which is mounted
+ * into sessions). Never prints or records the text.
+ */
+export function readHeldBack(
+  { premiseFile, slugFile, sha256 }: HeldBack,
+  frozenDir: string,
+): Premise {
+  const path = realpathSync(resolve(premiseFile));
+  for (const dir of [REPO, toolDir(resolve(frozenDir))]) {
+    const rel = relative(dir, path);
+    if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
+      throw new Error(`The held-back premise must not live under ${dir}.`);
+    }
+  }
+  const bytes = readFileSync(path);
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (actual !== sha256.toLowerCase()) {
+    throw new Error(
+      `The held-back premise's sha256 is ${actual}, not the expected ${sha256}.`,
+    );
+  }
+  const slug = readFileSync(resolve(slugFile), "utf8").trim();
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug) || slug in PREMISES) {
+    throw new Error(
+      `The held-back premise's slug must be lowercase letters, digits and hyphens, and not ${Object.keys(PREMISES).join(", ")}.`,
+    );
+  }
+  const text = bytes.toString("utf8").trim();
+  if (text === "") throw new Error("The held-back premise is empty.");
+  return heldBackPremise(slug, text);
+}
+
+/**
+ * Phase B of the second comparison: Thukker and the sealed held-back
+ * premise, two tool runs and two notes runs each, in a random order, then
+ * the packets. `root` holds `frozen/`, and may hold `sealed/`, which is
+ * never mounted into a session.
+ */
+export async function phaseB(rootArg: string, held: HeldBack): Promise<void> {
   const root = resolve(rootArg);
   const frozenDir = join(root, "frozen");
   if (existsSync(join(root, "key")) || existsSync(join(root, "packets"))) {
@@ -796,9 +878,10 @@ export async function phaseB(rootArg: string): Promise<void> {
       `${root} already has a key or packets; failed runs aren't quietly rerun.`,
     );
   }
+  const heldBack = readHeldBack(held, frozenDir);
   loadFrozen(frozenDir);
   const slots = shuffle(
-    Object.values(PREMISES).flatMap((premise) =>
+    [PREMISES.thukker, heldBack].flatMap((premise) =>
       (["tool", "tool", "notes", "notes"] as const).map((arm) => ({
         arm,
         premise,
@@ -948,9 +1031,24 @@ export async function main(argv: string[]): Promise<void> {
       return;
     }
     case "phase-b": {
-      const [root] = rest;
-      if (root === undefined) break;
-      await phaseB(root);
+      const [root, ...flags] = rest;
+      const flag = (name: string) => {
+        const i = flags.indexOf(`--${name}`);
+        return i === -1 ? undefined : flags[i + 1];
+      };
+      const premiseFile = flag("held-back");
+      const slugFile = flag("slug-file");
+      const sha256 = flag("sha256");
+      if (
+        root === undefined ||
+        premiseFile === undefined ||
+        slugFile === undefined ||
+        sha256 === undefined ||
+        flags.length !== 6
+      ) {
+        break;
+      }
+      await phaseB(root, { premiseFile, slugFile, sha256 });
       return;
     }
     case "skill-check": {
@@ -963,7 +1061,7 @@ export async function main(argv: string[]): Promise<void> {
     }
   }
   console.error(
-    "Usage: comparison.ts freeze <frozen-dir> | run <out-dir> <frozen-dir> <tool|notes> thukker | packets <out-dir> | phase-b <root> | skill-check <out-dir> <premise>",
+    "Usage: comparison.ts freeze <frozen-dir> | run <out-dir> <frozen-dir> <tool|notes> thukker | packets <out-dir> | phase-b <root> --held-back <premise-file> --slug-file <slug-file> --sha256 <hex> | skill-check <out-dir> <premise>",
   );
   process.exit(2);
 }

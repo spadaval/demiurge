@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +11,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { freeze, lineDiff, main, phaseB, writePackets } from "./comparison";
+import {
+  COMPARISON,
+  freeze,
+  lineDiff,
+  main,
+  phaseB,
+  readHeldBack,
+  writePackets,
+} from "./comparison";
 import {
   diffHunks,
   packetMarkdown,
@@ -228,7 +237,12 @@ afterEach(() => {
 });
 
 /** A finished run in `<out>/key/raw/<id>`, as runOne leaves it. */
-function fakeRun(out: string, id: string, arm: "tool" | "notes"): void {
+function fakeRun(
+  out: string,
+  id: string,
+  arm: "tool" | "notes",
+  premise = { id: "thukker", title: "Thukker", tunedOn: true },
+): void {
   const raw = join(out, "key", "raw", id);
   const story = arm === "tool" ? "story.json" : "story.md";
   for (const step of [1, 2, 3, 4]) {
@@ -251,12 +265,16 @@ function fakeRun(out: string, id: string, arm: "tool" | "notes"): void {
   writeFileSync(
     join(raw, "run.json"),
     JSON.stringify({
+      comparison: COMPARISON,
       runId: id,
       arm,
-      premise: "thukker",
+      premise: premise.id,
+      premiseTitle: premise.title,
+      tunedOn: premise.tunedOn,
       workdir: `/tmp/story.${id}`,
       frozenCommit: "abc",
       model: "claude-opus-5-5",
+      claudeVersion: "9.9.9 (Claude Code)",
       claudeArgs: arm === "tool" ? ["--add-dir", "/opt/story-tool"] : [],
       sandbox: [],
       steps: [],
@@ -284,9 +302,11 @@ describe("writePackets", () => {
         "thukker-pair-2-A.md",
         "thukker-pair-2-B.md",
       ]);
-      const key = JSON.parse(
-        readFileSync(join(out, "key", "key.json"), "utf8"),
-      ) as KeyEntry[];
+      const key = (
+        JSON.parse(readFileSync(join(out, "key", "key.json"), "utf8")) as {
+          packets: KeyEntry[];
+        }
+      ).packets;
       for (const pair of [1, 2]) {
         const arms = key
           .filter((k) => k.packet.startsWith(`thukker-pair-${pair}-`))
@@ -310,6 +330,113 @@ describe("writePackets", () => {
     }
     // Over 16 pairs, the tool run landed on both letters.
     expect([...letterOfTool].sort()).toEqual(["A", "B"]);
+  });
+
+  test("names the held-back premise by its slug, after Thukker, and labels the key with the comparison, model and Claude Code version", () => {
+    const out = temp();
+    const held = { id: "premise-z", title: "premise-z", tunedOn: false };
+    fakeRun(out, "h0001", "tool", held);
+    fakeRun(out, "h0002", "notes", held);
+    fakeRun(out, "t0001", "tool");
+    fakeRun(out, "n0001", "notes");
+    writePackets(out);
+    expect(readdirSync(join(out, "packets")).sort()).toEqual([
+      "premise-z-pair-1-A.md",
+      "premise-z-pair-1-B.md",
+      "thukker-pair-1-A.md",
+      "thukker-pair-1-B.md",
+    ]);
+    const packet = readFileSync(
+      join(out, "packets", "premise-z-pair-1-A.md"),
+      "utf8",
+    );
+    expect(packet).toContain("premise-z");
+    const key = JSON.parse(readFileSync(join(out, "key", "key.json"), "utf8"));
+    expect(key).toMatchObject({
+      comparison: "second comparison (worldcrafter-ac45)",
+      models: ["claude-opus-5-5"],
+      claudeVersions: ["9.9.9 (Claude Code)"],
+    });
+    expect(key.packets[0]).toMatchObject({
+      premise: "thukker",
+      claudeVersion: "9.9.9 (Claude Code)",
+    });
+    const keyMd = readFileSync(join(out, "key", "key.md"), "utf8");
+    expect(keyMd.startsWith(`# Key: ${COMPARISON}\n`)).toBe(true);
+    expect(keyMd.indexOf("## Thukker")).toBeLessThan(
+      keyMd.indexOf("## premise-z (held back until the freeze)"),
+    );
+    expect(readFileSync(join(out, "key", "failures.md"), "utf8")).toContain(
+      "(tool, premise-z, claude-opus-5-5, Claude Code 9.9.9 (Claude Code))",
+    );
+  });
+});
+
+describe("the held-back premise", () => {
+  const sealed = (text: string, slug = "premise-z\n") => {
+    const dir = temp();
+    writeFileSync(join(dir, "premise.txt"), text);
+    writeFileSync(join(dir, "slug.txt"), slug);
+    return {
+      premiseFile: join(dir, "premise.txt"),
+      slugFile: join(dir, "slug.txt"),
+      sha256: createHash("sha256").update(text).digest("hex"),
+    };
+  };
+  const frozen = () => join(temp(), "frozen");
+
+  test("is read from the sealed file when its sha256 matches, named by its slug", () => {
+    const held = sealed("A fixture premise about a clockmaker.\n");
+    expect(readHeldBack(held, frozen())).toEqual({
+      id: "premise-z",
+      title: "premise-z",
+      text: "A fixture premise about a clockmaker.",
+      tunedOn: false,
+    });
+  });
+
+  test("refuses a wrong sha256, a bad or clashing slug, and a file under the repository or the frozen tool", () => {
+    const held = sealed("A fixture premise.");
+    expect(() =>
+      readHeldBack({ ...held, sha256: "0".repeat(64) }, frozen()),
+    ).toThrow("not the expected");
+    for (const slug of ["thukker", "Premise C", "../x", ""]) {
+      const bad = sealed("A fixture premise.", slug);
+      expect(() => readHeldBack(bad, frozen())).toThrow("slug must be");
+    }
+    const inRepo = new URL("./prompts.ts", import.meta.url).pathname;
+    expect(() =>
+      readHeldBack(
+        {
+          ...held,
+          premiseFile: inRepo,
+          sha256: createHash("sha256")
+            .update(readFileSync(inRepo))
+            .digest("hex"),
+        },
+        frozen(),
+      ),
+    ).toThrow("must not live under");
+    const root = temp();
+    mkdirSync(join(root, "frozen", "tool"), { recursive: true });
+    writeFileSync(join(root, "frozen", "tool", "p.txt"), "A fixture premise.");
+    expect(() =>
+      readHeldBack(
+        { ...held, premiseFile: join(root, "frozen", "tool", "p.txt") },
+        join(root, "frozen"),
+      ),
+    ).toThrow("must not live under");
+  });
+
+  test("gives the step-1 prompt the same text around it as Thukker's", () => {
+    const held = readHeldBack(sealed("A fixture premise."), frozen());
+    for (const arm of ["tool", "notes"] as const) {
+      const prompt = (premise: { text: string }) =>
+        stepPrompt({ arm, step: 1, premise, craft: "C", skill: "S" });
+      expect(prompt(held).replace(held.text, "")).toBe(
+        prompt(PREMISES.thukker).replace(PREMISES.thukker.text, ""),
+      );
+    }
   });
 });
 
@@ -335,13 +462,18 @@ describe("refusals", () => {
   test("phase-b refuses a root that already has a key", async () => {
     const root = temp();
     mkdirSync(join(root, "key"));
-    await expect(phaseB(root)).rejects.toThrow("aren't quietly rerun");
+    const held = { premiseFile: "", slugFile: "", sha256: "" };
+    await expect(phaseB(root, held)).rejects.toThrow("aren't quietly rerun");
+    const packets = temp();
+    mkdirSync(join(packets, "packets"));
+    mkdirSync(join(packets, "sealed"));
+    await expect(phaseB(packets, held)).rejects.toThrow("aren't quietly rerun");
   });
 
   test("run refuses the held-back premise", async () => {
     const out = temp();
     await expect(
-      main(["run", out, join(out, "frozen"), "tool", "magical-girl-therapist"]),
+      main(["run", out, join(out, "frozen"), "tool", "premise-c"]),
     ).rejects.toThrow("only the thukker premise");
     expect(readdirSync(out)).toEqual([]);
   });
