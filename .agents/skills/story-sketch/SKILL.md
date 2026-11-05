@@ -71,43 +71,51 @@ Say what each scene does with the bible:
 
 Each command replaces that kind of link; `none` clears it, and the edit
 names any ref it dropped. `--add` adds refs without retyping the list
-(`set-scene-links storm plants --add object:knife`) and `--remove` takes
-them off. Any record or candidate can be linked. `show scene:<id>` lists a
-scene's links, and `scenes <ref>` lists, in telling order, every scene that
-touches a record and how.
+(`set-scene-links storm plants --add object:knife`,
+`set-scene-actors storm --add ivo`) and `--remove` takes them off, on every
+scene list. Any record or candidate can be linked. `show scene:<id>` lists
+a scene's links, and `scenes <ref>` lists, in telling order, every scene
+that touches a record and how.
 
 ## Writing a scene
 
 Before drafting, ask the bible what the reader knows by then, rather than
 trusting memory:
 
-- `reader-order --before <scene>`, read whole before every scene, the
-  next one in the same session too, never through `head`, `tail`, `sed` or
+- `reader-order --before <scene>`, read whole before every scene, the next
+  one in the same session too, never through `head`, `tail`, `sed` or
   `grep`: its early lines hold the setups, and its marks change from scene
   to scene. It lists, in short labels, what earlier scenes have told the
   reader, each way they told it (`planted in 3, revealed in 7`) and when it
   happened; what they held back and haven't told or answered yet; and each
-  count's value as of the scene. For a scene with a viewpoint, it marks
-  what the reader has been told that the viewpoint character doesn't know
-  (`Mara doesn't know yet`, `no longer believes`, `doesn't know, believes
-  version:fog`): the dramatic irony the scene can play on. A record is
-  marked only when someone's knowledge of it is recorded and the viewpoint
-  character doesn't hold it at the scene's latest event. Their own
-  knowledge records of it, or of a version of the event, decide; without
-  any, they hold what they take part in, a version they tell, and what a
-  scene through their eyes set earlier shows or reveals. So record who
-  knows each secret with `add-knowledge`, or nothing is marked.
-- `show` each event the scene depicts.
+  count's value as the scene opens, then each change during it. For a scene
+  with a viewpoint, it marks what the reader has been told that the
+  viewpoint character doesn't know (`Mara doesn't know yet`,
+  `no longer believes`, `doesn't know, believes version:fog`): the dramatic
+  irony the scene can play on. A record is marked only when someone's
+  knowledge of it is recorded and the viewpoint character doesn't hold it
+  at the scene's latest event. Their own knowledge records of it, or of a
+  version of the event, decide. Without any, they hold what they take part
+  in, a version they tell, what an earlier scene through their eyes shows,
+  reveals, implies or pays off, and what an earlier scene they are in
+  reveals or pays off, unless it is that scene's viewpoint's own secret
+  (held by their knowledge record). So record who knows each secret with
+  `add-knowledge`, or nothing is marked, and record what main viewpoint
+  characters know of public accounts no scene tells them.
+- `show` each event the scene depicts or retells: a scene that recounts
+  earlier events must agree with what they say.
 
 After drafting, and before you commit the draft, check every number and
-stated time in its prose: `show count:<id>` for each number ("nearly
-half", "five boats") and `span <event> <event>` for each time ("three days
-since"). Check that the number counts the same thing as the count: hands
-on deck are not hands signed on while some are ashore. Subtract what isn't
-there (with `--of`, the rest is the total less the count), or keep a count
-of that quantity. Before reusing a line from an earlier scene, `grep` the
-scene files for it, to see who said it and where. Then set the scene's
-links, and read what each edit prints.
+stated time in its prose: `show count:<id>` for each number ("nearly half",
+"five boats") and `span <event> <event>` for each time ("three days
+since"), the numbers the scene opens on among them: run `show count:` for
+each count the scene's events change.
+Check that the number counts the same thing as the count: hands on deck are
+not hands signed on while some are ashore. Subtract what isn't there (with
+`--of`, the rest is the total less the count), or keep a count of that
+quantity. Before reusing a line from an earlier scene, `grep` the scene
+files for it, to see who said it and where. Then set the scene's links, and
+read what each edit prints.
 
 ## How the craft maps onto it
 
@@ -194,10 +202,11 @@ links, and read what each edit prints.
   can be ordered with `constrain ... before`; `--gap` takes a unit (`3d`,
   `2w`, `6h`, `4mo`), give or take half that unit without `--tolerance`.
   `span <event> <event>` gives the time between two placed events in
-  calendar days, or the range it may be when one is placed only by its
-  year (`11.7 to 12.7 years`). Knowledge and membership
-  `--since`/`--until` and turns `--at` name events, so they follow the
-  events wherever they are placed.
+  calendar days, or the range it may be when one is placed by a month, a
+  year or a longer range (`11.7 to 12.7 years`). `--precision` is your note
+  on how exact it is, shown quoted beside the position. Knowledge and
+  membership `--since`/`--until` and turns `--at` name events, so they
+  follow the events wherever they are placed.
 - **Counts.** A number the plot runs on, such as hands aboard or days of
   food left, is a count, not a fact: `add-count crew "Hands aboard"
   --total 12 --direction falls`, then `set-count crew wreck 3 --note "Nine
