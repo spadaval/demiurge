@@ -55,7 +55,24 @@ bun scripts/comparison/comparison.ts phase-b /home/supadava/projects/demiurge-co
 # Smoke tests: one run (Thukker only), then packets for what's in <out>/key.
 bun scripts/comparison/comparison.ts run <out> <frozen> <tool|notes> thukker
 bun scripts/comparison/comparison.ts packets <out>
+
+# Skill check: one step-1 tool session on a throwaway premise, with the CLI
+# and skill built from the working tree into <out>/tool (no freeze needed).
+# <out> must not exist. Exits 1 if any check fails.
+bun scripts/comparison/comparison.ts skill-check <out> "<premise>"
 ```
+
+The skill check is for testing a change to the skill or the CLI before a
+freeze. It runs one session in the same sandbox, with the same flags,
+memory wait, token check and timeout as a comparison step, and checks
+only mechanical properties, written to `<out>/check.json`: `claude` exited
+zero, `story.json` parses and has at least one cause, the transcript shows
+a `mentions` call, `model-gaps.md` exists, the transcript check found
+nothing outside the run's directories, and only the comparison's model
+answered. It never reads the story for quality. `<out>` also holds the
+prompt, the session's sandbox and flags (`session.json`), the transcript,
+stderr and a copy of the run directory (`files/`). Use a premise that is
+neither comparison premise.
 
 ## The runs
 

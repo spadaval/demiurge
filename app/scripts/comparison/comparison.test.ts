@@ -19,7 +19,7 @@ import {
 } from "./packet";
 import { PREMISES, STEPS, stepPrompt } from "./prompts";
 import { ensureToken } from "./sandbox";
-import { checkTranscript } from "./transcript";
+import { checkTranscript, mentionsCalls } from "./transcript";
 
 const tool = (name: string, input: Record<string, unknown>) =>
   JSON.stringify({
@@ -105,6 +105,27 @@ describe("transcript check", () => {
     expect(summary.outside.map((f) => f.detail)).toContain(
       "/opt/story-tool/story-sketch/SKILL.md",
     );
+  });
+});
+
+describe("mentions calls", () => {
+  test("finds the CLI's mentions calls, however it is spelled, and nothing else", () => {
+    const jsonl = [
+      tool("Bash", {
+        command: 'bun "$STORY_CLI" story.json mentions event:wreck',
+      }),
+      tool("Bash", {
+        command: "S=story.json; bun $STORY_CLI $S mentions 'drive:find-sender'",
+      }),
+      tool("Bash", { command: "grep -n mentions model-gaps.md" }),
+      tool("Bash", { command: "bun $STORY_CLI story.json render" }),
+      tool("Read", { file_path: "mentions event:wreck" }),
+      "not json",
+    ].join("\n");
+    expect(mentionsCalls(jsonl)).toEqual([
+      'bun "$STORY_CLI" story.json mentions event:wreck',
+      "S=story.json; bun $STORY_CLI $S mentions 'drive:find-sender'",
+    ]);
   });
 });
 

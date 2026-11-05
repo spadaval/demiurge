@@ -928,7 +928,7 @@ export const EDITS: EditSpecs = {
       stop: { bool: true, help: "stop weighing, so render shows them again" },
     },
     summary:
-      "Mark the question as being weighed: render shows it in one line and leaves out its candidates, which stay in the file.",
+      "Mark the question as being weighed: render shows it in one line and leaves out its candidates, which stay in the file. Refused on an answered question; answering clears the mark.",
     example: ["set-open-question-working", "who-wrote"],
     build: (a) => ({
       type: "setOpenQuestionWorking",

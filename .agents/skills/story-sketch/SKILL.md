@@ -35,10 +35,26 @@ before linking to it.
 - **Open questions** are `add-open-question`, with several `add-candidate`
   answers. Give each candidate the records it would bring in with
   `--touches`, then **try it** with `touches candidate:<question>/<id>`.
-  `touches` reports the links that are declared, plus one step further. It
-  can't see what free text only mentions, so declare a link when it matters.
   Choose an answer with `answer-open-question` once a satisfying one has
   emerged, then make what it implies with other commands.
+- **Weigh in the file, not in your head.** While you are still weighing a
+  question's candidates, mark it with `set-open-question-working who-wrote`.
+  `render` then shows the question in one line and leaves its candidates
+  out, so weighing costs no words in the readable form. Answering clears the
+  mark; `--stop` clears it without answering. An answered question can't be
+  marked working: unanswer it first.
+- **Re-answering keeps the history.** Choosing a different candidate, or
+  `unanswer-open-question`, keeps the old answer as superseded, with what
+  replaced it. `show open-question:who-wrote` lists that history, and
+  `render` prints only the current answer. So rework an answer by answering
+  again; don't delete the question or its other candidates, which cost no
+  words once the question is decided.
+- **Causes.** When one event happened because of another, record it with
+  `add-cause wreck letter` (the wreck caused the letter). Positions and
+  constraints only say what comes first; a cause says why. `render` says
+  "because of", `touches` follows causes both ways, and a move that puts an
+  effect before its cause, or a circle of causes, is kept and reported by
+  `contradictions`.
 - **Contradictions are kept.** A timeline edit that makes events contradict
   each other is saved and the problem printed. A clash that isn't about time
   can be an open question with `--conflict`.
@@ -46,12 +62,30 @@ before linking to it.
   with `describe-event`, `set-position` or `constrain`, and see what it
   reaches with `touches`. A want that changes over the story can be two
   drives with different origins.
+- **Find the text a change left behind with `mentions`.** `touches` sees only
+  declared links. Summaries, stakes, notes, facts and candidates can still
+  state the old version in words: a name, a year, "ten years ago", "since
+  spring". After `set-position`, `describe-event`, `update-drive` or
+  `update-actor`, the CLI prints the free text that mentions the changed
+  record under "Free text that mentions ... may still state the old
+  version". Read it and fix what is now wrong; nothing is rewritten for you.
+  After other changes, such as answering a question that changes what
+  someone did, run `mentions event:wreck` (or `actor:`, `drive:` and so on)
+  yourself on what the change reaches.
 - **`gaps` and `contradictions` are prompts, not a to-do list.** Run them now
   and then to see what isn't woven in yet or still pulls against itself, and
-  act on what is worth acting on.
+  act on what is worth acting on. When a gap is a choice, say so: each gap
+  ends with a `[gap ref]` to paste into `mark-gap-deliberate
+  drive-without-origin drive:keep-quiet --reason "He has always kept his own
+  counsel"`. The mark and its reason stay in the story file, and `gaps`
+  stops listing it. Mark only what you have decided, not what you haven't
+  got to yet.
 - **Check length and readability with `render`**, which prints the whole
   story as text with no IDs and a word count. It is how the story will be
-  read.
+  read. It says each thing once: a want in full under its holder, and
+  briefly elsewhere; a relation once; a constraint only when the positions
+  don't already show it; a decided question as its answer alone. Links cost
+  few words, so cut story, not true links, when you are over length.
 
 ## The model gaps log
 

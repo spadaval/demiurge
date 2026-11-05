@@ -163,6 +163,43 @@ export function checkTranscript(
   return summary;
 }
 
+/** Every Bash command a transcript ran, in order. */
+function bashCommands(jsonl: string): string[] {
+  const commands: string[] = [];
+  for (const line of jsonl.split("\n")) {
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!isObject(event) || event.type !== "assistant") continue;
+    const content = isObject(event.message) ? event.message.content : [];
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (!isObject(part) || part.type !== "tool_use" || part.name !== "Bash") {
+        continue;
+      }
+      const command = isObject(part.input)
+        ? text(part.input.command)
+        : undefined;
+      if (command !== undefined) commands.push(command);
+    }
+  }
+  return commands;
+}
+
+/**
+ * The Bash commands that ran the story CLI's `mentions`. A call names a ref
+ * (`mentions event:wreck`), so this holds however the session spells the
+ * CLI, and a word like "mentions" in other text doesn't count.
+ */
+export function mentionsCalls(jsonl: string): string[] {
+  return bashCommands(jsonl).filter((command) =>
+    /\bmentions\s+["']?[a-z-]+:/.test(command),
+  );
+}
+
 type Inside = Record<"read" | "write", (path: string) => boolean>;
 
 function toolFindings(name: string, input: Json, inside: Inside): Finding[] {

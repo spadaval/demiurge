@@ -8,6 +8,7 @@
  *   bun scripts/comparison/comparison.ts run <out-dir> <frozen-dir> <tool|notes> thukker
  *   bun scripts/comparison/comparison.ts packets <out-dir>
  *   bun scripts/comparison/comparison.ts phase-b <root>
+ *   bun scripts/comparison/comparison.ts skill-check <out-dir> <premise>
  */
 
 import { createHash } from "node:crypto";
@@ -28,6 +29,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseStory } from "../../src/story/story";
 import { diffHunks, packetMarkdown, sentenceLines } from "./packet";
 import {
   type Arm,
@@ -47,7 +49,11 @@ import {
   type TokenSource,
   tokenExpiresAt,
 } from "./sandbox";
-import { checkTranscript, type TranscriptSummary } from "./transcript";
+import {
+  checkTranscript,
+  mentionsCalls,
+  type TranscriptSummary,
+} from "./transcript";
 
 export const MODEL = "claude-opus-5-5";
 /** Each step is bounded by `timeout`; this Claude Code has no --max-turns. */
@@ -227,17 +233,12 @@ function uncommitted(repo: string): string {
   ).trim();
 }
 
-export function freeze(frozenDir: string, repo = REPO): Frozen {
-  const dir = resolve(frozenDir);
-  if (existsSync(dir)) {
-    throw new Error(`${dir} exists; a freeze is never redone in place.`);
-  }
-  const dirty = uncommitted(repo);
-  if (dirty !== "") {
-    throw new Error(`Commit these before freezing:\n${dirty}`);
-  }
-  const commit = must(["git", "rev-parse", "HEAD"], repo).trim();
-  const tool = toolDir(dir);
+/**
+ * Builds the tool a session sees into `tool`: `story.js` (the CLI built with
+ * `bun build --target=bun`) and `story-sketch/` (the skill and craft.md),
+ * from the repository's working tree.
+ */
+function buildTool(tool: string, repo: string): void {
   const skillDir = join(tool, "story-sketch");
   mkdirSync(skillDir, { recursive: true });
   for (const file of ["SKILL.md", "craft.md"]) {
@@ -258,7 +259,21 @@ export function freeze(frozenDir: string, repo = REPO): Frozen {
     ],
     repo,
   );
-  must(["bun", storyCli, "--help"], dir);
+  must(["bun", storyCli, "--help"], tool);
+}
+
+export function freeze(frozenDir: string, repo = REPO): Frozen {
+  const dir = resolve(frozenDir);
+  if (existsSync(dir)) {
+    throw new Error(`${dir} exists; a freeze is never redone in place.`);
+  }
+  const dirty = uncommitted(repo);
+  if (dirty !== "") {
+    throw new Error(`Commit these before freezing:\n${dirty}`);
+  }
+  const commit = must(["git", "rev-parse", "HEAD"], repo).trim();
+  const tool = toolDir(dir);
+  buildTool(tool, repo);
   const frozen: Frozen = {
     commit,
     frozenAt: new Date().toISOString(),
@@ -797,6 +812,112 @@ export async function phaseB(rootArg: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Skill check: one fresh step-1 session of the tool arm on the working tree.
+
+export type SkillCheck = {
+  premise: string;
+  workdir: string;
+  exitCode: number;
+  durationSeconds: number;
+  /** Each mechanical property, true when it holds. */
+  checks: {
+    exitedZero: boolean;
+    storyParses: boolean;
+    hasCause: boolean;
+    ranMentions: boolean;
+    hasModelGaps: boolean;
+    nothingOutside: boolean;
+    onlyModel: boolean;
+  };
+  causes: number;
+  mentionsCalls: string[];
+  transcript: TranscriptSummary;
+};
+
+/**
+ * Runs step 1 of the tool arm once, sandboxed as in the comparison, with the
+ * CLI and skill built from the working tree rather than a freeze, on a
+ * throwaway premise. Checks only mechanical properties: the story file
+ * parses, it has a cause, the session ran `mentions`, it kept
+ * `model-gaps.md`, and it stayed in its directories. Nothing reads the story
+ * for quality. `<out>` must not exist; it gets `tool/`, `prompt.md`, the
+ * transcript, stderr, a copy of the run directory (`files/`) and
+ * `check.json`.
+ */
+export async function skillCheck(
+  outDirArg: string,
+  premise: string,
+): Promise<SkillCheck> {
+  const out = resolve(outDirArg);
+  if (existsSync(out)) {
+    throw new Error(`${out} exists; each check gets a fresh directory.`);
+  }
+  const tool = toolDir(out);
+  buildTool(tool, REPO);
+  must(["chmod", "-R", "a-w", tool]);
+  const skillDir = join(tool, "story-sketch");
+  const prompt = stepPrompt({
+    arm: "tool",
+    step: 1,
+    premise: { text: premise },
+    craft: readFileSync(join(skillDir, "craft.md"), "utf8"),
+    skill: readFileSync(join(skillDir, "SKILL.md"), "utf8"),
+  });
+  writeFileSync(join(out, "prompt.md"), prompt);
+  const workdir = realpathSync(mkdtempSync("/tmp/story."));
+  must(["git", "init", "-q", "-b", "main"], workdir);
+  const sessionArgs = session("tool", workdir, out);
+  writeJson(join(out, "session.json"), sessionArgs);
+  waitForMemory();
+  ensureToken((STEP_TIMEOUT_SECONDS + 600) * 1000, hostToken);
+  console.log(`Skill check started ${new Date().toISOString()} in ${workdir}`);
+  const started = performance.now();
+  const transcriptPath = join(out, "transcript.jsonl");
+  const exitCode = await spawnSession(
+    sessionArgs,
+    prompt,
+    STEP_TIMEOUT_SECONDS,
+    { cwd: workdir, stdout: transcriptPath, stderr: join(out, "stderr.txt") },
+  ).exited;
+  const durationSeconds = Math.round((performance.now() - started) / 1000);
+  const files = join(out, "files");
+  mkdirSync(files);
+  must(["cp", "-a", `${workdir}/.`, files]);
+  must(["rm", "-rf", workdir]);
+
+  const jsonl = readFileSync(transcriptPath, "utf8");
+  const transcript = checkTranscript(jsonl, workdir, {
+    read: [workdir, TOOL_MOUNT],
+    write: [workdir],
+  });
+  const story = parseStory(readIf(join(files, FILES.toolStory)) ?? "");
+  const causes = story.isOk() ? story.value.causes.length : 0;
+  const mentions = mentionsCalls(jsonl);
+  const result: SkillCheck = {
+    premise,
+    workdir,
+    exitCode,
+    durationSeconds,
+    checks: {
+      exitedZero: exitCode === 0,
+      storyParses: story.isOk(),
+      hasCause: causes > 0,
+      ranMentions: mentions.length > 0,
+      hasModelGaps: existsSync(join(files, FILES.modelGaps)),
+      nothingOutside: transcript.outside.length === 0,
+      onlyModel:
+        transcript.models.length > 0 &&
+        transcript.models.every((model) => model === MODEL),
+    },
+    causes,
+    mentionsCalls: mentions,
+    transcript,
+  };
+  writeJson(join(out, "check.json"), result);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 
 export async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
@@ -832,9 +953,17 @@ export async function main(argv: string[]): Promise<void> {
       await phaseB(root);
       return;
     }
+    case "skill-check": {
+      const [out, premise] = rest;
+      if (out === undefined || premise === undefined) break;
+      const { checks, durationSeconds } = await skillCheck(out, premise);
+      console.log(JSON.stringify({ durationSeconds, checks }, null, 2));
+      if (Object.values(checks).includes(false)) process.exit(1);
+      return;
+    }
   }
   console.error(
-    "Usage: comparison.ts freeze <frozen-dir> | run <out-dir> <frozen-dir> <tool|notes> thukker | packets <out-dir> | phase-b <root>",
+    "Usage: comparison.ts freeze <frozen-dir> | run <out-dir> <frozen-dir> <tool|notes> thukker | packets <out-dir> | phase-b <root> | skill-check <out-dir> <premise>",
   );
   process.exit(2);
 }

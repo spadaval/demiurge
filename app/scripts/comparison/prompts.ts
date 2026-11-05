@@ -49,7 +49,8 @@ export const FILES = {
 export type PromptInputs = {
   arm: Arm;
   step: Step;
-  premise: Premise;
+  /** Only its text is used, so a throwaway premise can be passed. */
+  premise: Pick<Premise, "text">;
   craft: string;
   /** The skill file's text; required for the tool arm. */
   skill?: string;
@@ -63,7 +64,7 @@ function storyLocation(arm: Arm): string {
     : `The story is held as plain Markdown notes in \`${FILES.notesStory}\`, organised however you like; that file, as written, is its readable form.`;
 }
 
-function task(arm: Arm, step: Step, premise: Premise): string {
+function task(arm: Arm, step: Step, premise: Pick<Premise, "text">): string {
   const story = arm === "tool" ? FILES.toolStory : FILES.notesStory;
   const check = arm === "tool" ? " (check it with `render`)" : "";
   switch (step) {

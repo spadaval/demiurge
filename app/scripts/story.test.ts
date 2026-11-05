@@ -197,6 +197,19 @@ describe("story CLI", () => {
     ok("set-open-question-working", "who", "--stop");
     expect(saved().openQuestions[0]?.working).toBeUndefined();
     expect(words(ok("render")).count).toBe(open.count);
+
+    // Answering clears the mark, and an answered question can't be weighed.
+    ok("set-open-question-working", "who");
+    ok("answer-open-question", "who", "ferry");
+    expect(saved().openQuestions[0]?.working).toBeUndefined();
+    const before = readFileSync(file, "utf8");
+    const answered = cli(file, "set-open-question-working", "who");
+    expect(answered.code).toBe(1);
+    expect(answered.stderr).toContain("open question who is answered");
+    expect(readFileSync(file, "utf8")).toBe(before);
+    expect(cli("--help").stdout).toContain(
+      "Refused on an answered question; answering clears the mark.",
+    );
   });
 
   test("records causes, renders them, and reports a move that puts an effect first", () => {
