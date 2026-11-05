@@ -25,9 +25,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T10:24:42.731802745+00:00"
+status: "done"
 title: "Round 1 fixes: tool and skill, from the writer's transcript"
-updated_at: "2026-11-05T09:35:16.543219841+00:00"
+updated_at: "2026-11-05T10:24:42.731802745+00:00"
 ---
 
 ## Goal
@@ -41,3 +42,7 @@ Fix what the Round 1 reading (/home/supadava/projects/demiurge-world/round-1/rea
 ## Notes
 
 - 2026-11-05 [note] Deferred from the Round 1 reading (finding worldcrafter-mrwc): the tool half of issue 5 (point of view, presence and place; group membership over time) and issue 12 (defeated drives, recognitions, rules deciding events, quoted lines, object holders, parallel time, how knowledge was gained). Model additions, not fixes to what broke; Round 2's reading (worldcrafter-5pks) checks whether they recur.
+
+## Close Reason
+
+Round 1 fixes done and reviewed (round1-fix-reviewer, approval kv29): b0la quiet CLI (Round 1 outline replay 1,402 -> 14 lines), dates everywhere, render --section, set-scene-links --add/--remove, update-event; w2hx counts over time, span, reader-order --before; te8t choose-random --range; 1h0r skill guidance; h5rz removed Round 1 story words from writer-facing text. 5b6m deferred to Round 2's reading.
