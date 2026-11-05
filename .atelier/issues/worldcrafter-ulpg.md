@@ -27,9 +27,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+closed_at: "2026-11-05T12:27:27.558103760+00:00"
+status: "done"
 title: "Round 2 fixes: numbers checked, traces precise, viewpoint and membership"
-updated_at: "2026-11-05T11:37:27.497139735+00:00"
+updated_at: "2026-11-05T12:27:27.558103760+00:00"
 ---
 
 ## Goal
@@ -39,3 +40,7 @@ Fix what Round 2's reading (docs/rounds/round-2/reading.md, ranked issues 1-8) f
 ## Done when
 
 - All children are closed, each independently reviewed, and merged into local master before Round 3 starts.
+
+## Close Reason
+
+Round 2 fixes done and reviewed (round1-fix-reviewer, approvals 64sy, e1y4, fet1): uf0f counts in reader-order --before and quieter count output; vg6e trace precision (Round 2 replay 8 traces/22 suspects -> 1, the real stale note); zevg story so far held to length by one revision; ktfa scene viewpoint and group membership (decision dgkx); 2m7d skill: check numbers after drafting, read reader-order whole. mugi deferred to Round 3.
