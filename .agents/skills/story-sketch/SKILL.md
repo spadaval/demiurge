@@ -81,24 +81,33 @@ touches a record and how.
 Before drafting, ask the bible what the reader knows by then, rather than
 trusting memory:
 
-- `reader-order --before <scene>`, read whole, never through `head` or
-  `tail`: its early lines hold the setups. It lists, in short labels, what
-  earlier scenes have told the reader and when each happened, what they held
-  back, and each count's value as of the scene. For a scene with a
-  viewpoint, it marks what the reader has been told that the viewpoint
-  character doesn't know (`Mara doesn't know yet, believes version:fog`):
-  the dramatic irony the scene can play on. A record is marked only when
-  someone's knowledge of it is recorded and the viewpoint character doesn't
-  hold it at the scene's latest event: by their own knowledge records of
-  it, or, without any, by taking part in it, telling it, or being shown it
-  in a scene through their eyes set before this one. So record who knows
-  each secret with `add-knowledge`, or nothing is marked.
+- `reader-order --before <scene>`, read whole before every scene, the
+  next one in the same session too, never through `head`, `tail`, `sed` or
+  `grep`: its early lines hold the setups, and its marks change from scene
+  to scene. It lists, in short labels, what earlier scenes have told the
+  reader, each way they told it (`planted in 3, revealed in 7`) and when it
+  happened; what they held back and haven't told or answered yet; and each
+  count's value as of the scene. For a scene with a viewpoint, it marks
+  what the reader has been told that the viewpoint character doesn't know
+  (`Mara doesn't know yet`, `no longer believes`, `doesn't know, believes
+  version:fog`): the dramatic irony the scene can play on. A record is
+  marked only when someone's knowledge of it is recorded and the viewpoint
+  character doesn't hold it at the scene's latest event. Their own
+  knowledge records of it, or of a version of the event, decide; without
+  any, they hold what they take part in, a version they tell, and what a
+  scene through their eyes set earlier shows or reveals. So record who
+  knows each secret with `add-knowledge`, or nothing is marked.
 - `show` each event the scene depicts.
 
 After drafting, and before you commit the draft, check every number and
 stated time in its prose: `show count:<id>` for each number ("nearly
 half", "five boats") and `span <event> <event>` for each time ("three days
-since"). Then set the scene's links, and read what each edit prints.
+since"). Check that the number counts the same thing as the count: hands
+on deck are not hands signed on while some are ashore. Subtract what isn't
+there (with `--of`, the rest is the total less the count), or keep a count
+of that quantity. Before reusing a line from an earlier scene, `grep` the
+scene files for it, to see who said it and where. Then set the scene's
+links, and read what each edit prints.
 
 ## How the craft maps onto it
 
@@ -179,21 +188,25 @@ since"). Then set the scene's links, and read what each edit prints.
   once, and one with no turns is still live; `show drive:<id>` lists its
   life.
 - **Time.** `set-position` takes a year (`1954`) or a date: `1954-10`,
-  `1954-10-12` or `"1954-10-12 21:00"`, each the span it names, and `--end`
-  makes a range. Two events in one year or on one day can be ordered with
-  `constrain ... before`; `--gap` takes a unit (`3d`, `2w`, `6h`, `4mo`), give or take half
-  that unit without `--tolerance`. `span <event> <event>` gives the time
-  between two placed events in calendar days, or the range it may be when
-  one is placed only by its year. Knowledge and membership
+  `1954-10-12` or `"1954-10-12 21:00"`, each the whole span it names, and
+  `--end` makes a range running through the year or date it names
+  (`1950 --end 1960` includes 1960). Two events in one year or on one day
+  can be ordered with `constrain ... before`; `--gap` takes a unit (`3d`,
+  `2w`, `6h`, `4mo`), give or take half that unit without `--tolerance`.
+  `span <event> <event>` gives the time between two placed events in
+  calendar days, or the range it may be when one is placed only by its
+  year (`11.7 to 12.7 years`). Knowledge and membership
   `--since`/`--until` and turns `--at` name events, so they follow the
   events wherever they are placed.
 - **Counts.** A number the plot runs on, such as hands aboard or days of
   food left, is a count, not a fact: `add-count crew "Hands aboard"
   --total 12 --direction falls`, then `set-count crew wreck 3 --note "Nine
-  drowned"` at each event where it changes. A value holds from the start of
-  its event until the next one in story order. A total that itself changes is another count (`--of
-  <count>`), and `--threshold 6` or `more-than-half` marks the value that
-  matters. After setting a count's series, read `show count:crew` once and
+  drowned"` at each event where it changes. A value holds from the start
+  of its event (for one lasting days, the counts say "from" when) until the
+  next one in story order; to have it at an event's end, place an event
+  there. A total that itself changes is another count (`--of <count>`),
+  and `--threshold 6` or `more-than-half` marks the value that matters.
+  After setting a count's series, read `show count:crew` once and
   check each value, and how far it is from the threshold, against what
   that event says: `contradictions` checks only a value above its total
   and, with `--direction`, one that moves the other way.
@@ -202,11 +215,12 @@ since"). Then set the scene's links, and read what each edit prints.
   CLI prints the top three suspects under "What may still state the old
   ...": records and paragraphs of scene prose (`scenes/<id>.md:<line>`)
   that may now be wrong, each with why, and how many more `trace <ref>`
-  would list. `trace <ref>` on its own lists everything that may depend on
-  a record, likeliest first. These are suspects, not verdicts: read each,
-  fix what the change made wrong, and leave the rest. `touches` (declared
-  links only) and `mentions` (text naming it only) are the narrower views
-  it builds on.
+  would list. Within one command line it leaves out the scene you are
+  writing and records added earlier in that line. `trace <ref>` on its own
+  lists everything that may depend on a record, likeliest first. These are
+  suspects, not verdicts: read each, fix what the change made wrong, and
+  leave the rest. `touches` (declared links only) and `mentions` (text
+  naming it only) are the narrower views it builds on.
 - **`gaps` is advisory: optional prompts, never a reason to delete.** Run it
   now and then and act only on what is worth acting on. An empty list is not
   a goal, and not a result to report: don't add links or relations just to
