@@ -31,7 +31,7 @@ updated_at: "2026-11-05T11:33:23.796183305+00:00"
 
 ## Goal
 
-Fix what Round 2's reading (docs/rounds/round-2/reading.md, ranked issues 1-8) found, plus the round runner's story-so-far length, before Round 3. Don't gold-plate.
+Fix what Round 2's reading (docs/rounds/round-2/reading.md, ranked issues 1-8) found (issue 5 only in its skill half: the tool half, not prompting gaps for date-anchor events, is left out because the reading proposed only the skill line; finding worldcrafter-3q8b), plus the round runner's story-so-far length, before Round 3. Don't gold-plate.
 
 ## Done when
 

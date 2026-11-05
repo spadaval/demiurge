@@ -46,7 +46,7 @@ Each reviewed (round1-fix-reviewer, approval kv29) and merged locally:
   **23 s23-return** (range 18–34, seed 20261108). Scene numbers below are
   telling order: 1 s10-surge, 2 s12-mill, 3 s23-return, 4 s24-kettle.
 - Scenes: 1,975, 1,877, 1,917, 1,913 words. Story so far: 797, 741, 662,
-  556 words, all over "about 300–500" (Round 1's were too, less so); the
+  556 words, all over "about 300–500" (in Round 1, two of three were over); the
   runner doesn't enforce the length. Vocabulary check: no hits.
 - Panel: 16 reports. Sonnet's first report on scene 4 was malformed (an
   evidence string on `overall`) and was replaced by a fresh Sonnet judge, run
@@ -79,7 +79,7 @@ From `round-2/reading.md`, which cites every claim:
   dramatic irony (the writer's "engine of s16–s23"), group membership over
   time, quoted lines as setups, and a new one, one person with two
   identities. Defeated drives recur in the data as `renounced` with notes.
-  Parallel time and place don't recur.
+  Presence recurs in a new form (who is conspicuously quiet in a scene). Parallel time and place don't recur.
 - Duration-unit wording (finding worldcrafter-5b6m) was never printed: no
   constraints were made.
 
