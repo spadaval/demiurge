@@ -26,6 +26,7 @@ import {
   commandNames,
   GIT_LOG_CAP,
   MAX_POINTS,
+  needsRevision,
   OPENING_SO_FAR,
   outlineBefore,
   outlinePrompt,
@@ -37,12 +38,16 @@ import {
   recheck,
   resultText,
   type SessionRecord,
+  SO_FAR_WORDS,
   STORY_MOUNT,
   sandboxedGitLog,
   scenePrompt,
   seeded,
   sessionIds,
+  soFarArgs,
   soFarPrompt,
+  soFarRevisionPrompt,
+  soFarSandbox,
   VOCAB_KINDS,
   vocabHits,
   WARLOCK_PREMISE,
@@ -564,5 +569,70 @@ describe("the vocabulary check's kinds (worldcrafter-ts64)", () => {
     expect(vocabHits("f", "candidate:who/ferryman", [])[0]?.term).toBe(
       "candidate:who/ferryman",
     );
+  });
+});
+
+describe("the story so far's length (worldcrafter-zevg)", () => {
+  test("the prompt states the target firmly", () => {
+    expect(soFarPrompt()).toContain(
+      "It must be 300 to 500 words, never more than 500",
+    );
+  });
+
+  test("a revision is asked for only outside 250 to 550 words", () => {
+    expect(SO_FAR_WORDS).toEqual({
+      min: 300,
+      max: 500,
+      reviseBelow: 250,
+      reviseAbove: 550,
+    });
+    expect([249, 250, 400, 550, 551, 797].map(needsRevision)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
+
+  test("the revision prompt names the length and which way to go", () => {
+    const long = soFarRevisionPrompt(797);
+    expect(long).toContain(
+      "That is 797 words. The story so far must be 300 to 500 words.",
+    );
+    expect(long).toContain("cut detail");
+    const short = soFarRevisionPrompt(120);
+    expect(short).toContain("say more of what the outline holds");
+    for (const text of [long, short]) {
+      expect(text).toContain("final reply");
+      expect(text).not.toMatch(/story\.json|STORY_CLI|tool|judge|Demiurge/);
+    }
+  });
+
+  test("the agent's session is saved in a kept home, then resumed, with Read only", () => {
+    const first = soFarArgs("/tmp/so-far.x", "id-2", false);
+    const again = soFarArgs("/tmp/so-far.x", "id-2", true);
+    expect(first).not.toContain("--no-session-persistence");
+    expect(first.join(" ")).toContain("--session-id id-2");
+    expect(again.join(" ")).toContain("--resume id-2");
+    expect(again).not.toContain("--session-id");
+    for (const args of [first, again]) {
+      expect(args[args.indexOf("--tools") + 1]).toBe("Read");
+      expect(args[args.indexOf("--model") + 1]).toBe("claude-opus-5-5");
+    }
+    const joined = soFarSandbox(
+      "/tmp/so-far.x",
+      "/tmp/so-far-home.y",
+      process.execPath,
+    ).join(" ");
+    const home = joined.indexOf(`--bind /tmp/so-far-home.y ${SANDBOX_HOME}`);
+    const creds = joined.indexOf(
+      `--ro-bind ${credentialsPath()} ${SANDBOX_HOME}/.claude/.credentials.json`,
+    );
+    expect(home).toBeGreaterThan(-1);
+    expect(creds).toBeGreaterThan(home);
+    expect(joined).toContain("--bind /tmp/so-far.x /tmp/so-far.x");
+    expect(joined).toContain("--chdir /tmp/so-far.x");
   });
 });

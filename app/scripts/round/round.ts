@@ -42,6 +42,7 @@ import {
   spawnSandboxed,
   systemMounts,
   TOOL_MOUNT,
+  workdirAndEnv,
 } from "../comparison/sandbox";
 import {
   checkTranscript,
@@ -316,10 +317,77 @@ export function soFarPrompt(): string {
   return [
     "This directory holds `outline.md`: the premise of a novel and what happens in it, in order, up to the scene a reader is about to start. Read it in full. Read nothing else.",
     "",
-    "Write the story so far for that reader: 300 to 500 words of plain prose saying what has happened and who the people are, in the order a reader met it. Hold to what the outline says: don't add events, and don't guess at what comes next. Don't mention the outline, notes, scenes, beats or chapters.",
+    "Write the story so far for that reader: plain prose saying what has happened and who the people are, in the order a reader met it. It must be 300 to 500 words, never more than 500, however long the outline is: give the main lines a reader needs for the next scene, not every event, and leave out detail to stay within length. Hold to what the outline says: don't add events, and don't guess at what comes next. Don't mention the outline, notes, scenes, beats or chapters.",
     "",
     "Give it as your final reply, with no heading and nothing before or after it. Don't create or change any file.",
   ].join("\n");
+}
+
+/** The target, and the band outside which the agent is asked once to revise. */
+export const SO_FAR_WORDS = {
+  min: 300,
+  max: 500,
+  reviseBelow: 250,
+  reviseAbove: 550,
+} as const;
+
+export const needsRevision = (n: number) =>
+  n < SO_FAR_WORDS.reviseBelow || n > SO_FAR_WORDS.reviseAbove;
+
+export function soFarRevisionPrompt(n: number): string {
+  return [
+    `That is ${n} words. The story so far must be ${SO_FAR_WORDS.min} to ${SO_FAR_WORDS.max} words.`,
+    "",
+    n > SO_FAR_WORDS.max
+      ? "Revise it to that length: keep the main lines a reader needs for the next scene and cut detail. Don't add anything the outline doesn't say."
+      : "Revise it to that length: say more of what the outline holds, in the same plain prose. Don't add anything the outline doesn't say.",
+    "",
+    "Give the whole revised text as your final reply, with no heading and nothing before or after it. Don't create or change any file.",
+  ].join("\n");
+}
+
+/**
+ * The story-so-far agent's sandbox: as a judge's, but with a home kept on
+ * the host for the length of the phase, so the session can be resumed once
+ * to revise. The credentials are read-only over it.
+ */
+export function soFarSandbox(
+  runDir: string,
+  home: string,
+  claude: string,
+): string[] {
+  return [
+    ...systemMounts(),
+    "--bind",
+    home,
+    SANDBOX_HOME,
+    "--ro-bind",
+    credentialsPath(),
+    `${SANDBOX_HOME}/.claude/.credentials.json`,
+    "--ro-bind",
+    realpathSync(claude),
+    `${BIN}/claude`,
+    ...workdirAndEnv(runDir, {
+      USER: "judge",
+      LANG: "C.UTF-8",
+      CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
+      DISABLE_AUTOUPDATER: "1",
+    }),
+  ];
+}
+
+/** A judge's `claude` flags with Read only, its session saved and named, or resumed. */
+export function soFarArgs(
+  runDir: string,
+  sessionId: string,
+  resume: boolean,
+): string[] {
+  return [
+    ...judgeSession(MODEL, runDir, "Read").args.filter(
+      (a) => a !== "--no-session-persistence",
+    ),
+    ...(resume ? ["--resume", sessionId] : ["--session-id", sessionId]),
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -1122,44 +1190,84 @@ export async function soFar(roundArg: string): Promise<SessionRecord[]> {
     }
     const outlineText = outlineBefore(story, point.sceneId);
     const runDir = realpathSync(mkdtempSync("/tmp/so-far."));
+    // The agent's home, kept only until its one revision is done.
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "so-far-home.")));
+    mkdirSync(join(home, ".claude"));
+    const sessionId = randomUUID();
+    const sandbox = soFarSandbox(runDir, home, which("claude"));
     try {
       writeFileSync(join(runDir, "outline.md"), outlineText);
-      const prompt = soFarPrompt();
-      const session = judgeSession(MODEL, runDir, "Read");
-      const {
-        record: rec,
-        jsonl,
-        dir,
-      } = await runSession({
-        round,
-        phase: `so-far-${point.index}`,
-        prompt,
-        command: ["claude", "-p", prompt, ...session.args],
-        sandbox: session.sandbox,
-        cwd: runDir,
-        sandboxCwd: runDir,
-        timeoutSeconds: TIMEOUTS.soFar,
-        check: (j) => judgeTranscript(j, runDir),
-      });
-      writeFileSync(join(dir, "outline.md"), outlineText);
-      if (filesUnder(runDir).join(",") !== "outline.md") {
-        rec.problems.push(`the run dir holds ${filesUnder(runDir).join(", ")}`);
+      const ask = async (phase: string, prompt: string, resume: boolean) => {
+        const result = await runSession({
+          round,
+          phase,
+          prompt,
+          command: [
+            "claude",
+            "-p",
+            prompt,
+            ...soFarArgs(runDir, sessionId, resume),
+          ],
+          sandbox,
+          cwd: runDir,
+          sandboxCwd: runDir,
+          timeoutSeconds: TIMEOUTS.soFar,
+          check: (j) => judgeTranscript(j, runDir),
+        });
+        const { record: rec, jsonl, dir } = result;
+        writeFileSync(join(dir, "outline.md"), outlineText);
+        if (filesUnder(runDir).join(",") !== "outline.md") {
+          rec.problems.push(
+            `the run dir holds ${filesUnder(runDir).join(", ")}`,
+          );
+        }
+        const ids = sessionIds(jsonl);
+        if (ids.length !== 1 || ids[0] !== sessionId) {
+          rec.problems.push(
+            `the transcript names session ${ids.join(", ") || "none"}, not ${sessionId}`,
+          );
+        }
+        const reply = resultText(jsonl)?.trim();
+        if (reply === undefined || reply === "")
+          rec.problems.push("no final reply");
+        else writeFileSync(join(dir, "reply.md"), `${reply}\n`);
+        return { rec, dir, reply };
+      };
+      const first = await ask(`so-far-${point.index}`, soFarPrompt(), false);
+      const recs = [first.rec];
+      let text = first.reply;
+      if (text !== undefined && needsRevision(words(text))) {
+        const n = words(text);
+        first.rec.problems.push(
+          `note: ${n} words, so the agent was asked once to revise`,
+        );
+        const second = await ask(
+          `so-far-${point.index}-revise`,
+          soFarRevisionPrompt(n),
+          true,
+        );
+        recs.push(second.rec);
+        if (second.reply !== undefined) text = second.reply;
       }
-      const reply = resultText(jsonl)?.trim();
-      if (reply === undefined || reply === "")
-        rec.problems.push("no final reply");
-      else {
-        writeFileSync(out, `${reply}\n`);
-        const n = words(reply);
-        if (n < 300 || n > 500)
-          rec.problems.push(`note: ${n} words, outside 300 to 500`);
+      const last = recs[recs.length - 1];
+      if (text !== undefined && last !== undefined) {
+        writeFileSync(out, `${text}\n`);
+        const n = words(text);
+        if (n < SO_FAR_WORDS.min || n > SO_FAR_WORDS.max) {
+          last.problems.push(
+            `note: ${n} words, outside ${SO_FAR_WORDS.min} to ${SO_FAR_WORDS.max}`,
+          );
+        }
       }
-      writeJson(join(dir, "record.json"), rec);
-      record.sessions.push(rec);
+      for (const rec of recs) {
+        writeJson(join(paths(round).phases, rec.phase, "record.json"), rec);
+        record.sessions.push(rec);
+        done.push(rec);
+      }
       saveRound(round, record);
-      done.push(rec);
     } finally {
       rmSync(runDir, { recursive: true });
+      rmSync(home, { recursive: true, force: true });
     }
   }
   vocabulary(round);

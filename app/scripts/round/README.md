@@ -24,6 +24,20 @@ output is what the scene panel (`../judging/scenes.ts`) judges.
    300 to 500 words of plain prose as its final reply. The outline's first scene
    has nothing before it, so its story so far is the fixed line "Nothing yet:
    this scene opens the story.", with no agent.
+
+   **Length (worldcrafter-zevg).** The prompt says the text must be 300 to
+   500 words, never more than 500, giving the main lines rather than every
+   event (Round 2's came out at 797, 741, 662 and 556 words). If the reply is
+   under 250 or over 550 words, the same agent is resumed once, still with
+   Read only, told its count and asked to revise to length (phase
+   `so-far-<n>-revise`). Its session is saved in a home kept on the host
+   only for the phase, with the credentials read-only over it, then removed.
+   The revision, if it gives a reply, is what `so-far/<n>.md` holds. Both
+   replies are kept as `reply.md` in their phase directories. A text still
+   outside 300 to 500 words is a note, not a failure. In a smoke on Round 2's
+   outline (its first scene, which came out at 797 words then), the first
+   reply was 671 words and the revision 511. The judge prompt and rubric
+   are unchanged.
 5. **Vocabulary check.** Every scene and story so far is checked for the
    tool's vocabulary, and any hit is reported before judging.
 
@@ -106,12 +120,14 @@ must not be reused as it stands.
   order and how many beats there were, `chosen` or `random`, the reason,
   the seed for a random one, and when;
 - `scene-order.json`: which scene ID each `scenes/<n>.md` is;
-- `phases/<phase>/` for `outline`, `scene-<n>` and `so-far-<n>`: `prompt.md`,
+- `phases/<phase>/` for `outline`, `scene-<n>`, `so-far-<n>` and
+  `so-far-<n>-revise`: `prompt.md`,
   `transcript.jsonl`, `stderr.txt`, `record.json` (command, bwrap options,
   exit, duration, credentials hash before and after, transcript summary,
   `checkProblems` from the exit, transcript and credentials, and all
   `problems`), and for the writer `work/` and `git-log.txt` as the session
-  left them; for a story so far, the `outline.md` it got;
+  left them; for a story so far, the `outline.md` it got and its
+  `reply.md`;
 - `scenes/<n>.md` and `so-far/<n>.md`, `n` from 1 in telling order: what
   the judges read, as `scenes.ts judge` expects;
 - `vocabulary.md`: the vocabulary check.
@@ -146,7 +162,7 @@ A transcript check finding that turns out to be a false positive is fixed in
 the check, committed, and the phase rechecked:
 
 ```sh
-bun scripts/round/round.ts recheck $R <phase>   # outline, scene-<n>, so-far-<n>
+bun scripts/round/round.ts recheck $R <phase>   # outline, scene-<n>, so-far-<n>[-revise]
 ```
 
 It redoes the exit, model, transcript and credentials checks on the saved
