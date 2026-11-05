@@ -21,9 +21,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T05:46:39.841431244+00:00"
+status: "done"
 title: "Point the docs and agent instructions at the notes-first mission"
-updated_at: "2026-11-05T05:46:01.503518055+00:00"
+updated_at: "2026-11-05T05:46:39.841431244+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ AGENTS.md, PRODUCT.md and `docs/rebuild/story-model.md` still say that the typed
 ## Scope
 
 Docs only. Don't touch code, and don't remove the typed-model CLI or skill, which stay until the new mission shows whether anything reuses them. Leave the product name (worldcrafter-cogw) alone.
+
+## Close Reason
+
+AGENTS.md names Notes first as current, with the ended bet described as history; PRODUCT.md replaces the typed-model purpose with the plain-notes approach, empties Positioning until an aid earns one, updates the strategy pointer and principles 1 and 6 (results decide the form; a panel judges, per zybl); story-model.md opens with a no-longer-sets-direction note; story-sketch SKILL.md description and top say frozen, craft.md untouched. The grep finds only historical references. Not changed: PRODUCT.md's Operating Context and principle 3 still describe structure-centred app use; they describe the app plan, which the decision left alone.
