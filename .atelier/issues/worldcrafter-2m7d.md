@@ -23,9 +23,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Skill guidance from Round 2 (reading 1, 4, 5, 7)"
-updated_at: "2026-11-05T11:33:23.795530097+00:00"
+updated_at: "2026-11-05T12:24:34.624544137+00:00"
 ---
 
 ## Goal
