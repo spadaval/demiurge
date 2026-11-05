@@ -13,6 +13,7 @@ import {
   checkGrokTranscript,
   ensureGrokToken,
   GROK_ENV,
+  grokArgs,
   grokModelProblems,
   grokSandboxArgs,
   grokTokenExpiresAt,
@@ -23,6 +24,7 @@ import {
   checkQuotes,
   claimSlot,
   concurrencyFor,
+  credentialsNote,
   DEFAULT_RUBRIC,
   failedRuns,
   finalReply,
@@ -223,11 +225,13 @@ describe("the prompt and the rubric cut", () => {
 });
 
 describe("concurrency", () => {
-  test("four at once only with more than 5 GiB available", () => {
-    expect(concurrencyFor(5.1)).toBe(4);
-    expect(concurrencyFor(5)).toBe(2);
-    expect(concurrencyFor(3.5)).toBe(2);
-    expect(concurrencyFor(3)).toBe(1);
+  test("four at once only if free -g, in whole GiB, shows more than 5", () => {
+    expect(concurrencyFor(6)).toBe(4);
+    expect(concurrencyFor(7.4)).toBe(4);
+    expect(concurrencyFor(5.99)).toBe(2);
+    expect(concurrencyFor(5.1)).toBe(2);
+    expect(concurrencyFor(4)).toBe(2);
+    expect(concurrencyFor(3.9)).toBe(1);
     expect(concurrencyFor(0.5)).toBe(1);
   });
 });
@@ -291,7 +295,7 @@ describe("checkGrokTranscript", () => {
     const jsonl = [
       JSON.stringify({
         type: "available_commands",
-        tools: ["read_file", "search_tool"],
+        tools: ["read_file"],
       }),
       call("a", "read_file", { target_file: `${RUN}/scene.md` }),
       update("a", `${RUN}/scene.md`),
@@ -301,8 +305,31 @@ describe("checkGrokTranscript", () => {
     const summary = checkGrokTranscript(jsonl, RUN);
     expect(summary.outside).toEqual([]);
     expect(summary.toolCalls).toBe(2);
-    expect(summary.toolsOffered).toEqual(["read_file", "search_tool"]);
+    expect(summary.toolsOffered).toEqual(["read_file"]);
     expect(grokModelProblems(summary)).toEqual([]);
+  });
+
+  test("a session offered any tool but read_file fails, once per tool", () => {
+    const offered = JSON.stringify({
+      type: "available_commands",
+      tools: ["read_file", "search_tool", "use_tool"],
+    });
+    const summary = checkGrokTranscript(
+      [offered, offered, end(["grok-4.7"])].join("\n"),
+      RUN,
+    );
+    expect(summary.outside).toEqual([
+      { tool: "search_tool", detail: "offered a tool the judge wasn't given" },
+      { tool: "use_tool", detail: "offered a tool the judge wasn't given" },
+    ]);
+  });
+
+  test("grokArgs gives read_file and removes the MCP discovery tools", () => {
+    const args = grokArgs(30);
+    expect(args[args.indexOf("--tools") + 1]).toBe("read_file");
+    expect(args[args.indexOf("--disallowed-tools") + 1]).toBe(
+      "search_tool,use_tool",
+    );
   });
 
   test("reports paths outside the run dir, Grok's home and other tools", () => {
@@ -594,5 +621,50 @@ describe("tabulate", () => {
       );
     }
     expect(() => tabulate(round)).toThrow("different rubrics");
+  });
+});
+
+describe("credentialsNote", () => {
+  test("notes a changed credentials hash, and nothing otherwise", () => {
+    const path = "/home/u/.grok/auth.json";
+    expect(credentialsNote({ path, before: "a".repeat(64) })).toBeUndefined();
+    expect(
+      credentialsNote({ path, before: "a".repeat(64), after: "a".repeat(64) }),
+    ).toBeUndefined();
+    expect(
+      credentialsNote({ path, before: "a".repeat(64), after: "b".repeat(64) }),
+    ).toBe(
+      `note: credentials changed during the session: ${path} sha256 ${"a".repeat(16)}... before, ${"b".repeat(16)}... after (mounted read-only, so changed on the host)`,
+    );
+  });
+
+  test("the tables show the note under an ok run", () => {
+    const round = temp();
+    write(join(round, "scenes", "1.md"), SCENE);
+    write(join(round, "so-far", "1.md"), "Before.");
+    const report = goodReport();
+    const dir = slotDir(round, "1", "grok");
+    write(join(dir, "STATUS"), "ok\n");
+    write(
+      join(dir, "run.json"),
+      JSON.stringify({
+        run: 1,
+        rubricPath: "r",
+        rubricCommit: "c",
+        rubric: { sha256: "1" },
+        credentials: {
+          path: "/a",
+          before: "x".repeat(64),
+          after: "y".repeat(64),
+        },
+      }),
+    );
+    write(
+      join(dir, "scores.json"),
+      JSON.stringify({ report, quotes: checkQuotes(report, SCENE) }),
+    );
+    expect(tabulate(round)).toContain(
+      "  - grok: note: credentials changed during the session: /a",
+    );
   });
 });

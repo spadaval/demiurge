@@ -29,6 +29,12 @@ export const GROK_MODEL = "grok-4.7";
 export const GROK_ANSWERING = ["grok-4.7", "grok-4.7-build"] as const;
 /** Read the inputs; the report is the final reply. */
 export const GROK_TOOLS = ["read_file"] as const;
+/**
+ * The MCP discovery tools Grok offers even with `--tools read_file`
+ * (`use_tool` is a gateway to tools behind it); removed explicitly. Seen:
+ * with this, `available_commands` lists `read_file` alone.
+ */
+export const GROK_DISALLOWED = ["search_tool", "use_tool"] as const;
 const WRITERS = new Set(["write", "search_replace"]);
 
 export function grokBinary(): string {
@@ -104,6 +110,8 @@ export function grokArgs(maxTurns: number): string[] {
     "streaming-json",
     "--tools",
     GROK_TOOLS.join(","),
+    "--disallowed-tools",
+    GROK_DISALLOWED.join(","),
     "--disable-web-search",
     "--no-subagents",
     "--permission-mode",
@@ -292,6 +300,12 @@ export function checkGrokTranscript(
       for (const tool of event.tools) {
         if (typeof tool === "string" && !summary.toolsOffered.includes(tool)) {
           summary.toolsOffered.push(tool);
+          if (!allowed.includes(tool)) {
+            summary.outside.push({
+              tool,
+              detail: "offered a tool the judge wasn't given",
+            });
+          }
         }
       }
     } else if (

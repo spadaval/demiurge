@@ -70,11 +70,15 @@ host path is on a command line.
   environment turns off memory, telemetry, feedback, subagents and web fetch,
   and sets `GROK_AUTH_EARLY_INVALIDATION_SECS=0` so the session never tries
   to refresh its token. Flags: `-m grok-4.7 --output-format streaming-json
-  --tools read_file --disable-web-search --no-subagents
+  --tools read_file --disallowed-tools search_tool,use_tool
+  --disable-web-search --no-subagents
   --permission-mode bypassPermissions --max-turns 30`.
-  Grok still offers its MCP discovery tools (`search_tool`, `use_tool`)
-  beside `read_file`; with no MCP servers in the fresh home they reach
-  nothing, and the transcript check fails any call to them.
+  `--tools read_file` alone still offers Grok's MCP discovery tools
+  (`search_tool`, and `use_tool`, a gateway to tools behind it), so they are
+  removed with `--disallowed-tools`; with it the session is offered
+  `read_file` alone (seen in the session's `available_commands`). The
+  transcript check fails a run offered, or calling, any tool but
+  `read_file`.
 - **Grok's token** is refreshed on the host before each wave
   (`ensureGrokToken`): if the earliest `expires_at` in `auth.json` is within
   the wave's time, a one-line `grok -p` runs on the host with
@@ -85,7 +89,9 @@ host path is on a command line.
 - run.json records the sha256 of the credentials file the sandbox mounted,
   before and after the session. A change is possible only from the host
   (another session refreshing), never from inside, as the mount is
-  read-only.
+  read-only. If they differ, STATUS gets a `note: credentials changed during
+  the session` line and the tables repeat it under the run; it is a note,
+  not a failure.
 
 The T3 `delegate_task` fallback the issue allows for Grok isn't needed:
 Grok runs sandboxed headless, so the runner has no fallback path.
@@ -120,9 +126,10 @@ corrected, and a missing one doesn't fail the run.
 
 ### Memory
 
-Judges run in waves. Before each wave the runner reads MemAvailable (what
-`free -g` shows as available): four at once only with more than 5 GiB, two
-with more than 3 GiB, else one (`concurrencyFor`).
+Judges run in waves. Before each wave the runner reads MemAvailable and
+rounds it down to whole GiB, as `free -g` shows it: four at once only if that
+is more than 5 (6 GiB or more), two if more than 3, else one
+(`concurrencyFor`).
 
 ### Output
 

@@ -88,13 +88,33 @@ export const SO_FAR_FILE = "story-so-far.md";
 export const REPORT_FILE = "report.md";
 
 /**
- * How many judges run at once: four only with more than 5 GiB available
- * (what `free -g` shows), else fewer.
+ * How many judges run at once: four only if `free -g` shows more than 5 GB
+ * available, else fewer. `free -g` prints whole GiB, rounded down, so 5.9
+ * GiB is 5 and not enough for four.
  */
 export function concurrencyFor(gib: number): number {
-  if (gib > 5) return 4;
-  if (gib > 3) return 2;
+  const shown = Math.floor(gib);
+  if (shown > 5) return 4;
+  if (shown > 3) return 2;
   return 1;
+}
+
+/**
+ * A note, not a failure, when the credentials a session mounted changed
+ * while it ran. The mount is read-only, so only the host can have changed
+ * them (another session refreshing a token); the note puts that evidence
+ * where the round's STATUS and tables show it.
+ */
+export function credentialsNote(
+  credentials: SceneRun["credentials"],
+): string | undefined {
+  if (
+    credentials.after === undefined ||
+    credentials.after === credentials.before
+  ) {
+    return undefined;
+  }
+  return `note: credentials changed during the session: ${credentials.path} sha256 ${credentials.before.slice(0, 16)}... before, ${credentials.after.slice(0, 16)}... after (mounted read-only, so changed on the host)`;
 }
 
 // ---------------------------------------------------------------------------
@@ -412,10 +432,14 @@ export type SceneRun = {
 const writeJson = (path: string, value: unknown) =>
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
-const writeStatus = (out: string, problems: readonly string[]) =>
+const writeStatus = (
+  out: string,
+  problems: readonly string[],
+  note?: string | undefined,
+) =>
   writeFileSync(
     join(out, "STATUS"),
-    `${problems.length === 0 ? "ok" : "failed"}\n${problems.map((p) => `- ${p}\n`).join("")}`,
+    `${problems.length === 0 ? "ok" : "failed"}\n${problems.map((p) => `- ${p}\n`).join("")}${note === undefined ? "" : `${note}\n`}`,
   );
 
 const brief = (detail: string) =>
@@ -647,7 +671,7 @@ export async function runSceneJudge(
   } finally {
     running.delete(out);
     writeJson(join(out, "run.json"), record);
-    writeStatus(out, record.problems);
+    writeStatus(out, record.problems, credentialsNote(record.credentials));
   }
   console.log(
     `${label} exit ${record.exitCode ?? "none"}, ${record.durationSeconds ?? 0}s, ${record.problems.length === 0 ? "ok" : `FAILED: ${record.problems.join("; ")}`}`,
@@ -903,6 +927,11 @@ export function tabulate(roundArg: string): string {
       lines.push(
         `- ${j}: run ${run.run}, \`judging/${scene}/${j}/report.md\`, ${run.durationSeconds ?? 0}s.`,
       );
+      const note =
+        run.credentials === undefined
+          ? undefined
+          : credentialsNote(run.credentials);
+      if (note !== undefined) lines.push(`  - ${j}: ${note}`);
     }
     lines.push(...failures, "");
     json[scene] = Object.fromEntries(
