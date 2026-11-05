@@ -639,6 +639,82 @@ describe("transcript check: heredocs written to a file", () => {
   });
 });
 
+describe("transcript check: parent dirs, braces and IFS (worldcrafter-jf70)", () => {
+  const run = "/tmp/judge.abc";
+  const outside = (command: string) =>
+    checkTranscript(tool("Bash", { command }), run, {
+      read: [run],
+      write: [run],
+    }).outside.map((f) => f.tool);
+  test("flags each form", () => {
+    for (const command of [
+      "cd ..; ls",
+      "cd ..&& ls",
+      "cd ..|| ls",
+      "(cd ..)",
+      "x=`cd ..`",
+      "cat {/etc/shadow,x}",
+      "cat {x,/etc/shadow}",
+      `cat $(echo\${IFS}/etc/shadow)`,
+      `cat\${IFS}x`,
+      "IFS=/; cat x",
+      "cd ..; cat > f.md <<'EOF'\nA / B\nEOF",
+    ]) {
+      expect([command, outside(command).length > 0]).toEqual([command, true]);
+    }
+  });
+  test("leaves ordinary commands alone", () => {
+    for (const command of [
+      "wc -w packets/{a,b}.md",
+      "ls packets",
+      "cat part1.md | head -n 5",
+      "echo 'about 1..3 times'",
+      `cd ${run}/packets && cat a.md`,
+    ]) {
+      expect([command, outside(command)]).toEqual([command, []]);
+    }
+  });
+});
+
+describe("transcript check: only top-level cat heredocs are skipped (worldcrafter-aaj0)", () => {
+  const run = "/tmp/judge.abc";
+  const outside = (command: string) =>
+    checkTranscript(tool("Bash", { command }), run, {
+      read: [run],
+      write: [run],
+    }).outside.map((f) => f.tool);
+  test("a cat heredoc inside an outer heredoc or a multi-line string is checked", () => {
+    // The two probes from the review.
+    expect(
+      outside("bash <<X\ncat > f <<'EOF'\n$(cat /etc/shadow)\nEOF\nX"),
+    ).toEqual(["Bash"]);
+    expect(
+      outside("echo \"\ncat > f <<'EOF'\n$(cat /etc/shadow)\nEOF\n\" | bash"),
+    ).toEqual(["Bash"]);
+    expect(
+      outside(
+        "bash <<X\ncat > f <<'EOF'\n$(cat ~/.claude/.credentials.json)\nEOF\nX",
+      ),
+    ).toEqual(["Bash", "Bash (credentials)"]);
+    expect(outside("sh -c '\ncat > f <<\"EOF\"\n$(ls /)\nEOF\n'")).toEqual([
+      "Bash",
+    ]);
+  });
+  test("top-level ones still are skipped, one after another or after an outer heredoc ends", () => {
+    expect(
+      outside("cat > a.md <<'EOF'\nA / B\nEOF\ncat > b.md <<'EOF'\nC / D\nEOF"),
+    ).toEqual([]);
+    expect(
+      outside(
+        "cat > a.md <<'X'\nnot \" a quote\nX\n# don't mind this\ncat > b.md <<'EOF'\nC / D\nEOF",
+      ),
+    ).toEqual([]);
+    expect(
+      outside("python3 - <<'PY'\nprint(1)\nPY\ncat > b.md <<'EOF'\nC / D\nEOF"),
+    ).toEqual([]);
+  });
+});
+
 describe("ensureToken", () => {
   const needed = 1000;
   function fake(expiresAt: number, refreshedTo?: number) {

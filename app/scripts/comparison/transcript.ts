@@ -211,9 +211,11 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
     );
     const vague =
       // `~` as a home (`~`, `~/x`, `~user`), not "~1,500 words".
-      /(^|[\s'"=:(])~(?![\d.,])|\$HOME|\$\{HOME\}|(^|[\s/'"=])\.\.(\/|\s|$)/.test(
-        command,
-      );
+      /(^|[\s'"=:(])~(?![\d.,])|\$HOME|\$\{HOME\}/.test(command) ||
+      // `..` as a path segment, however the command around it is punctuated.
+      /(^|[\s/'"=;&|(`{,])\.\.(\/|[\s;&|)`},]|$)/.test(command) ||
+      // `$IFS`, which can stand in for the spaces and slashes the check reads.
+      /\$\{?IFS\b|(^|[\s;&|(`])IFS=/.test(command);
     const findings: Finding[] =
       named.length > 0 || vague ? [{ tool: name, detail: full }] : [];
     for (const [label, pattern] of SHELL_PATTERNS) {
@@ -273,16 +275,34 @@ const CAT_HEREDOC_TO_FILE = new RegExp(
  * paths or commands. The `cat` line itself, the terminator and everything
  * around them are kept. Any other heredoc is kept whole: unquoted (bash
  * expands `$(...)` and backticks in its body), fed to an interpreter, piped
- * on, or after any command but a plain `cd` on its line.
+ * on, after any command but a plain `cd` on its line, or not at the top
+ * level: inside an outer heredoc or a quoted string.
  */
 export function withoutFileHeredocs(command: string): string {
   const lines = command.split("\n");
   const kept: string[] = [];
+  // Where a line starts: inside a quoted string, or inside an outer heredoc
+  // that hasn't ended. A cat line is top-level, and skipped, only outside
+  // both, since an outer unquoted heredoc or a string run by a shell would
+  // expand what it holds.
+  let quote: Quote;
+  const outer: Heredoc[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
     kept.push(line);
-    const match = CAT_HEREDOC_TO_FILE.exec(line);
-    if (match === null) continue;
+    const inside = outer[0];
+    if (inside !== undefined) {
+      if ((inside.dash ? line.replace(/^\t+/, "") : line) === inside.word) {
+        outer.shift();
+      }
+      continue;
+    }
+    const match = quote === undefined ? CAT_HEREDOC_TO_FILE.exec(line) : null;
+    quote = quoteAfter(line, quote);
+    if (match === null) {
+      if (quote === undefined) outer.push(...heredocsOpened(line));
+      continue;
+    }
     const dash = (match[1] ?? match[5]) === "-";
     const word = [2, 3, 4, 6, 7, 8]
       .map((group) => match[group])
@@ -297,15 +317,54 @@ export function withoutFileHeredocs(command: string): string {
   return kept.join("\n");
 }
 
+type Quote = "'" | '"' | undefined;
+type Heredoc = { word: string; dash: boolean };
+
 /**
- * Absolute paths a shell command names. The root itself (`ls /`,
+ * The quote a line leaves open, given the one open at its start. Backslash
+ * escapes outside single quotes, and a `#` comment outside quotes, are
+ * followed; `$(...)` and backticks aren't, which errs toward not skipping.
+ */
+function quoteAfter(line: string, start: Quote): Quote {
+  let quote = start;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote === "'") {
+      if (c === "'") quote = undefined;
+    } else if (c === "\\") {
+      i++;
+    } else if (quote === '"') {
+      if (c === '"') quote = undefined;
+    } else if (c === "'" || c === '"') {
+      quote = c;
+    } else if (c === "#" && (i === 0 || /\s/.test(line[i - 1] ?? ""))) {
+      break;
+    }
+  }
+  return quote;
+}
+
+/** The heredocs a line opens, in order, leaving out `<<<` here-strings. */
+function heredocsOpened(line: string): Heredoc[] {
+  return [
+    ...line.matchAll(/(?<!<)<<(?!<)(-?)\s*(?:'(\w+)'|"(\w+)"|\\?(\w+))/g),
+  ].map((m) => ({ word: m[2] ?? m[3] ?? m[4] ?? "", dash: m[1] === "-" }));
+}
+
+/**
+ * Absolute paths a shell command names, bounded by whitespace, quotes,
+ * shell punctuation, braces or commas. The root itself (`ls /`,
  * `find / ...`, `cd / && ...`) and any path whose first segment is a
  * wildcard (a star, `?`, `[` or `{`) always count. Otherwise a slash-led
  * word counts only if its first segment exists at the filesystem root (`/home`, `/etc`, `/tmp`),
  * so sed addresses such as `/## Events/` aren't taken for paths.
  */
 export function shellPaths(command: string): string[] {
-  const found = command.matchAll(/(?:^|[\s'"=:(<>|;&])(\/[^\s'"`;|&<>()]*)/g);
+  // Braces and commas bound a path too, as in `{/etc/shadow,x}`, and so
+  // does the `}` of `${IFS}`.
+  const found = command.matchAll(
+    /(?:^|[\s'"=:(<>|;&{},])(\/[^\s'"`;|&<>(){},]*)/g,
+  );
   return [...found]
     .map((match) => match[1] ?? "")
     .filter((path) => {
