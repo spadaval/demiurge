@@ -252,7 +252,9 @@ export type ViewpointGap = {
  * they take part in it, and an object in it; a version they tell, from its
  * event; what a scene told through their eyes shows, reveals, pays off or
  * implies; and what a scene through other eyes reveals or pays off when
- * they are in it or take part in what it shows. A scene tells them from its now (its
+ * they are in it or take part in what it shows, unless that scene's
+ * viewpoint holds it by their own knowledge record (their secret, told
+ * through their thoughts) and it isn't a version, which is an account. A scene tells them from its now (its
  * latest event) on, the scene being written aside. With `at` undefined (a
  * scene that shows no placed event) time is left out: any knowledge of it
  * counts, and any such scene told before this one. Undefined when the actor holds it, or it isn't tracked.
@@ -363,11 +365,20 @@ function shownFrom(
     const own = s.viewpoint === actor;
     const present =
       s.actors.includes(actor) || s.depicts.some((e) => takesPart(e));
+    // What that scene's viewpoint holds by their own knowledge record is
+    // told through their thoughts, not to the room; but a version is an
+    // account, made to be told.
+    const theirs = (s: Scene) =>
+      ref.kind !== "version" &&
+      s.viewpoint !== undefined &&
+      story.knowledge.some(
+        (k) => k.actor === s.viewpoint && sameRef(k.what, ref),
+      );
     const shown = own
       ? (ref.kind === "event" && s.depicts.includes(ref.id)) ||
         reveals(s) ||
         implies(s)
-      : present && reveals(s);
+      : present && reveals(s) && !theirs(s);
     if (!shown) return [];
     const now = sceneNow(story, s);
     if (at === undefined || now === undefined) {

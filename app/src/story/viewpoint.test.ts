@@ -291,7 +291,7 @@ describe("what the story shows the viewpoint", () => {
     const other = run(seen, {
       type: "setSceneViewpoint",
       id: "night",
-      actor: "ivo",
+      actor: "crew",
     });
     expect(viewpointGap(other, "mara", lamp, "confession", 1)).toEqual({
       later: false,
@@ -351,6 +351,138 @@ describe("what the story shows the viewpoint", () => {
       later: false,
       believes: [],
     });
+  });
+
+  test("in a scene through another's eyes, their own secret isn't told to her", () => {
+    // Supper, through Ivo's eyes, Mara at the table, reveals his guilt and
+    // pays off the vial; dawn is through Mara's.
+    const supper = run(
+      base,
+      { type: "addFact", id: "guilt", text: "Ivo cut the rope", about: [] },
+      { type: "addObject", id: "vial", name: "The vial", notes: "" },
+      {
+        type: "addKnowledge",
+        id: "ivo-guilt",
+        actor: "ivo",
+        how: "knows",
+        what: { kind: "fact", id: "guilt" },
+      },
+      {
+        type: "addKnowledge",
+        id: "ivo-vial",
+        actor: "ivo",
+        how: "knows",
+        what: { kind: "object", id: "vial" },
+      },
+      { type: "addFact", id: "lamp", text: "The lamp was out", about: [] },
+      {
+        type: "addKnowledge",
+        id: "ivo-lamp",
+        actor: "crew",
+        how: "knows",
+        what: { kind: "fact", id: "lamp" },
+      },
+      { type: "setSceneEvents", id: "night", depicts: ["wreck"] },
+      { type: "setSceneViewpoint", id: "night", actor: "ivo" },
+      { type: "setSceneActors", id: "night", actors: ["ivo", "mara"] },
+      {
+        type: "setSceneLinks",
+        id: "night",
+        how: "reveals",
+        refs: [
+          { kind: "fact", id: "guilt" },
+          { kind: "fact", id: "lamp" },
+        ],
+      },
+      {
+        type: "setSceneLinks",
+        id: "night",
+        how: "paysOff",
+        refs: [{ kind: "object", id: "vial" }],
+      },
+      { type: "setSceneEvents", id: "post", depicts: ["confession"] },
+      { type: "setSceneViewpoint", id: "post", actor: "mara" },
+    );
+    const unaware = { later: false, believes: [] };
+    expect(
+      viewpointGap(
+        supper,
+        "mara",
+        { kind: "fact", id: "guilt" },
+        "confession",
+        1,
+      ),
+    ).toEqual(unaware);
+    expect(
+      viewpointGap(
+        supper,
+        "mara",
+        { kind: "object", id: "vial" },
+        "confession",
+        1,
+      ),
+    ).toEqual(unaware);
+    // What isn't Ivo's own is told to the room.
+    expect(
+      viewpointGap(
+        supper,
+        "mara",
+        { kind: "fact", id: "lamp" },
+        "confession",
+        1,
+      ),
+    ).toBeUndefined();
+    // An account he believes, told at the table, is told to her too.
+    const account = run(
+      supper,
+      {
+        type: "addVersion",
+        id: "squall",
+        event: "wreck",
+        text: "A squall took the rope",
+        by: ["ivo"],
+      },
+      {
+        type: "addKnowledge",
+        id: "ivo-squall",
+        actor: "ivo",
+        how: "believes",
+        what: { kind: "version", id: "squall" },
+      },
+      {
+        type: "setSceneLinks",
+        id: "night",
+        how: "reveals",
+        refs: [{ kind: "version", id: "squall" }],
+      },
+    );
+    expect(
+      viewpointGap(
+        account,
+        "mara",
+        { kind: "version", id: "squall" },
+        "confession",
+        1,
+      ),
+    ).toBeUndefined();
+    // Her own record still decides.
+    const told = run(supper, {
+      type: "addKnowledge",
+      id: "mara-guilt",
+      actor: "mara",
+      how: "knows",
+      what: { kind: "fact", id: "guilt" },
+      since: "wreck",
+    });
+    expect(
+      viewpointGap(
+        told,
+        "mara",
+        { kind: "fact", id: "guilt" },
+        "confession",
+        1,
+      ),
+    ).toBeUndefined();
   });
 
   test("a version of the event she believes decides over what she is shown", () => {
