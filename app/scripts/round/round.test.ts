@@ -24,6 +24,7 @@ import {
   checkProblems,
   choosePoint,
   commandNames,
+  GIT_LOG_CAP,
   MAX_POINTS,
   OPENING_SO_FAR,
   outlineBefore,
@@ -447,6 +448,36 @@ describe("host processes never run what the writer controls (worldcrafter-f9l3)"
     } finally {
       rmSync(repo, { recursive: true, force: true });
       rmSync(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  test("the git log's output is capped, so a writer's repo can't flood host memory", () => {
+    const repo = mkdtempSync(join(tmpdir(), "round-git."));
+    try {
+      git(repo, "init", "-q", "-b", "main");
+      // A writer can make git print as much as it likes, for example with a
+      // huge commit message (finding worldcrafter-rkqy).
+      const tree = git(repo, "write-tree");
+      const commit = [
+        `tree ${tree}`,
+        "author b <b@b> 1700000000 +0000",
+        "committer b <b@b> 1700000000 +0000",
+        "",
+        "flood ".repeat(1_500_000),
+        "",
+      ].join("\n");
+      const object = Bun.spawnSync(
+        ["git", "hash-object", "-t", "commit", "-w", "--stdin"],
+        { cwd: repo, stdin: new TextEncoder().encode(commit), stdout: "pipe" },
+      )
+        .stdout.toString()
+        .trim();
+      git(repo, "update-ref", "refs/heads/main", object);
+      const log = sandboxedGitLog(repo);
+      expect(log).toContain(`cut at ${GIT_LOG_CAP} bytes`);
+      expect(log.length).toBeLessThan(GIT_LOG_CAP + 200);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
     }
   });
 

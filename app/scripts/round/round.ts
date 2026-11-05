@@ -863,18 +863,26 @@ export function sandboxedGitLog(repo: string, timeoutSeconds = 120): string {
       "--setenv",
       "GIT_CONFIG_GLOBAL",
       "/dev/null",
-      "git",
-      "log",
-      "--stat",
-      "--format=%h %ad %s",
-      "--date=iso",
+      // Output is capped inside the sandbox, so a program the writer's
+      // config runs can't stream unbounded data into host memory
+      // (finding worldcrafter-rkqy). The exit status is git's.
+      "/bin/bash",
+      "-c",
+      `set -o pipefail; git log --stat '--format=%h %ad %s' --date=iso 2>/dev/null | head -c ${GIT_LOG_CAP}`,
     ],
-    { cwd: tmpdir(), env: {}, stdout: "pipe", stderr: "pipe" },
+    { cwd: tmpdir(), env: {}, stdout: "pipe", stderr: "ignore" },
   );
+  const out = r.stdout.toString();
+  if (out.length >= GIT_LOG_CAP) {
+    return `${out}\n(git log output cut at ${GIT_LOG_CAP} bytes)\n`;
+  }
   return r.exitCode === 0
-    ? r.stdout.toString()
-    : `(git log failed in its sandbox, exit ${r.exitCode}: ${r.stderr.toString().trim().slice(0, 500)})\n`;
+    ? out
+    : `(git log failed in its sandbox, exit ${r.exitCode})\n`;
 }
+
+/** Bytes of `git log` output kept from a writer's repository. */
+export const GIT_LOG_CAP = 4_000_000;
 
 /**
  * A file's text from a repository the writer controls, or undefined unless
