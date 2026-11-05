@@ -61,6 +61,8 @@ function story(ids: string[]): Story {
     reveals: [],
     implies: [],
     withholds: [],
+    plants: [],
+    paysOff: [],
   }));
   return s;
 }
