@@ -30,6 +30,7 @@ import {
   outlineBefore,
   outlinePrompt,
   type Point,
+  parseRange,
   paths,
   pointsInOrder,
   readRepoFile,
@@ -204,6 +205,47 @@ describe("choosing points", () => {
         NOW,
       ),
     ).toThrow("chosen already");
+  });
+
+  test("a range draws only among its unchosen beats and is recorded", () => {
+    const range = parseRange("2-4");
+    expect(range).toEqual({ from: 2, to: 4 });
+    const drawn = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const p = choosePoint(s, [], { seed, range }, NOW);
+      expect(p.position).toBeGreaterThanOrEqual(2);
+      expect(p.position).toBeLessThanOrEqual(4);
+      expect(p.range).toEqual(range);
+      expect(p.seed).toBe(seed);
+      expect(p.reason).toContain("in 2-4 not already chosen");
+      drawn.add(p.sceneId);
+    }
+    // Uniform over the range: every beat in it comes up.
+    expect([...drawn].sort()).toEqual(["b", "c", "d"]);
+    const taken = [
+      choosePoint(s, [], { sceneId: "b", reason: "x" }, NOW),
+      choosePoint(s, [], { sceneId: "c", reason: "x" }, NOW),
+    ];
+    expect(choosePoint(s, taken, { seed: 3, range }, NOW).sceneId).toBe("d");
+    // The same seed and choices give the same point.
+    expect(choosePoint(s, [], { seed: 9, range }, NOW)).toEqual(
+      choosePoint(s, [], { seed: 9, range }, NOW),
+    );
+    // Without a range, nothing is recorded.
+    expect(choosePoint(s, [], { seed: 9 }, NOW).range).toBeUndefined();
+  });
+
+  test("a range with no unchosen beat, or past the outline, is refused", () => {
+    const taken = [choosePoint(s, [], { sceneId: "e", reason: "x" }, NOW)];
+    expect(() =>
+      choosePoint(s, taken, { seed: 1, range: parseRange("5-5") }, NOW),
+    ).toThrow("Every beat in 5-5 is chosen already.");
+    expect(() =>
+      choosePoint(s, [], { seed: 1, range: parseRange("5-7") }, NOW),
+    ).toThrow("goes past the outline's 6 beats");
+    for (const bad of ["4-2", "0-3", "3", "a-b", "1-", "2-3-4"]) {
+      expect(() => parseRange(bad)).toThrow("--range takes <a>-<b>");
+    }
   });
 
   test("the generator is mulberry32", () => {

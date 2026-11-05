@@ -9,7 +9,7 @@
  *   bun scripts/round/round.ts outline <round-dir> [--premise <text>] [--outline-size <text>]
  *   bun scripts/round/round.ts beats <round-dir>
  *   bun scripts/round/round.ts choose <round-dir> <scene-id> --reason <text>
- *   bun scripts/round/round.ts choose-random <round-dir> --seed <n> [--reason <text>]
+ *   bun scripts/round/round.ts choose-random <round-dir> --seed <n> [--range <a>-<b>] [--reason <text>]
  *   bun scripts/round/round.ts scenes <round-dir> [--words <text>]
  *   bun scripts/round/round.ts so-far <round-dir>
  *   bun scripts/round/round.ts vocab <round-dir>
@@ -195,8 +195,23 @@ export type Point = {
   how: "chosen" | "random";
   reason: string;
   seed?: number;
+  /** For a random point drawn from part of the outline: the positions, inclusive. */
+  range?: { from: number; to: number };
   chosenAt: string;
 };
+
+/** `<a>-<b>`: 1-based positions in telling order, inclusive, a <= b. */
+export function parseRange(text: string): { from: number; to: number } {
+  const match = /^([1-9]\d*)-([1-9]\d*)$/.exec(text);
+  const from = Number(match?.[1]);
+  const to = Number(match?.[2]);
+  if (match === null || from > to) {
+    throw new Error(
+      `--range takes <a>-<b> with 1 <= a <= b, not ${JSON.stringify(text)}.`,
+    );
+  }
+  return { from, to };
+}
 
 const readRound = (round: string) => readJson<RoundRecord>(paths(round).run);
 const saveRound = (round: string, record: RoundRecord) =>
@@ -394,7 +409,7 @@ export function choosePoint(
   points: readonly Point[],
   choice:
     | { sceneId: string; reason: string }
-    | { seed: number; reason?: string },
+    | { seed: number; reason?: string; range?: { from: number; to: number } },
   now = new Date(),
 ): Point {
   if (points.length >= MAX_POINTS)
@@ -418,8 +433,25 @@ export function choosePoint(
       chosenAt: now.toISOString(),
     };
   }
-  const open = beats.filter((b) => !taken.has(b.id));
-  if (open.length === 0) throw new Error("Every beat is chosen already.");
+  const range = choice.range;
+  if (range !== undefined && range.to > beats.length) {
+    throw new Error(
+      `--range ${range.from}-${range.to} goes past the outline's ${beats.length} beats.`,
+    );
+  }
+  const open = beats.filter(
+    (b) =>
+      !taken.has(b.id) &&
+      (range === undefined ||
+        (b.position >= range.from && b.position <= range.to)),
+  );
+  if (open.length === 0) {
+    throw new Error(
+      range === undefined
+        ? "Every beat is chosen already."
+        : `Every beat in ${range.from}-${range.to} is chosen already.`,
+    );
+  }
   const beat = open[Math.floor(seeded(choice.seed)() * open.length)];
   if (beat === undefined) throw new Error("No beat was drawn.");
   return {
@@ -430,8 +462,9 @@ export function choosePoint(
     how: "random",
     reason:
       choice.reason ??
-      `Drawn uniformly from the ${open.length} beats not already chosen, with seed ${choice.seed} (mulberry32).`,
+      `Drawn uniformly from the ${open.length} beats ${range === undefined ? "" : `in ${range.from}-${range.to} `}not already chosen, with seed ${choice.seed} (mulberry32).`,
     seed: choice.seed,
+    ...(range === undefined ? {} : { range }),
     chosenAt: now.toISOString(),
   };
 }
@@ -1139,7 +1172,7 @@ const USAGE = `Usage:
   round.ts outline <round-dir> [--premise <text>] [--outline-size <text>]
   round.ts beats <round-dir>
   round.ts choose <round-dir> <scene-id> --reason <text>
-  round.ts choose-random <round-dir> --seed <n> [--reason <text>]
+  round.ts choose-random <round-dir> --seed <n> [--range <a>-<b>] [--reason <text>]
   round.ts scenes <round-dir> [--words <text>]
   round.ts so-far <round-dir>
   round.ts vocab <round-dir>
@@ -1155,6 +1188,7 @@ export async function main(argv: string[]): Promise<void> {
     "--outline-size",
     "--reason",
     "--seed",
+    "--range",
     "--words",
   ];
   const flag = (name: string) => {
@@ -1201,9 +1235,11 @@ export async function main(argv: string[]): Promise<void> {
       } else {
         const seed = Number(flag("--seed"));
         if (!Number.isInteger(seed)) break;
+        const rangeText = flag("--range");
         point = choosePoint(story, points, {
           seed,
           ...(reason === undefined ? {} : { reason }),
+          ...(rangeText === undefined ? {} : { range: parseRange(rangeText) }),
         });
       }
       writeJson(paths(round).points, [...points, point]);

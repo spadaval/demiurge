@@ -127,7 +127,7 @@ bun scripts/round/round.ts outline $R
 # 2. List the beats, then record four points.
 bun scripts/round/round.ts beats $R
 bun scripts/round/round.ts choose $R <scene-id> --reason "the reveal of ..."
-bun scripts/round/round.ts choose-random $R --seed <n>
+bun scripts/round/round.ts choose-random $R --seed <n> [--range <a>-<b>]
 
 # 3. The scenes, by the resumed writer, in telling order.
 bun scripts/round/round.ts scenes $R
@@ -162,4 +162,9 @@ directory exists is refused; move a failed one aside to rerun it. `scenes`
 stops at a failed scene, so later ones keep their order.
 
 `choose-random` draws uniformly, with mulberry32 seeded by `--seed`, among
-the beats not yet chosen, so the same seed and choices give the same point.
+the beats not yet chosen, so the same seed and choices give the same point. With `--range <a>-<b>` it draws only among
+beats `a` to `b` (1-based positions in telling order, inclusive, as `beats`
+numbers them), so a round can draw one point from each half of the arc
+(`--range 1-15`, then `--range 16-30`). `points.json` records the range
+beside the seed. A range past the last beat, or with every beat in it
+already chosen, is refused.
