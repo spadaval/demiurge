@@ -851,6 +851,15 @@ describe("transcript check: sed and perl scripts aren't paths", () => {
       "python3 -c 'import os; os.listdir(\"/\")'",
       "eval 'ls /'",
       'echo "$X / y"',
+      // Review worldcrafter-h6sd: prose that is then run.
+      "cat <<EOF | sh\nfind / -name '*.json' -exec cat {} +\nEOF",
+      "cat <<EOF | xargs ls\n/\nEOF",
+      'echo "find / -name x -exec cat {} +" | sh',
+      'bash -c -- "ls /"',
+      "cat <<'EOF' | bash\nls /\nEOF",
+      'printf "%s" "ls /" | xargs -0 sh -c',
+      "python3 <<< \"import os; os.listdir('/')\"",
+      "bash -c -x -- 'ls /'",
     ]) {
       expect([command, outside(command)]).toEqual([command, ["Bash"]]);
     }

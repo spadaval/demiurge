@@ -658,10 +658,14 @@ export function quoteContext(command: string): QuoteContext {
         // The command the heredoc feeds: the last one on the line before it.
         const before = command.slice(lineStart, i).split(/[;&|]/).pop() ?? "";
         const first = before.trim().split(/\s+/)[0] ?? "";
+        // Text only if cat's output isn't piped on (`cat <<EOF | sh`).
+        const eol = command.indexOf("\n", i);
+        const after = command.slice(i + m[0].length, eol === -1 ? n : eol);
         pending.push({
           word,
           dash: m[1] === "-",
-          text: (first.split("/").pop() ?? "") === "cat",
+          text:
+            (first.split("/").pop() ?? "") === "cat" && !after.includes("|"),
           expands: m[5] !== undefined && m[4] === "",
         });
         i += m[0].length;
@@ -729,10 +733,19 @@ function closingDouble(command: string, open: number): number {
 }
 
 /**
+ * A pipe or here-string into a shell, an interpreter, xargs, eval or
+ * source: anything quoted on such a command line may be run.
+ */
+const FEEDS_CODE =
+  /(?:\||<<<)\s*(?:(?:sudo|env|exec|command|nohup|time)\s+)*(?:\S*\/)?(?:bash|sh|zsh|dash|ksh|fish|python[\d.]*|perl|ruby|node|bun|deno|php|lua|tclsh|xargs|eval|source|\.)(?=\s|$|;|\))|<<</m;
+
+/**
  * Whether a bare `/` (or `//`) at `at` is prose rather than the root: in the
- * text of a heredoc fed to cat, or inside quotes in a word whose value is
- * more than slashes ("bound to / owned by"), unless that word is code given
- * to a shell or interpreter (`sh -c '...'`, `python -c`, `perl -e`, `eval`).
+ * text of a heredoc fed to cat whose output isn't piped on, or inside quotes
+ * in a word whose value is more than slashes ("bound to / owned by"), unless
+ * that word is code given to a shell or interpreter (`sh -c '...'`,
+ * `bash -c -- '...'`, `python -c`, `perl -e`, `eval`) or the command line
+ * pipes into one (FEEDS_CODE).
  * As a word of its own, quoted or not (`ls /`, `cd "/"`), or bare outside
  * quotes (`echo a,//`), it is the root.
  */
@@ -743,19 +756,26 @@ function bareSlashIsProse(
 ): boolean {
   if (context.body[at]) return true;
   if (!context.quoted[at]) return false;
+  // A quoted word may be fed on as code (`echo "find / ..." | sh`).
+  if (FEEDS_CODE.test(command)) return false;
   const boundary = (k: number) =>
     !context.quoted[k] && /[\s;&|()<>]/.test(command[k] ?? "");
   let start = at;
   while (start > 0 && !boundary(start - 1)) start--;
   let end = at;
   while (end < command.length && !boundary(end)) end++;
-  // The word before it: code given to `-c`, `-e` or `eval` is commands.
+  // The options before it: a word given to `-c` or `-e` (with `--` or other
+  // options between, as in `bash -c -- "ls /"`), or to `eval`, is code.
   let p = start - 1;
-  while (p >= 0 && /[ \t]/.test(command[p] ?? "")) p--;
-  let q = p;
-  while (q >= 0 && !/[\s;&|()<>]/.test(command[q] ?? "")) q--;
-  const previous = command.slice(q + 1, p + 1);
-  if (/^-[A-Za-z]*[ce]$|^--eval$|^eval$/.test(previous)) return false;
+  for (;;) {
+    while (p >= 0 && /[ \t]/.test(command[p] ?? "")) p--;
+    let q = p;
+    while (q >= 0 && !/[\s;&|()<>]/.test(command[q] ?? "")) q--;
+    const previous = command.slice(q + 1, p + 1);
+    if (/^-[A-Za-z]*[ce]$|^--eval$|^eval$/.test(previous)) return false;
+    if (!previous.startsWith("-")) break;
+    p = q;
+  }
   const value = shellWordValue(command.slice(start, end));
   // A word that could expand is read as it stands: the root, to be safe.
   return value !== undefined && !/^\/+$/.test(value.trim());
