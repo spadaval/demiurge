@@ -23,7 +23,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Update the skill for the changed tool"
-updated_at: "2026-11-05T00:50:24.530212011+00:00"
+updated_at: "2026-11-05T01:11:49.036017797+00:00"
 ---
 
 ## Goal
@@ -37,3 +37,7 @@ The skill tells an agent how to use the changed tool, while `craft.md` stays exa
 - The CLI subprocess test covers the new commands end to end.
 - A fresh headless session, sandboxed as in the comparison, given only the skill and a throwaway premise that is neither comparison premise, produces a story file that parses, uses at least one cause link and one `mentions` call, and a `model-gaps.md`. Its output isn't read for quality.
 - `bun run check` passes.
+
+## Notes
+
+- 2026-11-04 [note] From review finding worldcrafter-f5m4: SKILL.md must also cover set-open-question-working (weigh candidates in the file without spending render words), and the CLI help should say it's refused on an answered question.
