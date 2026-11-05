@@ -3,6 +3,9 @@ created_at: "2026-11-05T11:33:23.996780975+00:00"
 id: "worldcrafter-lxmj"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-lxmj
 priority: "P1"
 relationships:
   blocks: []
@@ -20,9 +23,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round 3"
-updated_at: "2026-11-05T12:27:28.902927319+00:00"
+updated_at: "2026-11-05T12:27:28.966380367+00:00"
 ---
 
 ## Goal
