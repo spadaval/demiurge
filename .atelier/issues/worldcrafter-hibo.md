@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Skill up to date with the CLI after the Round 4 fixes"
-updated_at: "2026-11-05T17:23:36.091581009+00:00"
+updated_at: "2026-11-05T17:25:10.991838912+00:00"
 ---
 
 ## Goal
