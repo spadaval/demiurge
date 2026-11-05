@@ -28,6 +28,7 @@ An open question is one of: undecided (an author task, with candidates and rejec
 
 ## Done when
 
+- SKILL.md describes the new commands or states, and `--help` is accurate (review finding worldcrafter-j8lb).
 - The model holds the four states, rejected candidates keep their reasons, and show/render display them.
 - 'Revealed in scene X' ties to the scene links from the bible/prose split.
 - Nothing reports an unrevealed or reader-open question as a problem.

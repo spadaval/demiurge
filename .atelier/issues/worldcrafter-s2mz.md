@@ -28,6 +28,7 @@ After a change, list the records and prose that depend on it by meaning, not jus
 
 ## Done when
 
+- SKILL.md describes the new commands or states, and `--help` is accurate (review finding worldcrafter-j8lb).
 - After an edit (and on demand), the CLI lists records and scene prose that likely depend on the changed record's content, including ones that don't name it (for example a paraphrase, a date stated as an interval, a consequence). Approach is the implementer's call; an LLM call is allowed if it stays cheap and the CLI still works without it.
 - Tests on fixed examples show it finds dependents that mentions misses. bun run check runs offline: if the tracer uses an LLM, the tests cover the offline path, and the LLM path is proven once by a recorded manual run on the same examples.
 - bun run check passes; independently reviewed and merged locally.

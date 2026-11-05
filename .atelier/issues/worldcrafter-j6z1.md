@@ -28,5 +28,6 @@ Objects (planted in one scene, paid off in another), event participants, a drive
 
 ## Done when
 
+- SKILL.md describes the new commands or states, and `--help` is accurate (review finding worldcrafter-j8lb).
 - Each of the four is held by the model and the CLI, shown by show/render, with tests.
 - bun run check passes; independently reviewed and merged locally.
