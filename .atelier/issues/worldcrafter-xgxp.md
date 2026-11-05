@@ -12,9 +12,9 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Render the story, not the links"
-updated_at: "2026-11-05T00:57:16.467360564+00:00"
+updated_at: "2026-11-05T00:57:39.487801788+00:00"
 ---
 
 ## Goal

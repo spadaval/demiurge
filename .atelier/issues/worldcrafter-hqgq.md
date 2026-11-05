@@ -4,6 +4,9 @@ id: "worldcrafter-hqgq"
 issue_type: "feature"
 labels:
 - "story-model"
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-hqgq
 priority: "P1"
 relationships:
   blocks: []
@@ -32,7 +35,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Change the tool from the verdict, then compare again on a fresh premise"
-updated_at: "2026-11-05T00:56:08.754732967+00:00"
+updated_at: "2026-11-05T00:57:39.487799674+00:00"
 ---
 
 ## Goal
