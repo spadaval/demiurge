@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Run the second comparison on a fresh held-back premise"
-updated_at: "2026-11-05T00:50:24.551339850+00:00"
+updated_at: "2026-11-05T02:15:11.312643418+00:00"
 ---
 
 ## Goal
