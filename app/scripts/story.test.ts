@@ -291,6 +291,50 @@ describe("story CLI", () => {
     expect(ok("update-scene", "market", "--title", "Market")).toBe("Saved.\n");
   });
 
+  test("an edit prompts only when it changes what text can state, and at most five lines", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-actor", "mara", "Mara");
+    ok("add-drive", "calm", "Stay calm", "--actor", "mara");
+    ok("add-event", "wreck", "The wreck");
+    ok("set-position", "wreck", "10");
+    for (const i of [1, 2, 3, 4, 5, 6, 7]) {
+      ok("add-fact", `f${i}`, `Mara saw the wreck, fact ${i}`);
+    }
+    const prompt = "Free text that mentions";
+
+    // No-op and kind-only edits change nothing text states.
+    expect(ok("update-actor", "mara", "--name", "Mara")).toBe("Saved.\n");
+    expect(ok("update-actor", "mara", "--kind", "person")).toBe("Saved.\n");
+    expect(ok("update-actor", "mara", "--notes", "Keeps the light")).toBe(
+      "Saved.\n",
+    );
+    expect(ok("update-drive", "calm", "--stakes", "Her post")).toBe("Saved.\n");
+    expect(ok("update-drive", "calm", "--want", "Stay calm")).toBe("Saved.\n");
+    expect(ok("describe-event", "wreck", "--summary", "It sinks")).toBe(
+      "Saved.\n",
+    );
+    expect(ok("set-position", "wreck", "10")).toBe("Saved.\n");
+
+    // A rename prompts, five lines at most, then points at mentions.
+    const renamed = ok("update-actor", "mara", "--name", "Maren");
+    const lines = renamed.trimEnd().split("\n");
+    expect(lines[0]).toBe("Saved.");
+    expect(lines[1]).toContain(`${prompt} actor:mara`);
+    expect(lines.slice(2, 7).every((line) => line.includes('"Mara"'))).toBe(
+      true,
+    );
+    expect(lines[7]).toBe(
+      "...and 2 more (7 in all): run mentions actor:mara for all.",
+    );
+    expect(lines).toHaveLength(8);
+    // A new holder prompts for the old one's name.
+    ok("add-actor", "ivo", "Ivo");
+    ok("update-actor", "mara", "--name", "Mara");
+    expect(ok("update-drive", "calm", "--actor", "ivo")).toContain(
+      "(names its holder Mara)",
+    );
+  });
+
   test("show lists a reworked answer's history, and render doesn't", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-open-question", "who", "Who wrote it?");

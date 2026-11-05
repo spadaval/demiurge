@@ -1367,40 +1367,85 @@ function mentionLines(story: Story, found: readonly Mention[]): string[] {
   );
 }
 
+/** The most mentions an edit prints; `mentions` lists them all. */
+const MAX_STALE_LINES = 5;
+
 /**
- * The record an edit changes whose old version free text may still state,
- * for the edits that change a name, a time, a want or an actor.
+ * The record whose old version free text may still state, when the edit
+ * changed something text can state: an actor's name, a drive's want or
+ * holder, an event's label or position. An edit that changes none of these
+ * prompts nothing.
  */
-function changedRef(command: StoryCommand): Ref | undefined {
+function changedRef(
+  before: Story,
+  after: Story,
+  command: StoryCommand,
+): Ref | undefined {
+  const differs = <T>(find: (story: Story) => T) =>
+    JSON.stringify(find(before)) !== JSON.stringify(find(after));
   switch (command.type) {
-    case "setPosition":
-      return { kind: "event", id: command.event };
-    case "describeEvent":
-      return { kind: "event", id: command.id };
-    case "updateDrive":
-      return { kind: "drive", id: command.id };
-    case "updateActor":
-      return { kind: "actor", id: command.id };
+    case "setPosition": {
+      const id = command.event;
+      return differs((story) =>
+        story.timeline.positions.find(
+          (p) => p.event === id && p.frame === WORLD_FRAME,
+        ),
+      )
+        ? { kind: "event", id }
+        : undefined;
+    }
+    case "describeEvent": {
+      const { id } = command;
+      return differs(
+        (story) => story.timeline.events.find((e) => e.id === id)?.label,
+      )
+        ? { kind: "event", id }
+        : undefined;
+    }
+    case "updateDrive": {
+      const { id } = command;
+      return differs((story) => {
+        const drive = story.drives.find((d) => d.id === id);
+        return [drive?.want, drive?.actorId];
+      })
+        ? { kind: "drive", id }
+        : undefined;
+    }
+    case "updateActor": {
+      const { id } = command;
+      return differs((story) => story.actors.find((a) => a.id === id)?.name)
+        ? { kind: "actor", id }
+        : undefined;
+    }
     default:
       return undefined;
   }
 }
 
-/** A prompt listing text that may still state what the edit changed. */
+/**
+ * A prompt listing text that may still state what the edit changed, at most
+ * `MAX_STALE_LINES` of it.
+ */
 function staleTextLines(
   before: Story,
   after: Story,
   command: StoryCommand,
 ): string[] {
-  const ref = changedRef(command);
+  const ref = changedRef(before, after, command);
   if (ref === undefined) return [];
   const found = whatMentions(after, ref, before).unwrapOr([]);
-  return found.length === 0
-    ? []
-    : [
-        `Free text that mentions ${formatRef(ref)} and may still state the old version (nothing was rewritten):`,
-        ...mentionLines(after, found),
-      ];
+  if (found.length === 0) return [];
+  const shown = found.slice(0, MAX_STALE_LINES);
+  const more = found.length - shown.length;
+  return [
+    `Free text that mentions ${formatRef(ref)} and may still state the old version (nothing was rewritten):`,
+    ...mentionLines(after, shown),
+    ...(more === 0
+      ? []
+      : [
+          `...and ${more} more (${found.length} in all): run mentions ${formatRef(ref)} for all.`,
+        ]),
+  ];
 }
 
 function touchLines(groups: TouchGroups): string[] {
