@@ -88,7 +88,7 @@ const MIN_SHARED_AFTER_CHANGE = 3;
  * evidence in a text (what an edit's inline trace shows) they need to be
  * this many, or every word the change took away if it took fewer, and at
  * least `MIN_SHARED_PART` of those words: a long summary shares four words
- * with much of a story by chance. For an event that only moved, shared words
+ * with much of a story by chance; or three rare ones (`MIN_SHARED_RARE`). For an event that only moved, shared words
  * are never that evidence: they say a text is about the same thing, not
  * that it states the old time, which its year, a span or a season would
  * (and those are looked for). Weaker shared words still count toward the
@@ -96,6 +96,15 @@ const MIN_SHARED_AFTER_CHANGE = 3;
  */
 const MIN_SHARED_IN_TEXT = 4;
 const MIN_SHARED_PART = 0.25;
+
+/**
+ * Three shared words are enough, whatever part of the change they are, when
+ * each is rare in the story (in at most this many texts, this one
+ * included): after a heavy rewrite, a paraphrase keeps few of the many
+ * words taken away, but rare ones (finding worldcrafter-6yvn).
+ */
+const MIN_SHARED_RARE = 3;
+const RARE_TEXTS = 3;
 
 /**
  * A word in more than this share of the story's texts (and more than
@@ -475,8 +484,10 @@ export function traceDependents(
       `${t.field} shares words: ${shared.sort().join(", ")}`,
       was === undefined ||
         (!onlyMoved &&
-          shared.length >= strong &&
-          shared.length >= MIN_SHARED_PART * uncommon),
+          ((shared.length >= strong &&
+            shared.length >= MIN_SHARED_PART * uncommon) ||
+            (shared.length >= MIN_SHARED_RARE &&
+              shared.every((s) => (documents.get(s) ?? 0) <= RARE_TEXTS)))),
     );
   }
 

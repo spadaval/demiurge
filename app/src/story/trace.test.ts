@@ -170,10 +170,21 @@ describe("traceDependents on the fixed example", () => {
       summary:
         "The Alba sank in a winter storm off the northern reef, with the bosun, the cook, eleven passengers, a cargo of salted herring, wool bales, copper pans, the parish bell, two oxen, a harpsichord and the mayor's portrait",
     });
-    const withFact = run(long, {
+    // Enough other texts that words in a few of them are neither common
+    // nor rare: "bosun" and "copper" are in four.
+    const others = Array.from(
+      { length: 100 },
+      (_, i): StoryCommand => ({
+        type: "addFact",
+        id: `other-${i}`,
+        text: i < 3 ? `The bosun polished copper ${i}` : `Gulls ${i}`,
+        about: [],
+      }),
+    );
+    const withFact = run(long, ...others, {
       type: "addFact",
       id: "herring",
-      text: "Nobody fishes the northern reef where the bosun, the herring and the copper went down",
+      text: "Nobody fishes northern waters where the bosun, the herring and the copper went down",
       about: [],
     });
     const reworded = run(withFact, {
@@ -185,7 +196,7 @@ describe("traceDependents on the fixed example", () => {
       was: withFact,
       prose,
     })._unsafeUnwrap();
-    // Four of the many words taken away: kept for trace, but not as
+    // Four of the many words taken away, not all rare: kept for trace, but not as
     // evidence in its text.
     const herring = found.find((s) => key(s) === "fact:herring");
     expect(herring?.reasons).toEqual([
@@ -301,6 +312,54 @@ describe("after an edit", () => {
       "in a scene that is in it",
     ]);
   });
+});
+
+test("after a heavy rewrite, three rare shared words still count in a text", () => {
+  // Filler facts, so no word is common in the story.
+  const filler = Array.from(
+    { length: 12 },
+    (_, i): StoryCommand => ({
+      type: "addFact",
+      id: `filler-${i}`,
+      text: `Filler fact number ${i} about weather${i} and tides${i}`,
+      about: [],
+    }),
+  );
+  const towed = run(
+    newStory("A keeper finds a letter."),
+    {
+      type: "addActor",
+      id: "ivo",
+      name: "Ivo",
+      kind: "person",
+      notes: "Came home in the dinghy and never spoke of Skerry",
+    },
+    {
+      type: "addEvent",
+      id: "wreck",
+      label: "The wreck",
+      summary:
+        "Ivo cut the tow rope in the gale off Skerry Point, left the brother at the helm, and rowed the dinghy home to the lighthouse",
+    },
+    {
+      type: "addFact",
+      id: "f-row",
+      text: "Ivo rowed home alone in the dinghy that night",
+      about: [],
+    },
+    ...filler,
+  );
+  const rewritten = run(towed, {
+    type: "describeEvent",
+    id: "wreck",
+    summary: "A freak wave rolled the Ondine while Ivo slept ashore",
+  });
+  const found = traceDependents(rewritten, wreck, {
+    was: towed,
+  })._unsafeUnwrap();
+  const inText = found.filter((s) => s.inText).map(key);
+  expect(inText).toContain("fact:f-row");
+  expect(inText).toContain("actor:ivo");
 });
 
 test("common words don't count as shared", () => {
