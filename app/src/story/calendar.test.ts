@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  describeMismatch,
   describeSpan,
   describeWhen,
   describeYears,
@@ -101,4 +102,28 @@ test("describeYears says a span whole in no unit in the largest it reaches", () 
   expect(describeYears(1.25 / 365.2425 / 24)).toBe("75 minutes");
   expect(describeYears(1.03 / 365.2425 / 24 / 60)).toBe("1 minute");
   expect(describeYears(0.3333)).toBe("4 months");
+});
+
+test("describeMismatch keeps a mismatch visible after rounding", () => {
+  const day = 1 / 365.2425;
+  // Said in the tolerance's unit, the largest that keeps the mismatch.
+  expect(describeMismatch(14 * day, 3.5 * day, 1, 1)).toEqual({
+    amount: "14 days",
+    tolerance: "3.5 days",
+    between: "365.2 days",
+  });
+  // Off by thirteen days on a year: said in the tolerance's unit.
+  expect(describeMismatch(1, day, 378.3 * day, 380.3 * day)).toEqual({
+    amount: "365.2 days",
+    tolerance: "1 day",
+    between: "378.3 days to 380.3 days",
+  });
+  // Ends that read the same are one value.
+  expect(describeMismatch(10, 0.5, 1.0001, 1.0002).between).toBe("12 months");
+  // A tolerance of none: the amount's unit, smaller if the gap needs it.
+  expect(describeMismatch(1, 0, 1 + 3 * day, 1 + 3 * day)).toEqual({
+    amount: "52.2 weeks",
+    tolerance: "0 weeks",
+    between: "52.6 weeks",
+  });
 });

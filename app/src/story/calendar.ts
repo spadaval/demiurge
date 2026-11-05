@@ -241,22 +241,76 @@ export function parseSpan(
   return ok({ years: Number(match[1]) * size, unit: size });
 }
 
-/** A span in years in the largest unit that says it in a whole number: `3 days`. */
-export function describeYears(years: number): string {
+const unitText = (count: number, word: string) =>
+  `${count} ${word}${Math.abs(count) === 1 ? "" : "s"}`;
+
+/** A span in the largest unit that says it in a whole number, if any. */
+function wholeText(years: number): string | undefined {
   for (const { years: size, word } of UNITS) {
     const count = years / size;
     const whole = Math.round(count);
     if (whole !== 0 && Math.abs(count - whole) < 1e-6) {
-      return `${whole} ${word}${Math.abs(whole) === 1 ? "" : "s"}`;
+      return unitText(whole, word);
     }
   }
+  return undefined;
+}
+
+/** The largest unit `years` reaches, or minutes. */
+const reached = (years: number) =>
+  UNITS.find(({ years: size }) => Math.abs(years) >= size) ??
+  UNITS[UNITS.length - 1];
+
+/** `years` in `unit`, to one decimal. */
+const inUnit = (years: number, unit: { years: number; word: string }) =>
+  unitText(Number((years / unit.years).toFixed(1)), unit.word);
+
+/** A span in years in the largest unit that says it in a whole number: `3 days`. */
+export function describeYears(years: number): string {
+  const whole = wholeText(years);
+  if (whole !== undefined) return whole;
   // Not whole in any unit: the largest unit it reaches, to one decimal.
+  const unit = reached(years);
+  return unit === undefined ? `${years} years` : inUnit(years, unit);
+}
+
+/**
+ * A stated duration (`amount` give or take `tolerance`) and the range of
+ * time positions put between the same events (`min` to `max`), all in
+ * years, in words that keep a mismatch between them visible. All four are
+ * said in one unit, to one decimal: the largest unit, no larger than the
+ * largest the tolerance reaches (or, with none, the amount), in which
+ * rounding can't close the gap between the two ranges. So 379 days is never
+ * said `1 year` beside `1 year give or take 1 day`. `between` is one value
+ * when its ends read the same.
+ */
+export function describeMismatch(
+  amount: number,
+  tolerance: number,
+  min: number,
+  max: number,
+): { amount: string; tolerance: string; between: string } {
+  const range = (a: string, b: string) => (a === b ? a : `${a} to ${b}`);
+  const gap = Math.max(min - (amount + tolerance), amount - tolerance - max);
+  const scale = Math.abs(tolerance > 0 ? tolerance : amount);
+  const found = UNITS.findIndex(({ years }) => scale >= years);
+  const largest = found === -1 ? UNITS.length - 1 : found;
   const unit =
-    UNITS.find(({ years: size }) => Math.abs(years) >= size) ??
-    UNITS[UNITS.length - 1];
-  if (unit === undefined) return `${years} years`;
-  const count = Number((years / unit.years).toFixed(1));
-  return `${count} ${unit.word}${Math.abs(count) === 1 ? "" : "s"}`;
+    UNITS.slice(largest).find(
+      ({ years }) => gap <= 0 || 0.05 * years <= gap / 2,
+    ) ?? UNITS[UNITS.length - 1];
+  if (unit === undefined) {
+    return {
+      amount: `${amount} years`,
+      tolerance: `${tolerance} years`,
+      between: range(`${min} years`, `${max} years`),
+    };
+  }
+  return {
+    amount: inUnit(amount, unit),
+    tolerance: inUnit(tolerance, unit),
+    between: range(inUnit(min, unit), inUnit(max, unit)),
+  };
 }
 
 /** Days from fractional year `from` to `to`, on the calendar: negative if `to` is earlier. */

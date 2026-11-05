@@ -747,11 +747,30 @@ describe("story CLI", () => {
       "2w",
     );
     expect(problem).toBe(
-      "Timeline problem (kept; see contradictions): constraint c3 puts 2 weeks give or take 84 hours between wreck and letter, but their positions put -3 hours to 21 hours between them\n",
+      "Timeline problem (kept; see contradictions): constraint c3 puts 14 days give or take 3.5 days between wreck and letter, but their positions put -0.1 days to 0.9 days between them\n",
     );
     expect(ok("contradictions")).toContain(
-      "- constraint c3 puts 2 weeks give or take 84 hours between wreck and letter",
+      "- constraint c3 puts 14 days give or take 3.5 days between wreck and letter",
     );
+    // Finding otbw: a gap off by days on a year still reads as off.
+    ok("add-event", "far", "Far");
+    ok("set-position", "far", "1955-10-26");
+    expect(
+      ok(
+        "constrain",
+        "c5",
+        "wreck",
+        "before",
+        "far",
+        "--gap",
+        "1y",
+        "--tolerance",
+        "1d",
+      ),
+    ).toBe(
+      "Timeline problem (kept; see contradictions): constraint c5 puts 365.2 days give or take 1 day between wreck and far, but their positions put 378.3 days to 380.3 days between them\n",
+    );
+    ok("remove-constraint", "c5");
     expect(ok("show", "event:wreck")).toContain(
       "constraint c3: wreck before letter (gap 2 weeks ± 84 hours)\n",
     );

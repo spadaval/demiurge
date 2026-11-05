@@ -12,7 +12,7 @@ import {
 } from "../time/chronology";
 import { timelineProblems } from "../time/commands";
 import type { EventId } from "../time/timeline";
-import { describeYears } from "./calendar";
+import { describeMismatch } from "./calendar";
 import { countProblems } from "./counts";
 import { questionState, type Ref, type Story } from "./story";
 import { refLabel } from "./touches";
@@ -44,7 +44,8 @@ export type Contradiction =
 
 /**
  * A timeline problem's message, with a duration in a year-based story said
- * in units (`2 weeks give or take 84 hours`) rather than fractional years.
+ * in units (`2 weeks give or take 84 hours`) rather than fractional years,
+ * fine enough that the mismatch it reports shows (`describeMismatch`).
  */
 export function timelineProblemMessage(
   story: Story,
@@ -58,14 +59,17 @@ export function timelineProblemMessage(
     return problem.message;
   }
   const { stated, between, referencedBy, events } = problem;
+  const said = describeMismatch(
+    stated.amount,
+    stated.tolerance,
+    between.min,
+    between.max,
+  );
   const amount =
     stated.tolerance === 0
-      ? `exactly ${describeYears(stated.amount)}`
-      : `${describeYears(stated.amount)} give or take ${describeYears(stated.tolerance)}`;
-  const range =
-    between.min === between.max
-      ? describeYears(between.min)
-      : `${describeYears(between.min)} to ${describeYears(between.max)}`;
+      ? `exactly ${said.amount}`
+      : `${said.amount} give or take ${said.tolerance}`;
+  const range = said.between;
   return `${referencedBy} puts ${amount} between ${events.join(" and ")}, but their positions put ${range} between them`;
 }
 
