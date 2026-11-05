@@ -396,7 +396,8 @@ export const EDITS: EditSpecs = {
   removeActor: {
     group: "Actors: people and groups",
     args: ["id"],
-    summary: "Remove an actor. Their drives stay, held by nobody.",
+    summary:
+      "Remove an actor. Their drives stay, held by nobody; what they know or believe goes, and they stop telling any version. Any knowledge of the actor goes too, with links to that; the edit lists what went.",
     example: ["remove-actor", "mara"],
     build: (a) => ({ type: "removeActor", id: a.arg("id") }),
   },
@@ -445,7 +446,8 @@ export const EDITS: EditSpecs = {
   removeEvent: {
     group: "Events: what happens in story time",
     args: ["id"],
-    summary: "Remove an event, its position and constraints, and links to it.",
+    summary:
+      "Remove an event, its position and constraints, and links to it. Its versions go, and any knowledge of it or of them, with links to those; knowledge held from or until it loses that time. The edit lists what went.",
     example: ["remove-event", "wreck"],
     build: (a) => ({ type: "removeEvent", id: a.arg("id") }),
   },
@@ -612,7 +614,8 @@ export const EDITS: EditSpecs = {
   removeDrive: {
     group: "Drives: what someone wants",
     args: ["id"],
-    summary: "Remove a drive and every link to it.",
+    summary:
+      "Remove a drive and every link to it. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-drive", "find-sender"],
     build: (a) => ({ type: "removeDrive", id: a.arg("id") }),
   },
@@ -692,7 +695,8 @@ export const EDITS: EditSpecs = {
   removeScene: {
     group: "Scenes: the telling",
     args: ["id"],
-    summary: "Remove a scene and links to it. Its prose file is left alone.",
+    summary:
+      "Remove a scene and links to it. Its prose file is left alone. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-scene", "storm"],
     build: (a) => ({ type: "removeScene", id: a.arg("id") }),
   },
@@ -798,7 +802,8 @@ export const EDITS: EditSpecs = {
   removeFact: {
     group: "Facts: plain statements about the world",
     args: ["id"],
-    summary: "Remove a fact.",
+    summary:
+      "Remove a fact. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-fact", "seen-ashore"],
     build: (a) => ({ type: "removeFact", id: a.arg("id") }),
   },
@@ -832,7 +837,8 @@ export const EDITS: EditSpecs = {
   removeReaderQuestion: {
     group: "Reader questions: what the reader waits to find out",
     args: ["id"],
-    summary: "Remove a reader question.",
+    summary:
+      "Remove a reader question. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-reader-question", "sender"],
     build: (a) => ({ type: "removeReaderQuestion", id: a.arg("id") }),
   },
@@ -913,7 +919,8 @@ export const EDITS: EditSpecs = {
   removeOpenQuestion: {
     group: "Open questions: undecided, decided, left open or revealed",
     args: ["id"],
-    summary: "Remove an open question and its candidates.",
+    summary:
+      "Remove an open question and its candidates. Any knowledge of the question or a candidate goes too, with links to that; the edit lists what went.",
     example: ["remove-open-question", "who-wrote"],
     build: (a) => ({ type: "removeOpenQuestion", id: a.arg("id") }),
   },
@@ -966,7 +973,8 @@ export const EDITS: EditSpecs = {
   removeCandidate: {
     group: "Open questions: undecided, decided, left open or revealed",
     args: ["question-id", "id"],
-    summary: "Remove a candidate answer.",
+    summary:
+      "Remove a candidate answer. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-candidate", "who-wrote", "ferryman"],
     build: (a) => ({
       type: "removeCandidate",
@@ -1100,7 +1108,8 @@ export const EDITS: EditSpecs = {
   removeVersion: {
     group: "Knowledge: who knows or believes what, and the versions told",
     args: ["id"],
-    summary: "Remove a version, knowledge of it, and links to both.",
+    summary:
+      "Remove a version, knowledge of it, and links to both; the edit lists the knowledge that went.",
     example: ["remove-version", "ivo-wreck"],
     build: (a) => ({ type: "removeVersion", id: a.arg("id") }),
   },
@@ -1167,7 +1176,8 @@ export const EDITS: EditSpecs = {
   removeKnowledge: {
     group: "Knowledge: who knows or believes what, and the versions told",
     args: ["id"],
-    summary: "Remove what an actor knows or believes, and links to it.",
+    summary:
+      "Remove what an actor knows or believes, and links to it. Knowledge of that knowledge goes too; the edit lists it.",
     example: ["remove-knowledge", "mara-doubts"],
     build: (a) => ({ type: "removeKnowledge", id: a.arg("id") }),
   },
@@ -1313,7 +1323,7 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: [],
     summary:
-      "Timeline problems, effects placed before their causes, circles of causes, and open questions marked as conflicts.",
+      "Timeline problems, effects placed before their causes, circles of causes, knowledge that ends before it starts, and open questions marked as conflicts.",
     example: ["contradictions"],
   },
   render: {
@@ -2053,7 +2063,7 @@ function runRead(
           ? ["No contradictions."]
           : found.map(
               (c) =>
-                `- ${c.message}${c.source === "openQuestion" ? ` [${formatRef(c.ref)}]` : ""}`,
+                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" ? ` [${formatRef(c.ref)}]` : ""}`,
             ),
       );
     }
@@ -2127,6 +2137,7 @@ function runEdit(
               (message) =>
                 `Cause problem (kept; see contradictions): ${message}`,
             ),
+            ...alsoRemovedLines(story, next, command),
             ...staleTextLines(story, next, command),
           ]
             .join("\n")
@@ -2134,6 +2145,35 @@ function runEdit(
         }));
     }),
   );
+}
+
+/**
+ * The versions and knowledge an edit removed besides the record it named,
+ * since removing one record can take them with it.
+ */
+function alsoRemovedLines(
+  before: Story,
+  after: Story,
+  command: StoryCommand,
+): string[] {
+  const named = (kind: "version" | "knowledge", id: string) =>
+    (command.type === "removeVersion" && kind === "version") ||
+    (command.type === "removeKnowledge" && kind === "knowledge")
+      ? command.id === id
+      : false;
+  const gone = (
+    kind: "version" | "knowledge",
+    was: readonly { id: string }[],
+    now: readonly { id: string }[],
+  ) =>
+    was
+      .filter(({ id }) => !now.some((n) => n.id === id) && !named(kind, id))
+      .map(({ id }) => describe(before, { kind, id }));
+  const removed = [
+    ...gone("version", before.versions, after.versions),
+    ...gone("knowledge", before.knowledge, after.knowledge),
+  ];
+  return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
 }
 
 /** Cause contradictions in `after` that weren't in `before`. */

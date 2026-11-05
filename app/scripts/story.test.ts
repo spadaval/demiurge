@@ -634,8 +634,18 @@ describe("story CLI", () => {
     );
     expect(ok("list", "knowledge")).toContain("knowledge:oren-lightning");
 
-    ok("remove-version", "lightning");
-    expect(saved().knowledge.map((k) => k.id)).toEqual(["vell-tithe"]);
+    expect(ok("remove-version", "lightning")).toBe(
+      'Saved.\nAlso removed: knowledge:oren-lightning ("Oren believes: Lightning struck it")\n',
+    );
+    ok("add-knowledge", "oren-arson", "oren", "knows", "version:arson");
+    expect(ok("remove-event", "burning")).toBe(
+      'Saved.\nAlso removed: version:arson ("Vell set the fire"), knowledge:oren-arson ("Oren knows: Vell set the fire")\n',
+    );
+    expect(ok("remove-fact", "tithe")).toContain(
+      "Also removed: knowledge:vell-tithe",
+    );
+    expect(ok("remove-actor", "oren")).toBe("Saved.\n");
+    expect(saved().knowledge).toEqual([]);
     expect(saved().scenes[0]?.reveals).toEqual([]);
     const bad = cli(
       file,

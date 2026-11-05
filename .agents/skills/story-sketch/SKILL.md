@@ -107,7 +107,12 @@ reread.
   an event or a candidate answer. Without `--since` it holds from the start,
   and without `--until` it never stops. Times are events, so a belief starts
   and ends with what happens. `show actor:mara` lists what she knows or
-  believes, and `show event:wreck` lists its versions.
+  believes, and `show event:wreck` lists its versions. Removing a record
+  takes with it the versions and knowledge that depend on it: an event's
+  versions, an actor's knowledge, and anyone's knowledge of the record. The
+  edit lists them under "Also removed", so rework by updating rather than
+  removing when the account or belief is still true. Knowledge that ends
+  before it starts is kept and reported by `contradictions`.
 - **Telling order is not true order.** A scene tells the reader something by
   revealing or implying it: the fact, a version (the reader may believe a
   lie for a while), or the knowledge itself (`set-scene-links docks reveals

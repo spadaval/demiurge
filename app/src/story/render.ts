@@ -611,12 +611,20 @@ function concerns(story: Story, about: readonly Ref[]): string {
 }
 
 /**
- * Timeline and cause problems in words; open conflicts are already marked
- * above.
+ * Timeline, cause and knowledge problems in words; open conflicts are
+ * already marked above.
  */
 function contradictionLines(story: Story): string[] {
   return storyContradictions(story).flatMap((c) => {
     if (c.source === "openQuestion") return [];
+    if (c.source === "knowledge") {
+      const k = story.knowledge.find((x) => x.id === c.ref.id);
+      return k?.since === undefined || k.until === undefined
+        ? []
+        : [
+            `- ${refName(story, c.ref)} ends with ${eventLabel(story, k.until)}, which happens before ${eventLabel(story, k.since)}, when it starts.`,
+          ];
+    }
     if (c.source === "cause") {
       return c.kind === "effect_first"
         ? [

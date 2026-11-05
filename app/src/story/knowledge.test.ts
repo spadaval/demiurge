@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { applyStoryCommand, type StoryCommand } from "./commands";
+import { storyContradictions } from "./contradictions";
 import { knowledgeAlways, tellingOrder, trueOrder } from "./learning";
 import { renderStory } from "./render";
 import { scenesTouching } from "./scenes";
@@ -139,6 +140,27 @@ describe("versions and knowledge", () => {
     expect(
       noLetter.knowledge.find((k) => k.id === "mara-fog")?.until,
     ).toBeUndefined();
+  });
+
+  test("knowledge that ends before it starts is a contradiction, kept", () => {
+    expect(storyContradictions(base)).toEqual([]);
+    const backwards = run(base, {
+      type: "updateKnowledge",
+      id: "mara-fog",
+      since: "letter",
+      until: "wreck",
+    });
+    expect(storyContradictions(backwards)).toEqual([
+      {
+        source: "knowledge",
+        ref: { kind: "knowledge", id: "mara-fog" },
+        message:
+          '"Mara believes: The fog took it" is held until "The wreck", which happens before "The letter", when it starts.',
+      },
+    ]);
+    expect(renderStory(backwards)).toContain(
+      "- Mara believes: Ivo's account of The wreck ends with The wreck, which happens before The letter, when it starts.\n",
+    );
   });
 
   test("touches and scenes follow them", () => {
