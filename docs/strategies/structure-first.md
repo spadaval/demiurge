@@ -298,7 +298,7 @@ Only these wait for Sumeet, because they're irreversible or public:
   which `on-screen` would have to, if it stays.
 - The judges are models too, mostly from the same family as the authoring
   sessions, and may prefer what an agent writes or miss what a reader would feel.
-  One judge on a different model, a rubric fixed before reading, and Sumeet's
+  Two of the three judges on other models, a rubric fixed before reading, and Sumeet's
   after-the-fact review are the check; disagreement among judges is reported, not
   hidden.
 - The gap reports are a first guess at what a story needs to be interesting, and

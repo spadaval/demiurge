@@ -19,6 +19,9 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-iaoc"
     type: "blocked_by"
+  - kind: "issue"
+    id: "worldcrafter-iu6l"
+    type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"

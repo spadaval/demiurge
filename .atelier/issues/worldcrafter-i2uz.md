@@ -24,9 +24,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T00:50:48.300420425+00:00"
+status: "done"
 title: "Verdict: a judging panel reads the comparison, then keep, change or drop"
-updated_at: "2026-11-05T00:49:23.401426965+00:00"
+updated_at: "2026-11-05T00:50:48.300420425+00:00"
 ---
 
 ## Goal
@@ -60,3 +61,15 @@ The packets are in `/home/supadava/projects/demiurge-comparison/packets/`. The k
 - 2026-11-04 [decision] Verdict: change. This replaces the earlier note 'Verdict: drop the tool as built'
   Reason: Opus change, Sonnet change (first run, which counts per d2401a0), Fable drop (dissent). The uncounted Sonnet replacement called drop. Every judge preferred the notes arm in all four pairs, so the tool as built lost; change means build on it only after named changes. The judges agree on what to change first: (1) render cost: the readable form's word budget made sessions delete structure, so keep links, settled questions and rejected candidates out of the count; (2) cause links between events, checked on moves; (3) a way to reach what free text mentions, such as moved dates and changed motives; (4) history: superseded answers. Opus: if the changes don't give at least an even result on a fresh held-back premise, the next verdict should be drop.
 - 2026-11-04 [note] Path map after 7b8aa90 (finding worldcrafter-3k5e): evidence worldcrafter-t2uj (drop) recorded the uncounted Sonnet replacement, now at docs/verdicts/comparison/sonnet-part2-replacement-uncounted.md; docs/verdicts/comparison/sonnet-part2.md now holds the counted first run (change), formerly failed/sonnet-part2-failed-1.md, with its first STATUS in sonnet-part2.STATUS.original. Evidence worldcrafter-tshh (drop) described the verdict.md of 0ab62e8; verdict.md now says change (evidence worldcrafter-enlh). t2uj was superseded by worldcrafter-bzev rather than amended.
+
+## Close Reason
+
+Verdict: change (keep 0, change 2 [opus, sonnet], drop 1 [fable]), by a panel of three isolated judges (Opus 5.5, Sonnet 5.5, Fable 5.1) against docs/verdicts/comparison-rubric.md at 314b20a. Reports, verdict and the uncounted Sonnet replacement are in docs/verdicts/comparison/; evidence on this item; procedure review approved (worldcrafter-y21o).
+
+Main reasons: every judge preferred the plain-notes arm in all four pairs, held-back and tuned-on alike, and the tool lost most rework comparisons. Two judges see promise if the render stops charging for structure; one (fable) would drop the data model and start again from the gaps logs.
+
+What they'd change first, in order: the readable form's word cost (wants quoted again under every link, constraints and settled questions printed, so sessions deleted true structure); cause links between events, checked on moves; a way to reach what free text mentions; history for superseded answers and deliberate gaps.
+
+Deviations: the Opus and Fable Part 1 runs were kept after a reviewed recheck of transcript-check false positives. Sonnet's first Part 2 was flagged the same way and replaced without a recorded decision; the procedure review caught it (49qz), and an independent decision (d2401a0) counted the first run, which turned the result from drop into change. The replacement is kept, uncounted.
+
+Next increment: worldcrafter-hqgq (make the changes, then a second comparison on a fresh held-back premise, judged by worldcrafter-iu6l).
