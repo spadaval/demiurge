@@ -1,0 +1,2 @@
+failed
+- outside the run dir: Bash: sed -i 's/ the Jovian-like mechanism is absent,//' part1.md && grep -n "Jovian-like" part1.md; echo done
