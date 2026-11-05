@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round runner: choose-random --range"
-updated_at: "2026-11-05T09:33:51.069106245+00:00"
+updated_at: "2026-11-05T10:15:01.509814111+00:00"
 ---
 
 ## Goal
