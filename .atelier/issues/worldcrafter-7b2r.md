@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round runner: a killed runner stops its sandboxed session"
-updated_at: "2026-11-05T17:02:28.300091597+00:00"
+updated_at: "2026-11-05T17:03:07.143182342+00:00"
 ---
 
 ## Goal

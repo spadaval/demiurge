@@ -3,6 +3,9 @@ created_at: "2026-11-05T16:59:55.918125363+00:00"
 id: "worldcrafter-qmq0"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-qmq0
 priority: "P1"
 relationships:
   blocks: []
@@ -24,7 +27,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 4 fixes: retold events, opening counts, viewpoint marks"
-updated_at: "2026-11-05T17:02:28.300558648+00:00"
+updated_at: "2026-11-05T17:03:03.164806534+00:00"
 ---
 
 ## Goal
