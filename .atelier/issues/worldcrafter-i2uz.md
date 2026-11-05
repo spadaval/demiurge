@@ -26,7 +26,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Verdict: a judging panel reads the comparison, then keep, change or drop"
-updated_at: "2026-11-05T00:22:19.802643405+00:00"
+updated_at: "2026-11-05T00:37:05.993922173+00:00"
 ---
 
 ## Goal
@@ -53,3 +53,5 @@ The packets are in `/home/supadava/projects/demiurge-comparison/packets/`. The k
 - 2026-11-04 [note] Refinement of the decision note above: Part 1's excerpt is the rubric's lines from '## What you're judging' up to (not including) '## Part 2' at the pinned commit; the title ('tool against plain notes') and the preamble are dropped too, since they name the arms.
 - 2026-11-04 [decision] Opus and Fable Part 1 runs are kept after a reviewed recheck rather than replaced
   Reason: Diagnosis (c8c9d35, 39ae955): Opus's flagged reads were Claude Code's own spill files of a packet it had just cat'ed, inside the sandbox's fresh HOME; Fable's flag was bare '/' in the prose of the heredoc writing its report. Neither reached beyond its material. A replacement Opus would trip the same spill-file read. STATUS.original keeps the first verdicts.
+- 2026-11-04 [decision] Verdict: drop the tool as built
+  Reason: Panel of three (opus change, sonnet drop, fable drop); rule gives drop. Notes won 4 of 4 pairs for every judge, including the held-back premise and the tuned-on one. Main reason in all three reports: the render's word budget made tool sessions delete the structure the tool holds; then missing cause links, no way to reach what text mentions, no history. Reports in docs/verdicts/comparison/.
