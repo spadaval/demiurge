@@ -1,49 +1,81 @@
 # Part 2 (key open)
 
-Part 1 is untouched in `my-part1.md`. Below I map my blind calls onto the key and answer 6-8.
+Part 1 is untouched in `my-part1.md`. Here is what my Part 1 preferences look like once the key says who used what.
 
-## What the key does to my Part 1 calls
-
-| Pair | Premise status | Tool was | My blind preference | Went to |
+| Pair | Tool | Notes | My Part 1 preference | Confidence |
 |---|---|---|---|---|
-| MG pair 1 | held back | A | B, medium | **notes** |
-| MG pair 2 | held back | B | A, medium | **notes** |
-| Thukker 1 | tuned-on | B | A, high | **notes** |
-| Thukker 2 | tuned-on | B | A, low | **notes** |
+| MGT 1 | A | B | B (notes) | medium |
+| MGT 2 | B | A | A (notes) | medium |
+| Thukker 1 | B | A | A (notes) | high |
+| Thukker 2 | B | A | A (notes) | low |
 
-The notes session won all four pairs, and the tool never won one. Sub-calls:
-- **Reworks.** The tool took 1 of the 8 rework comparisons that I gave to a side: rework 2 in MG pair 1 (Halsey Street pulled onto the page). I called MG1 rework 2 only "slightly", and called MG1 rework 1 for the notes. Notes took the other rework comparisons, including both reworks in MG pair 2 and both in Thukker 1. Thukker 2 went to notes slightly on both reworks.
-- **Scenes.** The notes scene was better in all four pairs.
-- **Open questions.** Notes were better or equal in every pair. Both arms tended to settle things early, but the notes arm weighed candidates more (the Carrow Street alternatives, the Auditor's unresolved "mercy or control").
+The notes session was preferred in all four pairs. None of the 8 runs failed (`failures.md`).
 
 ## 6. Keep, change or drop
 
-**Drop.**
+**Change.** This is a low-to-medium-confidence call. Drop is the nearest alternative.
 
-- **Held-back premise (weighs most).** Both pairs went to notes, each at medium confidence. In MG1 the notes session had the better central pressure, a twist that recasts earlier beats, and the better scene. In MG2 the notes session had the stronger engine ("the town needs its girls to stay hurt") and the cleaner reworks. The tool's one win there was a single rework. Nothing on the page suggests the tool made these stories better.
-- **Tuned-on premise.** The tool was built against Thukker, so it should have flattered the tool, yet it lost both pairs. Thukker 1 was a clear loss: the tool story's confusing socket line and its uncommented timeline clash with the Lattice hauler. Thukker 2 was a loss at low confidence, with the tool story arguably the more thematically interesting one. The tuned-on pairs moved me only slightly. If anything they count against the tool, because the tool lost even where it had home advantage. I did not use them to offset the held-back result.
-- **Why drop and not change.** "Change" fits a mixed result. Mine is not mixed: 0 of 4 pairs, 1 of 8 rework comparisons, 0 of 4 scenes. The model-gaps logs also show a mechanism that depresses the output, not just friction: the tool's render length budget (about 1,500 words) pushed every tool session to delete true links, answered questions and rejected candidates, so the stories carried less structure than the sessions knew. That is a design problem in the tool, not a fixable tweak. I would not build on the current tool. If someone rebuilds it, the budget problem in Q7 is the place to start.
+**Held-back premise (weighted most).**
+- Both MGT pairs went to the notes session, each at medium confidence. The tool did not make those stories better.
+- It wasn't uniformly worse. In MGT 1 the tool session (A) did the more structural rework 2: it moved Halsey Street into the present and kept the knock-on changes to Marcus and the kitchen scene. It also had a clean, tight confession scene.
+- In MGT 1 the notes session still won on the bigger central pressure, the planted twist and the better scene.
+- In MGT 2 the notes session won on the world rule, the cleaner reworks and the better scene. The tool session's scene had a dialogue glitch and a long expository speech.
+
+**Tuned-on premise.**
+- The notes session won both Thukker pairs, one of them at high confidence.
+- This premise should have flattered the tool, and it didn't. So the tuned-on pairs moved me toward drop, not toward keep.
+- They pulled me a bit further from keep, because even the favourable premise showed no benefit.
+
+**Why change and not drop.**
+- The four gap logs describe specific, repeated and fixable problems. Section 7 covers them.
+- The costliest one is not the model's structure. The ~1,500-word render budget made the tool sessions delete true links, settled questions and rejected candidates, as the logs say. That plausibly cost the tool arm some of its structural advantage.
+- The logs show the tool's help was real but small. It caught contradictions and gave `touches` lookups. Stale free text still had to be found by reading.
+- Four preferences, all pointing the same way, with two at only medium or low confidence, can't separate "the tool hurts" from "the tool as rendered and budgeted hurts".
+
+I would not build on the tool as it is. If the named changes don't move a rerun on a fresh premise, drop it.
 
 ## 7. What was missing
 
-Across all four tool logs, the same gaps recur. Roughly in order of how often they appear:
+The gap reports said the same things across all four runs.
 
-1. **Render length versus links (all four logs).** Every session says the readable form repeats wants and pressures for each relation, so to hit the word target they cut links, present-day events, answered questions, rejected candidates and the Office group. The model held more than the file could show. **This is the first thing I'd change.** Stop printing repeated wants, let settled questions and rejected candidates stay in the file but out of the render, and drop the hard word target or apply it only to the prose view.
-2. **A chain of causes ("because").** Asked for in three logs. Examples: the Thukker 2 desertion that turned from effect into cause with nothing to object, "her light goes out, so Ruth holds alone", and Thukker 1's "Haruka's call causes the second hull". Constraints only order events, and they print verbosely. A `caused` relation between events would catch the failures that appeared in the reworks.
-3. **Reaching what text only mentions.** Every log says rework edits needed the author to find scene and fact text by reading. `touches` finds linked records but not the sentences that mention a moved date or a changed motive. The leftovers I saw in Part 1 are the same problem on the page: "twenty years" versus sixteen, the stale waiting-list questions, and the Thukker 1 timeline clash. A way to list the free text that mentions an event, or to refer to an event's position from text, would address it.
-4. **Types the model lacks.** Plants and payoffs or motifs, mirrors and echoes between actors or events, and superseded answers. Each log asked for at least one. An intended ambiguity (the Archivist's ship) and a drive that ends given up were also asked for. These are real but second-order next to 1-3.
-5. **Time units.** Whole years only, so same-year and same-day ordering needed fractional hacks and produced spurious contradictions.
-6. **Gap reports.** The gaps check flagged origin-less drives (Velan, Ondrai, Saevel). The sessions called the flags unhelpful for temperament or condition motives and left them standing. The reports were mostly about the model, not the story. I'd add a way to mark a flag as deliberate, and I'd want the check to find stale text after a rework.
+**1. A causal "because" link between events, and from events to drives and scenes. Change this first.**
+- Positions alone carry no cause. The logs say so in several places:
+  - Run e388bae7: moving Aino's desertion turned an effect into a cause, and nothing objected. The ordering constraint was then deleted for length, so nothing guards that order.
+  - Run 12ed319c: "her light goes out, so Ruth holds alone" lives only in summaries.
+  - Run 6ae4e0b3: "this happened because of / right after that" was lost when constraints became plain years.
+- Rework 1 changes a motivation and rework 2 changes timing. Both are causal edits, so this is exactly where the tool should help most. The sessions fell back on reading.
+- The matching missing piece is a flag when a move changes the gap between linked events, or when free text mentions the moved event's timing. Four runs reported this separately.
 
-Order: (1) render budget, (2) causal link, (3) text-reference finding, then the rest.
+**2. A way to reach what the text only mentions.**
+- Plants and payoffs, motifs, mirrors and echoes live only in free text. Examples:
+  - Dani's door chair and window chair.
+  - Ines's mother's call echoing Dee's father's call.
+  - Hask's belief that belonging must be paid for, mirrored by Kiri.
+  - June at Halsey Street mirroring the girl on Bridget's roof.
+  - The knot-song.
+- Add a light relation such as `echoes`, `plants` or `pays off`, and let `touches` follow it. The scene text that depends on a changed fact should be findable.
+
+**3. Different gap reports, and a rendering fix.**
+- The render repeats each want in every relation, and ordering constraints print verbosely. The budget therefore pushed sessions to delete true structure.
+- Four of the logs record this.
+- Add a "decided, absorbed into the story" state. A settled question or a superseded candidate would stay in the file but drop out of the readable form.
+- Mark superseded answers instead of deleting them. Three runs lost the before-and-after of the rework to git only.
+- Make the gap check accept deliberate exceptions: an origin-less minor drive, a deliberate ambiguity, an intentional unexplained beat. Today those show up as unresolved flags.
+
+**4. Time units.**
+- Years are too coarse. Three logs report faking "same year" or "same night" ordering with fractional years such as 22.5 or 2026.801. Those hacks produced spurious contradictions.
+- Finer units or a "same day, after" relation would fix it.
+- This is a smaller fix than the others, but a recurring one.
+
+**Not the main gap.** A type the model lacks is not the main problem, apart from small cases: a group actor with no drive of its own (the Office), a condition rather than an event as an origin (the Jovians dying out), and a drive that ends in being given up rather than met or thwarted.
 
 ## 8. Doubts
 
-- **Sample size.** One run per cell, four pairs, three judges. A single pair at low confidence (Thukker 2) is a close call. The verdict rests on the consistency of the direction, not on the size of any one gap.
-- **Format giveaway.** Tool and notes packets may look different, which could bias a judge. I did not use format to judge, but I can't rule out an effect.
-- **Confounds.** The tool sessions had a word cap on the render, and by their own logs it changed what they kept. That is part of the tool as built, but it means the loss may owe more to the budget than to structured modelling as an idea. The data can't separate the two. A rebuild with no length cap might do better, and I can't say from this evidence that it would.
-- **My Part 1 confidence.** Mostly medium. Only Thukker 1 was high.
-- **Failures.** None: 0 of 8 runs failed, and every run's step list shows exit 0. The notes runs touched files outside the story directory only for scratch notes (one rework-notes file moved into the story folder, and a few editing scripts), which I read as harmless. They don't affect the verdict.
-- **Premise leak.** Thukker was used to tune the tool. That cuts toward flattering the tool, so the loss there is more telling than a win would have been.
+- **Small sample.** There are 4 pairs, one run per cell, and I am a single judge. Two of my preferences were low or medium on narrow margins (Thukker 2 low, MGT 1 B narrowly). Run-to-run variation in the sessions could account for a lot.
+- **The word budget confound.** The tool sessions reported pruning links, settled questions and rejected candidates to meet a roughly 1,500-word readable-form target. The notes sessions also trimmed. The `a0d95482` log shows word-count trims, but their notes could keep prose that the tool's render could not. The comparison may measure the budget and render as much as the model.
+- **Open-questions criterion.** My Part 1 verdict on this criterion didn't clearly separate the arms. The notes sessions' "Decided" lists flattened things too. That weakens any reading that the tool's candidate structure helped.
+- **Format giveaway.** I can't rule out that the packet format hinted at the arm. Part 1 judged the story on the page, and I made no guess at the arm, so I don't think it moved my judgments.
+- **Same model throughout.** The failures file shows `claude-opus-5-5` throughout. That is consistent, but it also means one model's habits are all that was tested.
+- **Judge panel.** The verdict is the call two of three judges make. A change from me is consistent with either a keep or a drop from the others.
 
-VERDICT: drop
+VERDICT: change
