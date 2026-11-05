@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Trace noise, round three (Round 3 reading 6)"
-updated_at: "2026-11-05T14:15:00.742499920+00:00"
+updated_at: "2026-11-05T14:39:42.290126417+00:00"
 ---
 
 ## Goal
