@@ -1,0 +1,48 @@
+[
+  {
+    "sceneId": "s12-mill",
+    "title": "The Drowned Mill",
+    "position": 12,
+    "beats": 34,
+    "how": "chosen",
+    "reason": "Interesting turn (cost paid): Lark drowns because Bry's brass-heavy vote and her hesitation cost one vote too long; chosen by the orchestrator, beat 12 of 34.",
+    "chosenAt": "2026-11-05T10:39:51.890Z"
+  },
+  {
+    "sceneId": "s24-kettle",
+    "title": "Hello, Little Kettle",
+    "position": 24,
+    "beats": 34,
+    "how": "chosen",
+    "reason": "Interesting turn (reveal): Mothlight is Bry's mother, Hesper; chosen by the orchestrator, beat 24 of 34.",
+    "chosenAt": "2026-11-05T10:39:51.947Z"
+  },
+  {
+    "sceneId": "s10-surge",
+    "title": "Just a Friend",
+    "position": 10,
+    "beats": 34,
+    "how": "random",
+    "reason": "Drawn uniformly from the 16 beats in 1-17 not already chosen, with seed 20261107 (mulberry32).",
+    "seed": 20261107,
+    "range": {
+      "from": 1,
+      "to": 17
+    },
+    "chosenAt": "2026-11-05T10:39:52.004Z"
+  },
+  {
+    "sceneId": "s23-return",
+    "title": "Something Pale With Wings",
+    "position": 23,
+    "beats": 34,
+    "how": "random",
+    "reason": "Drawn uniformly from the 16 beats in 18-34 not already chosen, with seed 20261108 (mulberry32).",
+    "seed": 20261108,
+    "range": {
+      "from": 18,
+      "to": 34
+    },
+    "chosenAt": "2026-11-05T10:39:52.058Z"
+  }
+]

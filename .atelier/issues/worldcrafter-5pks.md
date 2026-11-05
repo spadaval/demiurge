@@ -23,9 +23,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T11:33:24.472003787+00:00"
+status: "done"
 title: "Round 2"
-updated_at: "2026-11-05T10:24:43.972119622+00:00"
+updated_at: "2026-11-05T11:33:24.472003787+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ The second judged round, from scratch with a fresh writer on the same prompt, af
 ## Notes
 
 - 2026-11-05 [note] From review finding worldcrafter-5b6m: duration problems now print one unit finer than typed (e.g. '72 hours give or take 12 hours' for --gap 3d). The reading checks whether the writer misreads them.
+
+## Close Reason
+
+Round 2 run, judged and read. Fresh writer built a 34-beat outline and four 1,877-1,975-word scenes; 16 reports (one Sonnet run replaced), criterion scores 6-9, overall 8-9, world aliveness 7-8. Round 1 fixes took (no silencing; counts and span fixed outline errors); remaining: unchecked numbers in scenes, noisy traces, recurring viewpoint and membership gaps. Log: docs/rounds/round-2.md. Fixes: worldcrafter-ulpg; decision worldcrafter-dgkx. Next: Round 3 (worldcrafter-lxmj).
