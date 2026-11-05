@@ -28,7 +28,14 @@ import {
   storyContradictions,
   timelineProblemMessage,
 } from "../src/story/contradictions";
-import { type CountStep, countSeries, stepText } from "../src/story/counts";
+import {
+  belowThreshold,
+  type CountStep,
+  countSeries,
+  seriesTexts,
+  stepAt,
+  stepText,
+} from "../src/story/counts";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
 import {
   type FirstTold,
@@ -51,7 +58,6 @@ import { scenesTouching } from "../src/story/scenes";
 import {
   type Candidate,
   COUNT_DIRECTIONS,
-  type Count,
   type CountDirection,
   DRIVE_TURN_HOWS,
   GAP_KINDS,
@@ -969,7 +975,7 @@ export const EDITS: EditSpecs = {
       remove: { bool: true, help: "take the refs off the list" },
     },
     summary:
-      "Set the records the scene reveals (tells the reader), implies (lets the reader infer), withholds (keeps back where the reader would expect it), plants (sets up to matter later) or pays-off (brings back what was planted); none clears them. Any record or candidate can be linked. Without --add or --remove the refs replace the list, and the edit names any it dropped.",
+      "Set the records the scene reveals (tells the reader), implies (lets the reader infer), withholds (keeps back where the reader would expect it), plants (sets up to matter later) or pays-off (brings back what was planted); none clears them. Any record or candidate can be linked. Without --add or --remove the refs replace the list, and the edit names any it dropped, and any ref the scene now both tells and withholds.",
     example: ["set-scene-links", "storm", "withholds", "--add", "event:letter"],
     build: (a, story) => {
       const choice = a.choice(a.arg("how"), SCENE_LINK_NAMES, "<how>");
@@ -1045,7 +1051,7 @@ export const EDITS: EditSpecs = {
     args: ["id", "label"],
     flags: COUNT_FLAGS,
     summary:
-      "Add a number that changes at events: hands aboard, days of food, oil left in the lamp. Set its values with set-count; show and render print them as a running series in story order, with the total and how far from the threshold each value is. contradictions reports a value above its total, and with --direction a value that moves the other way.",
+      "Add a number that changes at events: hands aboard, days of food, oil left in the lamp. Set its values with set-count; show and render print them as a running series in story order, with the total, saying how a value stands against the threshold where that changes, and listing the values below it once. contradictions reports a value above its total, and with --direction a value that moves the other way.",
     example: [
       "add-count",
       "crew",
@@ -1672,7 +1678,7 @@ export const READS: Record<ReadName, Spec> = {
     flags: {
       before: {
         value: "<scene-id>",
-        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens",
+        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, then each count's value as of the scene",
       },
     },
     summary:
@@ -2063,7 +2069,16 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...field("threshold", threshold),
         ...field("direction", count.direction ?? ""),
         series.length === 0 ? "values: none yet" : "values, in story order:",
-        ...series.map((step) => `  ${countStepLine(story, count, step)}`),
+        ...seriesTexts(count, series).map(
+          (text, i) => `  ${countStepLine(story, series[i], text)}`,
+        ),
+        ...listLine(
+          "below the threshold at",
+          belowThreshold(series).map(
+            (step) =>
+              `${formatRef({ kind: "event", id: step.at })} (${stepText(count, step, false)})`,
+          ),
+        ),
       ];
     }
     case "object": {
@@ -2156,10 +2171,19 @@ function candidateMark(q: OpenQuestion, c: Candidate): string {
 
 /** `in event: event:wreck ("The wreck") (at the helm)`, for each event it's in. */
 /** `event:wreck ("The wreck") at 12 October 1954: 3 of 12 (Nine drowned)`. */
-function countStepLine(story: Story, count: Count, step: CountStep): string {
+function countStepLine(
+  story: Story,
+  step: CountStep | undefined,
+  text: string,
+): string {
+  if (step === undefined) return text;
   const at = eventTime(story, step.at);
-  return `${describe(story, { kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}: ${stepText(count, step)}${step.note.trim() === "" ? "" : ` (${step.note})`}`;
+  return `${describe(story, { kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}: ${text}${step.note.trim() === "" ? "" : ` (${step.note})`}`;
 }
+
+/** `name: a, b`, or nothing for an empty list. */
+const listLine = (name: string, items: readonly string[]) =>
+  items.length === 0 ? [] : [`${name}: ${items.join(", ")}`];
 
 /** The counts set at an event, with the value they take then. */
 function countsAt(story: Story, event: string): string[] {
@@ -2456,7 +2480,22 @@ function toldBeforeLines(story: Story, index: number): string[] {
           "Held back and not told yet:",
           ...withheld.map((ref) => `- ${shortDescribe(story, ref)}`),
         ]),
+    ...countsBefore(story, anchor),
   ];
+}
+
+/** Each count's value in effect at `event`, with how it stands. */
+function countsBefore(story: Story, event: string | undefined): string[] {
+  if (event === undefined) return [];
+  const lines = story.counts.flatMap((count) => {
+    const step = stepAt(story, countSeries(story, count), event);
+    if (step === undefined) return [];
+    const at = eventTime(story, step.at);
+    return [
+      `- ${shortDescribe(story, { kind: "count", id: count.id })}: ${stepText(count, step)}, since ${formatRef({ kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}`,
+    ];
+  });
+  return lines.length === 0 ? [] : ["Counts as of the scene:", ...lines];
 }
 
 /** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
@@ -2905,6 +2944,7 @@ function runEdit(
             ...(a.bool("remove") === true
               ? []
               : droppedLinkLines(story, next, command)),
+            ...crossedLinkLines(story, next),
             ...staleTextLines(story, next, command, path),
           ]
             .map((line) => `${line}\n`)
@@ -2994,6 +3034,28 @@ function droppedLinkLines(
     : [
         `Dropped from ${command.id} ${how}: ${dropped.join(", ")} (--add adds without replacing the list)`,
       ];
+}
+
+/**
+ * Refs a scene now both tells (reveals or implies) and withholds, which
+ * cancel out; only those the edit made are listed.
+ */
+function crossedLinkLines(before: Story, after: Story): string[] {
+  const crossed = (story: Story) =>
+    story.scenes.flatMap((scene) =>
+      (["reveals", "implies"] as const).flatMap((how) =>
+        scene[how]
+          .map(formatRef)
+          .filter((ref) => scene.withholds.map(formatRef).includes(ref))
+          .map(
+            (ref) => `scene ${scene.id} now both ${how} and withholds ${ref}`,
+          ),
+      ),
+    );
+  const old = new Set(crossed(before));
+  return crossed(after)
+    .filter((line) => !old.has(line))
+    .map((line) => `Note: ${line}; one of the two is probably meant.`);
 }
 
 /** Cause and count contradictions in `after` that weren't in `before`. */

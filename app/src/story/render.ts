@@ -22,12 +22,13 @@ import {
 import type { Constraint, Position, Timeline } from "../time/timeline";
 import { describeWhen, describeYears } from "./calendar";
 import { storyContradictions } from "./contradictions";
-import { countSeries, stepText } from "./counts";
+import { belowThreshold, countSeries, seriesTexts, stepText } from "./counts";
 import { eventsInStoryOrder } from "./order";
 import {
   type DriveTurn,
   type OpenQuestion,
   questionState,
+  type ReaderQuestion,
   type Ref,
   SCENE_LINK_KINDS,
   type Story,
@@ -72,7 +73,7 @@ const SECTIONS: readonly Section[] = [
   { name: "scenes", title: "Scenes, in telling order", lines: sceneLines },
   {
     name: "reader-questions",
-    title: "What the reader is waiting to find out",
+    title: "Reader questions, in the order they are raised",
     lines: readerLines,
   },
   {
@@ -439,12 +440,20 @@ function countLines(story: Story): string[] {
       `- **${named(count.label)}**${of === undefined ? "" : `, out of ${named(of.label)}`}${count.direction === undefined ? "" : `, only ${count.direction === "rises" ? "rising" : "falling"}`}.`,
       count.notes.trim() === "" ? undefined : sentence(count.notes),
     ]);
+    const series = countSeries(story, count);
+    const texts = seriesTexts(count, series);
+    const below = belowThreshold(series);
     return [
       head,
-      ...countSeries(story, count).map((step) => {
+      ...series.map((step, i) => {
         const when = eventTime(story, step.at);
-        return `  - ${eventLabel(story, step.at)}${when === undefined ? "" : ` (${when})`}: ${sentence(joined([stepText(count, step), step.note.trim() === "" ? undefined : `(${step.note.trim()})`]))}`;
+        return `  - ${eventLabel(story, step.at)}${when === undefined ? "" : ` (${when})`}: ${sentence(joined([texts[i], step.note.trim() === "" ? undefined : `(${step.note.trim()})`]))}`;
       }),
+      ...(below.length === 0
+        ? []
+        : [
+            `  Below the threshold at: ${below.map((step) => `${eventLabel(story, step.at)} (${stepText(count, step, false)})`).join("; ")}.`,
+          ]),
     ];
   });
 }
@@ -637,8 +646,19 @@ function sceneLines(story: Story): string[] {
   });
 }
 
+/**
+ * Reader questions in the order scenes raise them (those no scene raises
+ * last), the ones still open first and then those a scene answers.
+ */
 function readerLines(story: Story): string[] {
-  return story.readerQuestions.map((q) => {
+  const sceneIndex = (id: string | undefined) => {
+    const i = story.scenes.findIndex((scene) => scene.id === id);
+    return i === -1 ? Number.POSITIVE_INFINITY : i;
+  };
+  const ordered = [...story.readerQuestions].sort(
+    (a, b) => sceneIndex(a.opensAt) - sceneIndex(b.opensAt),
+  );
+  const line = (q: ReaderQuestion) => {
     const where = [
       q.opensAt === undefined
         ? undefined
@@ -648,7 +668,14 @@ function readerLines(story: Story): string[] {
         : `answered in "${sceneTitle(story, q.answeredAt)}"`,
     ].filter((part) => part !== undefined);
     return `- ${q.question}${where.length === 0 ? "" : ` (${where.join("; ")})`}`;
-  });
+  };
+  const open = ordered.filter((q) => q.answeredAt === undefined);
+  const answered = ordered.filter((q) => q.answeredAt !== undefined);
+  return [
+    ...(open.length === 0 ? [] : ["Still open:", ...open.map(line)]),
+    ...(open.length > 0 && answered.length > 0 ? [""] : []),
+    ...(answered.length === 0 ? [] : ["Answered:", ...answered.map(line)]),
+  ];
 }
 
 /** A question's ruled-out candidates, each with why, a line apiece. */

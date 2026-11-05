@@ -926,7 +926,7 @@ describe("story CLI", () => {
         "values, in story order:",
         "  event:reading at 7 April 619: 180 of 1000, 321 short of more than half (501)",
         "  event:fair at 13 May 619: 452 of 992, 45 short of more than half (497)",
-        "  event:sells at 28 May 619, 23:00: 488 of 992, 9 short of more than half (497)",
+        "  event:sells at 28 May 619, 23:00: 488 of 992",
         "",
       ].join("\n"),
     );
@@ -977,6 +977,92 @@ describe("story CLI", () => {
       "ledger",
     );
     expect(both.code).toBe(1);
+  });
+
+  test("a count says how it stands only where that changes, and reader-order --before gives it as of the scene", () => {
+    ok("init", "A keeper keeps the light.");
+    for (const [i, value] of [60, 70, 11, 80, 90].entries()) {
+      ok("add-event", `e${i + 1}`, `Night ${i + 1}`);
+      ok("set-position", `e${i + 1}`, `1954-10-${10 + i}`);
+      if (i === 0) {
+        ok("add-count", "oil", "Lamp oil", "--threshold", "50");
+        ok(
+          "add-count",
+          "crew",
+          "Hands",
+          "--of",
+          "oil",
+          "--threshold",
+          "more-than-half",
+        );
+      }
+      ok("set-count", "oil", `e${i + 1}`, String(value));
+    }
+    expect(ok("show", "count:oil")).toContain(
+      [
+        "values, in story order:",
+        '  event:e1 ("Night 1") at 10 October 1954: 60, reaching 50',
+        '  event:e2 ("Night 2") at 11 October 1954: 70',
+        '  event:e3 ("Night 3") at 12 October 1954: 11, 39 short of 50',
+        '  event:e4 ("Night 4") at 13 October 1954: 80, reaching 50',
+        '  event:e5 ("Night 5") at 14 October 1954: 90',
+        "below the threshold at: event:e3 (11)",
+        "",
+      ].join("\n"),
+    );
+    expect(ok("render", "--section", "counts")).toContain(
+      "  Below the threshold at: Night 3 (11).\n",
+    );
+    // More than half of a total of zero is no threshold.
+    ok("set-count", "oil", "e5", "0");
+    ok("set-count", "crew", "e5", "0");
+    expect(ok("show", "count:crew")).toContain(": 0 of 0\n");
+
+    ok("add-scene", "storm", "Storm");
+    ok("set-scene-events", "storm", "e4");
+    expect(ok("reader-order", "--before", "storm")).toContain(
+      'Counts as of the scene:\n- count:oil ("Lamp oil"): 80, reaching 50, since event:e4 at 13 October 1954\n',
+    );
+
+    // A scene that tells and withholds one ref is noted, once.
+    ok("set-scene-links", "storm", "implies", "event:e2");
+    expect(ok("set-scene-links", "storm", "withholds", "event:e2")).toBe(
+      "Note: scene storm now both implies and withholds event:e2; one of the two is probably meant.\n",
+    );
+    expect(
+      ok("set-scene-links", "storm", "withholds", "--add", "event:e1"),
+    ).toBe("");
+  });
+
+  test("render lists reader questions in the order scenes raise them, open then answered", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-scene", "one", "One");
+    ok("add-scene", "two", "Two");
+    ok("add-reader-question", "a-late", "Who sent it?");
+    ok("add-reader-question", "b-early", "Will she open it?");
+    ok("add-reader-question", "c-none", "Where is the ship?");
+    ok("set-reader-question-scenes", "a-late", "--opens", "two");
+    ok(
+      "set-reader-question-scenes",
+      "b-early",
+      "--opens",
+      "one",
+      "--answered",
+      "two",
+    );
+    expect(ok("render", "--section", "reader-questions")).toBe(
+      [
+        "## Reader questions, in the order they are raised",
+        "",
+        "Still open:",
+        '- Who sent it? (raised in "Two")',
+        "- Where is the ship?",
+        "",
+        "Answered:",
+        '- Will she open it? (raised in "One"; answered in "Two")',
+        "",
+      ].join("\n"),
+    );
   });
 
   test("span gives the time between two events, and reader-order --before what the reader has been told", () => {

@@ -48,9 +48,10 @@ export function countSeries(story: Story, count: Count): CountStep[] {
   return ordered(count, at).map(({ at: event, value, note }) => {
     const total =
       count.total ?? totals.filter((t) => at(t.at) <= at(event)).at(-1)?.value;
+    // More than half of nothing (a total of zero) is no threshold.
     const threshold =
       count.threshold === "more_than_half"
-        ? total === undefined
+        ? total === undefined || total <= 0
           ? undefined
           : moreThanHalf(total)
         : count.threshold;
@@ -64,21 +65,72 @@ export function countSeries(story: Story, count: Count): CountStep[] {
   });
 }
 
+/** The threshold as said: `more than half (497)` or `50`. */
+const thresholdText = (count: Count, threshold: number) =>
+  count.threshold === "more_than_half"
+    ? `more than half (${threshold})`
+    : `${threshold}`;
+
+/** Whether a step is at or past its threshold, if it has one. */
+const reaches = (step: CountStep) =>
+  step.threshold === undefined ? undefined : step.value >= step.threshold;
+
 /**
  * `488 of 992, 9 short of more than half (497)`: a step's value, with its
- * total and how it stands against the threshold.
+ * total and how it stands against the threshold. With `standing` false, the
+ * threshold is left out.
  */
-export function stepText(count: Count, step: CountStep): string {
+export function stepText(
+  count: Count,
+  step: CountStep,
+  standing = true,
+): string {
   const of = step.total === undefined ? "" : ` of ${step.total}`;
-  if (step.threshold === undefined) return `${step.value}${of}`;
-  const mark =
-    count.threshold === "more_than_half"
-      ? `more than half (${step.threshold})`
-      : `${step.threshold}`;
+  if (step.threshold === undefined || !standing) return `${step.value}${of}`;
+  const mark = thresholdText(count, step.threshold);
   const short = step.threshold - step.value;
   return short > 0
     ? `${step.value}${of}, ${short} short of ${mark}`
     : `${step.value}${of}, reaching ${mark}`;
+}
+
+/**
+ * Each step's text in a series, saying how it stands against the threshold
+ * only where that changes (it first reaches it, falls back below it, or
+ * the threshold itself moves), so a long series doesn't repeat it.
+ */
+export function seriesTexts(count: Count, series: CountStep[]): string[] {
+  return series.map((step, i) => {
+    const prev = series[i - 1];
+    const changed =
+      prev === undefined ||
+      prev.threshold !== step.threshold ||
+      reaches(prev) !== reaches(step);
+    return stepText(count, step, changed);
+  });
+}
+
+/**
+ * The steps below their threshold, to list once beside the series, when
+ * the series has some at or past it too (a dip that matters); none when
+ * every step is on one side.
+ */
+export function belowThreshold(series: CountStep[]): CountStep[] {
+  const below = series.filter((step) => reaches(step) === false);
+  return series.some((step) => reaches(step) === true) ? below : [];
+}
+
+/**
+ * The step in effect at `event`: the last whose event comes at or before it
+ * in story order.
+ */
+export function stepAt(
+  story: Story,
+  series: CountStep[],
+  event: EventId,
+): CountStep | undefined {
+  const at = storyIndex(story);
+  return series.filter((step) => at(step.at) <= at(event)).at(-1);
 }
 
 export type CountProblem = { count: string; at: EventId; message: string };
