@@ -304,6 +304,45 @@ describe("what the story shows the viewpoint", () => {
     });
   });
 
+  test("a version of the event she believes decides over what she is shown", () => {
+    const believing = run(
+      story,
+      { type: "addActor", id: "pia", name: "Pia", kind: "person", notes: "" },
+      {
+        type: "addVersion",
+        id: "storm",
+        event: "wreck",
+        text: "A storm took it",
+        by: ["pia"],
+      },
+      {
+        type: "addKnowledge",
+        id: "mara-storm",
+        actor: "mara",
+        how: "believes",
+        what: { kind: "version", id: "storm" },
+        since: "wreck",
+      },
+    );
+    const gap = {
+      later: false,
+      believes: [{ kind: "version", id: "storm" }],
+    };
+    expect(viewpointGap(believing, "mara", wreck, "letter")).toEqual(gap);
+    // Taking part in it, or a scene through her eyes showing it, doesn't
+    // override the recorded belief.
+    expect(
+      viewpointGap(run(believing, part("wreck")), "mara", wreck, "letter"),
+    ).toEqual(gap);
+    const seen = run(
+      believing,
+      { type: "setSceneEvents", id: "night", depicts: ["wreck"] },
+      { type: "setSceneViewpoint", id: "night", actor: "mara" },
+      { type: "setSceneEvents", id: "post", depicts: ["confession"] },
+    );
+    expect(viewpointGap(seen, "mara", wreck, "confession", 1)).toEqual(gap);
+  });
+
   test("her own knowledge records decide over what she is shown", () => {
     const recorded = run(story, part("wreck"), {
       type: "addKnowledge",

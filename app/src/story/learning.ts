@@ -245,7 +245,9 @@ export type ViewpointGap = {
  *
  * The actor's own knowledge records of it decide, where there are any:
  * knowing and believing both count as holding it, from after the `since`
- * event until the `until` event, in story order. Without them, the actor
+ * event until the `until` event, in story order. For an event, holding one
+ * of its versions at `at` is such a record too: they don't know it, and
+ * believe that instead. Without them, the actor
  * holds it from what the story shows them doing: an event from the time
  * they take part in it, and an object in it; a version they tell, from its
  * event; and what a scene told through their eyes shows or reveals, from
@@ -302,6 +304,9 @@ export function viewpointGap(
       believes,
     };
   }
+  // Holding a version of the event instead is their own record about it
+  // too: what they are shown doesn't override a recorded belief.
+  if (believes.length > 0) return { later: false, believes };
   // Story-order places from which the actor holds it, by what they do or see.
   const from = shownFrom(story, actor, ref, scene, place, at);
   if (from.some((p) => at === undefined || p <= place(at))) return undefined;
