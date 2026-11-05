@@ -43,6 +43,31 @@ export type DriveRelationType = "opposes" | "allies" | "competes";
 /** Stored on one drive of the pair only. */
 export type DriveRelation = { to: string; type: DriveRelationType };
 
+/**
+ * How a want ends or changes: met, given up, replaced by another want, or
+ * turned into its opposite (another want, often against what it was allied
+ * with). A drive with no turns is still live.
+ */
+export const DRIVE_TURN_HOWS = [
+  "satisfied",
+  "renounced",
+  "replaced",
+  "flipped",
+] as const;
+
+export type DriveTurnHow = (typeof DRIVE_TURN_HOWS)[number];
+
+/**
+ * One turn in a drive's life, at an event if it has one. `into` is the drive
+ * that replaces it or that it flips into.
+ */
+export type DriveTurn = {
+  how: DriveTurnHow;
+  at?: EventId;
+  into?: string;
+  note: string;
+};
+
 /** An actor's want. A motive can come before its owner, so `actorId` may be null. */
 export type Drive = {
   id: string;
@@ -53,7 +78,24 @@ export type Drive = {
   /** The events that created this drive. */
   origins: EventId[];
   relations: DriveRelation[];
+  /**
+   * Its life after it starts, in the order the turns happen. Left out of the
+   * file when empty, so older files read the same.
+   */
+  turns: DriveTurn[];
 };
+
+/**
+ * A thing that matters to the story: a knife, a letter, a hook. Scenes plant
+ * it and pay it off; events can have it as a participant.
+ */
+export type StoryObject = { id: string; name: string; notes: string };
+
+/**
+ * An actor or object taking part in an event, with its part in it in words:
+ * "did it", "witness", "the weapon". One per event and participant.
+ */
+export type Participant = { event: EventId; who: Ref; role: string };
 
 /** A plain statement about the world. Unlike the app's facts, it doesn't change at events. */
 export type Fact = { id: string; text: string; about: Ref[] };
@@ -68,11 +110,28 @@ export type ReaderQuestion = {
 
 /**
  * What a scene does with a record: tells the reader outright, lets the reader
- * infer it, or keeps it from the reader where the reader would expect it.
+ * infer it, or keeps it from the reader where the reader would expect it;
+ * plants it, setting it up to matter later, or pays off what an earlier scene
+ * planted. Any record can be planted: an object, a fact, a drive.
  */
-export const SCENE_LINK_KINDS = ["reveals", "implies", "withholds"] as const;
+export const SCENE_LINK_KINDS = [
+  "reveals",
+  "implies",
+  "withholds",
+  "plants",
+  "paysOff",
+] as const;
 
 export type SceneLinkKind = (typeof SCENE_LINK_KINDS)[number];
+
+/** Each link kind as a verb: `pays off`. */
+export const SCENE_LINK_WORDS: Record<SceneLinkKind, string> = {
+  reveals: "reveals",
+  implies: "implies",
+  withholds: "withholds",
+  plants: "plants",
+  paysOff: "pays off",
+};
 
 export type Scene = {
   id: string;
@@ -267,7 +326,8 @@ export type RefKind =
   | "scene"
   | "openQuestion"
   | "version"
-  | "knowledge";
+  | "knowledge"
+  | "object";
 
 export const REF_KINDS: readonly RefKind[] = [
   "actor",
@@ -279,6 +339,7 @@ export const REF_KINDS: readonly RefKind[] = [
   "openQuestion",
   "version",
   "knowledge",
+  "object",
 ];
 
 export type Ref =
@@ -303,6 +364,10 @@ export type Story = {
   versions: Version[];
   /** Left out of the file when empty, as `causes` is. */
   knowledge: Knowledge[];
+  /** Left out of the file when empty, as `causes` is. */
+  objects: StoryObject[];
+  /** Left out of the file when empty, as `causes` is. */
+  participants: Participant[];
   timeline: Timeline;
 };
 
@@ -330,6 +395,8 @@ export function refExists(story: Story, ref: Ref): boolean {
       return has(story.versions, ref.id);
     case "knowledge":
       return has(story.knowledge, ref.id);
+    case "object":
+      return has(story.objects, ref.id);
     case "candidate": {
       const { questionId, id } = ref;
       const question = story.openQuestions.find((q) => q.id === questionId);
@@ -364,6 +431,8 @@ export function newStory(premise: string): Story {
     deliberateGaps: [],
     versions: [],
     knowledge: [],
+    objects: [],
+    participants: [],
     timeline: emptyTimeline,
   };
 }
@@ -521,6 +590,7 @@ function checkDrive(v: JsonRecord, at: string): Check<Drive> {
     "method",
     "origins",
     "relations",
+    "turns",
   ]);
   if (known.isErr()) return err(known.error);
   const actorId: Check<string | null> =
@@ -533,7 +603,10 @@ function checkDrive(v: JsonRecord, at: string): Check<Drive> {
     checkString(v.method, `${at}.method`),
     checkStrings(v.origins, `${at}.origins`),
     checkRecords(v.relations, `${at}.relations`, checkDriveRelation),
-  ]).map(([id, actorId, want, stakes, method, origins, relations]) => ({
+    v.turns === undefined
+      ? ok([])
+      : checkRecords(v.turns, `${at}.turns`, checkDriveTurn),
+  ]).map(([id, actorId, want, stakes, method, origins, relations, turns]) => ({
     id,
     actorId,
     want,
@@ -541,7 +614,63 @@ function checkDrive(v: JsonRecord, at: string): Check<Drive> {
     method,
     origins,
     relations,
+    turns,
   }));
+}
+
+function checkDriveTurn(v: JsonRecord, at: string): Check<DriveTurn> {
+  const known = checkKeys(v, at, ["how", "at", "into", "note"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkOneOf(v.how, DRIVE_TURN_HOWS, `${at}.how`),
+    checkOptionalString(v.at, `${at}.at`),
+    checkOptionalString(v.into, `${at}.into`),
+    checkString(v.note, `${at}.note`),
+  ]).map(([how, when, into, note]) => ({
+    how,
+    ...(when === undefined ? {} : { at: when }),
+    ...(into === undefined ? {} : { into }),
+    note,
+  }));
+}
+
+function checkObject(v: JsonRecord, at: string): Check<StoryObject> {
+  const known = checkKeys(v, at, ["id", "name", "notes"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkString(v.id, `${at}.id`),
+    checkString(v.name, `${at}.name`),
+    checkString(v.notes, `${at}.notes`),
+  ]).map(([id, name, notes]) => ({ id, name, notes }));
+}
+
+function checkParticipant(v: JsonRecord, at: string): Check<Participant> {
+  const known = checkKeys(v, at, ["event", "who", "role"]);
+  if (known.isErr()) return err(known.error);
+  const who: Check<Ref> = isRecord(v.who)
+    ? checkRef(v.who, `${at}.who`)
+    : err(`${at}.who must be a ref`);
+  return Result.combine([
+    checkString(v.event, `${at}.event`),
+    who,
+    checkString(v.role, `${at}.role`),
+  ]).map(([event, who, role]) => ({ event, who, role }));
+}
+
+/** One participant per event and record, so the file's text doesn't depend on the edit. */
+function checkParticipants(value: unknown): Check<Participant[]> {
+  if (value === undefined) return ok([]);
+  return checkRecords(value, "participants", checkParticipant).andThen(
+    (participants) => {
+      const seen = new Set<string>();
+      for (const p of participants) {
+        const key = JSON.stringify(PARTICIPANT_KEY(p));
+        if (seen.has(key)) return err(`participants has duplicate ${key}`);
+        seen.add(key);
+      }
+      return ok(participants);
+    },
+  );
 }
 
 function checkFact(v: JsonRecord, at: string): Check<Fact> {
@@ -595,6 +724,8 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     checkSceneLinks(v.reveals, `${at}.reveals`),
     checkSceneLinks(v.implies, `${at}.implies`),
     checkSceneLinks(v.withholds, `${at}.withholds`),
+    checkSceneLinks(v.plants, `${at}.plants`),
+    checkSceneLinks(v.paysOff, `${at}.paysOff`),
   ]).map(
     ([
       id,
@@ -606,6 +737,8 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
       reveals,
       implies,
       withholds,
+      plants,
+      paysOff,
     ]) => ({
       id,
       title,
@@ -616,6 +749,8 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
       reveals,
       implies,
       withholds,
+      plants,
+      paysOff,
     }),
   );
 }
@@ -790,6 +925,15 @@ function checkDeliberateGaps(value: unknown): Check<DeliberateGap[]> {
 
 const CAUSE_KEY = ({ cause, effect }: Cause) => [cause, effect];
 
+/** Identifies a participant: one per event and record. */
+export const PARTICIPANT_KEY = ({
+  event,
+  who,
+}: {
+  event: string;
+  who: Ref;
+}) => [event, ...refKey(who)];
+
 const refKey = (ref: Ref | null): string[] =>
   ref === null
     ? []
@@ -907,6 +1051,8 @@ function checkStory(value: JsonValue): Check<Story> {
     "deliberateGaps",
     "versions",
     "knowledge",
+    "objects",
+    "participants",
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
@@ -935,6 +1081,10 @@ function checkStory(value: JsonValue): Check<Story> {
     value.knowledge === undefined
       ? ok([])
       : checkIdentified(value.knowledge, "knowledge", checkKnowledge),
+    value.objects === undefined
+      ? ok([])
+      : checkIdentified(value.objects, "objects", checkObject),
+    checkParticipants(value.participants),
     parseTimeline(value.timeline ?? null)
       .mapErr((message) => `timeline: ${message}`)
       .andThen(checkTimelineKeys),
@@ -951,6 +1101,8 @@ function checkStory(value: JsonValue): Check<Story> {
       deliberateGaps,
       versions,
       knowledge,
+      objects,
+      participants,
       timeline,
     ]): Story => ({
       version: STORY_VERSION,
@@ -965,6 +1117,8 @@ function checkStory(value: JsonValue): Check<Story> {
       deliberateGaps,
       versions,
       knowledge,
+      objects,
+      participants,
       timeline,
     }),
   );
@@ -1009,6 +1163,8 @@ function normalized(story: Story): Story {
         ...drive,
         origins: sortedStrings(drive.origins),
         relations: sortedBy(drive.relations, ({ to, type }) => [to, type]),
+        // In the order they happen.
+        turns: drive.turns,
       })),
     ),
     facts: byId(
@@ -1023,6 +1179,8 @@ function normalized(story: Story): Story {
       reveals: sortedRefs(scene.reveals),
       implies: sortedRefs(scene.implies),
       withholds: sortedRefs(scene.withholds),
+      plants: sortedRefs(scene.plants),
+      paysOff: sortedRefs(scene.paysOff),
     })),
     openQuestions: byId(
       story.openQuestions.map(({ superseded, ...question }) => ({
@@ -1049,6 +1207,8 @@ function normalized(story: Story): Story {
       })),
     ),
     knowledge: byId(story.knowledge),
+    objects: byId(story.objects),
+    participants: sortedBy(story.participants, PARTICIPANT_KEY),
     timeline: {
       ...timeline,
       events: byId(timeline.events),
@@ -1090,6 +1250,8 @@ const KEY_ORDER = [
   "deliberateGaps",
   "versions",
   "knowledge",
+  "objects",
+  "participants",
   "timeline",
   "id",
   "kind",
@@ -1147,20 +1309,39 @@ function withOrderedKeys(value: unknown): unknown {
 
 /** The file's text. Equal stories give equal text, however they were edited. */
 export function serializeStory(story: Story): string {
-  const { causes, deliberateGaps, versions, knowledge, scenes, ...rest } =
-    normalized(story);
+  const {
+    causes,
+    deliberateGaps,
+    versions,
+    knowledge,
+    objects,
+    participants,
+    scenes,
+    drives,
+    ...rest
+  } = normalized(story);
   const written = {
     ...rest,
-    scenes: scenes.map(({ reveals, implies, withholds, ...scene }) => ({
+    drives: drives.map(({ turns, ...drive }) => ({
+      ...drive,
+      ...(turns.length === 0 ? {} : { turns }),
+    })),
+    scenes: scenes.map((scene) => ({
       ...scene,
-      ...(reveals.length === 0 ? {} : { reveals }),
-      ...(implies.length === 0 ? {} : { implies }),
-      ...(withholds.length === 0 ? {} : { withholds }),
+      // Links are left out when empty, so files without them read the same.
+      ...Object.fromEntries(
+        SCENE_LINK_KINDS.map((kind) => [
+          kind,
+          scene[kind].length === 0 ? undefined : scene[kind],
+        ]),
+      ),
     })),
     ...(causes.length === 0 ? {} : { causes }),
     ...(deliberateGaps.length === 0 ? {} : { deliberateGaps }),
     ...(versions.length === 0 ? {} : { versions }),
     ...(knowledge.length === 0 ? {} : { knowledge }),
+    ...(objects.length === 0 ? {} : { objects }),
+    ...(participants.length === 0 ? {} : { participants }),
   };
   return `${JSON.stringify(withOrderedKeys(written), null, 2)}\n`;
 }

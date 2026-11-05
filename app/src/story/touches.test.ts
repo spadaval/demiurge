@@ -377,6 +377,7 @@ describe("what it skips", () => {
           method: "",
           origins: ["never"],
           relations: [{ to: "nobody", type: "opposes" }],
+          turns: [],
         },
       ],
       facts: [{ id: "f", text: "", about: [{ kind: "scene", id: "nowhere" }] }],
@@ -392,6 +393,8 @@ describe("what it skips", () => {
           reveals: [],
           implies: [],
           withholds: [],
+          plants: [],
+          paysOff: [],
         },
         {
           id: "s2",
@@ -403,6 +406,8 @@ describe("what it skips", () => {
           reveals: [],
           implies: [],
           withholds: [],
+          plants: [],
+          paysOff: [],
         },
       ],
     };

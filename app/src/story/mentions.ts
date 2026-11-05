@@ -11,6 +11,7 @@
 
 import { err, ok, type Result } from "neverthrow";
 import { WORLD_FRAME } from "../time/timeline";
+import { describeSpan } from "./calendar";
 import { describeRef, type Ref, refExists, type Story } from "./story";
 import {
   refLabel,
@@ -43,10 +44,10 @@ export type MentionMatch = "direct" | "holder" | "near";
 const MATCH_ORDER: readonly MentionMatch[] = ["direct", "holder", "near"];
 
 /** A record's free text, field by field. */
-type Text = { ref: Ref; field: string; value: string };
+export type Text = { ref: Ref; field: string; value: string };
 
 /** What to look for, and the field it came from, which isn't searched for it. */
-type Term = {
+export type Term = {
   pattern: RegExp;
   how: string;
   match: MentionMatch;
@@ -157,7 +158,7 @@ function sortedByMatch(texts: readonly Text[], mentions: Mention[]): Mention[] {
 }
 
 /** Every record's free text, records in `TOUCH_KINDS` order. */
-function storyTexts(story: Story): Text[] {
+export function storyTexts(story: Story): Text[] {
   const texts: Text[] = [];
   const add = (ref: Ref, fields: Record<string, string>) => {
     for (const [field, value] of Object.entries(fields)) {
@@ -201,6 +202,17 @@ function storyTexts(story: Story): Text[] {
   for (const v of story.versions) {
     add({ kind: "version", id: v.id }, { text: v.text });
   }
+  for (const o of story.objects) {
+    add({ kind: "object", id: o.id }, { name: o.name, notes: o.notes });
+  }
+  for (const d of story.drives) {
+    add(
+      { kind: "drive", id: d.id },
+      Object.fromEntries(
+        d.turns.map((turn, i) => [`turn ${i + 1} note`, turn.note]),
+      ),
+    );
+  }
   return texts;
 }
 
@@ -237,6 +249,8 @@ function nameOf(story: Story, ref: Ref): { field: string; value: string } {
     // Knowledge has no text of its own to look for.
     case "knowledge":
       return { field: "", value: "" };
+    case "object":
+      return { field: "name", value: find(story.objects)?.name ?? "" };
     case "candidate":
       return {
         field: "answer",
@@ -262,7 +276,7 @@ const numberPattern = (value: number) =>
   new RegExp(`(?<![\\d.])${escaped(String(value))}(?!\\d|\\.\\d)`, "g");
 
 /** What names `ref` in `story`. */
-function terms(story: Story, ref: Ref): Term[] {
+export function terms(story: Story, ref: Ref): Term[] {
   const name = nameOf(story, ref);
   const found: Term[] = [];
   if (name.value.trim() !== "") {
@@ -289,10 +303,13 @@ function terms(story: Story, ref: Ref): Term[] {
     const position = story.timeline.positions.find(
       (p) => p.event === ref.id && p.frame === WORLD_FRAME,
     );
+    // A date is stored as a fractional year, and text states its year.
     const years =
       position === undefined
         ? []
-        : [...new Set([position.start, position.end])];
+        : describeSpan(position) === undefined
+          ? [...new Set([position.start, position.end])]
+          : [Math.floor(position.start)];
     for (const year of years) {
       found.push({
         pattern: numberPattern(year),
@@ -315,7 +332,7 @@ const TAIL =
  * Text that states a span or a season: "twenty years ago", "three years
  * dead", "months", "spring", "the following winter".
  */
-const TIME_PHRASE = new RegExp(
+export const TIME_PHRASE = new RegExp(
   [
     `\\b(?:${COUNT}[\\s-]+){1,3}${UNIT}${TAIL}\\b`,
     `\\b(?:last|next|that|this|the same|the following|the previous|the next) (?:year|month|week|season|spring|summer|autumn|winter)\\b`,

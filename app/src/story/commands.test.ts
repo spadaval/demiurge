@@ -179,6 +179,7 @@ describe("applyStoryCommand", () => {
       method: "",
       origins: ["exile"],
       relations: [{ to: "leave", type: "opposes" }],
+      turns: [],
     });
     expect(sketch.scenes.map(({ id }) => id)).toEqual(["bar", "found"]);
     expect(sketch.scenes[1]).toMatchObject({

@@ -12,6 +12,7 @@ import {
   type Ref,
   refExists,
   SCENE_LINK_KINDS,
+  SCENE_LINK_WORDS,
   type Scene,
   type Story,
 } from "./story";
@@ -62,30 +63,32 @@ function sceneHow(story: Story, scene: Scene, ref: Ref): string[] {
   }
   for (const kind of SCENE_LINK_KINDS) {
     for (const linked of scene[kind]) {
-      if (sameRef(linked, ref)) how.push(`${kind} it`);
+      if (sameRef(linked, ref)) how.push(`${SCENE_LINK_WORDS[kind]} it`);
       // What a scene does with an answer, it does with that answer's question.
       else if (
         ref.kind === "openQuestion" &&
         linked.kind === "candidate" &&
         linked.questionId === id
       ) {
-        how.push(`${kind} its candidate ${linked.id}`);
+        how.push(`${SCENE_LINK_WORDS[kind]} its candidate ${linked.id}`);
       }
       // A version or knowledge stands for its event and its actors.
       if (linked.kind === "version") {
         const version = story.versions.find((v) => v.id === linked.id);
         if (ref.kind === "event" && version?.event === id) {
-          how.push(`${kind} its version ${linked.id}`);
+          how.push(`${SCENE_LINK_WORDS[kind]} its version ${linked.id}`);
         }
         if (ref.kind === "actor" && version?.by.includes(id)) {
-          how.push(`${kind} the version ${linked.id} they tell`);
+          how.push(
+            `${SCENE_LINK_WORDS[kind]} the version ${linked.id} they tell`,
+          );
         }
       }
       if (linked.kind === "knowledge") {
         const k = story.knowledge.find((x) => x.id === linked.id);
         if (ref.kind === "actor" && k?.actor === id) {
           how.push(
-            `${kind} what they ${k.how === "knows" ? "know" : "believe"} (${linked.id})`,
+            `${SCENE_LINK_WORDS[kind]} what they ${k.how === "knows" ? "know" : "believe"} (${linked.id})`,
           );
         }
       }

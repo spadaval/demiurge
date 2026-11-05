@@ -302,17 +302,17 @@ describe("story CLI", () => {
     const before = readFileSync(file, "utf8");
     const moved = ok("set-position", "wreck", "1213");
     expect(moved).toContain(
-      "Free text that mentions event:wreck and may still state the old version (nothing was rewritten):",
+      "What may still state the old event:wreck, likeliest first (nothing was rewritten):",
     );
-    expect(moved).toContain('text: "1203" (states its year 1203)');
+    expect(moved).toContain('text "1203" states its year 1203');
     expect(saved().facts[0]?.text).toBe("The reef was charted in 1203");
     expect(readFileSync(file, "utf8")).not.toBe(before);
 
     expect(ok("update-drive", "avenge", "--want", "Forgive")).toContain(
-      'summary: "Mara" (names its holder Mara)',
+      'summary "Mara" names its holder Mara',
     );
     expect(ok("update-actor", "mara", "--name", "Maren")).toContain(
-      'summary: "Mara" (names it)',
+      'summary "Mara" names it',
     );
     expect(ok("describe-event", "wreck", "--label", "The sinking")).toContain(
       "may state when this happened",
@@ -330,7 +330,7 @@ describe("story CLI", () => {
     for (const i of [1, 2, 3, 4, 5, 6, 7]) {
       ok("add-fact", `f${i}`, `Mara saw the wreck, fact ${i}`);
     }
-    const prompt = "Free text that mentions";
+    const prompt = "What may still state the old";
 
     // No-op and kind-only edits change nothing text states.
     expect(ok("update-actor", "mara", "--name", "Mara")).toBe("Saved.\n");
@@ -345,7 +345,7 @@ describe("story CLI", () => {
     );
     expect(ok("set-position", "wreck", "10")).toBe("Saved.\n");
 
-    // A rename prompts, five lines at most, then points at mentions.
+    // A rename prompts, five lines at most, then points at trace.
     const renamed = ok("update-actor", "mara", "--name", "Maren");
     const lines = renamed.trimEnd().split("\n");
     expect(lines[0]).toBe("Saved.");
@@ -353,15 +353,13 @@ describe("story CLI", () => {
     expect(lines.slice(2, 7).every((line) => line.includes('"Mara"'))).toBe(
       true,
     );
-    expect(lines[7]).toBe(
-      "...and 2 more (7 in all): run mentions actor:mara for all.",
-    );
+    expect(lines[7]).toBe("...run trace actor:mara for all 8.");
     expect(lines).toHaveLength(8);
     // A new holder prompts for the old one's name.
     ok("add-actor", "ivo", "Ivo");
     ok("update-actor", "mara", "--name", "Mara");
     expect(ok("update-drive", "calm", "--actor", "ivo")).toContain(
-      "(names its holder Mara)",
+      "names its holder Mara",
     );
   });
 
@@ -379,14 +377,12 @@ describe("story CLI", () => {
       .trimEnd()
       .split("\n");
     expect(lines[2]).toBe(
-      '- fact:vow ("Her vow to keep the light binds her") text: "keep the light" (names it)',
+      '- fact:vow ("Her vow to keep the light binds her"): text "keep the light" names it',
     );
     expect(lines.slice(3, 7).every((l) => l.includes("names its holder"))).toBe(
       true,
     );
-    expect(lines[7]).toBe(
-      "...and 8 more (13 in all): run mentions drive:d for all.",
-    );
+    expect(lines[7]).toBe("...run trace drive:d for all 14.");
   });
 
   test("show lists a reworked answer's history, and render doesn't", () => {
@@ -483,7 +479,7 @@ describe("story CLI", () => {
     expect(dangling.stderr).toContain("actor nobody does not exist");
     const malformed = cli(file, "set-position", "x", "soon");
     expect(malformed.code).toBe(2);
-    expect(malformed.stderr).toContain("<start> must be a number");
+    expect(malformed.stderr).toContain('<start>: "soon" is not a time');
     const badRef = cli(file, "add-fact", "f", "Text", "--about", "joel");
     expect(badRef.code).toBe(2);
     expect(badRef.stderr).toContain("is not a ref");
@@ -657,6 +653,124 @@ describe("story CLI", () => {
     );
     expect(bad.code).toBe(2);
     expect(bad.stderr).toContain("<how> must be one of knows, believes");
+  });
+
+  test("holds dates, objects planted and paid off, participants and a drive's life", () => {
+    ok("init", "A son comes home for a funeral.");
+    ok("add-actor", "lew", "Lew");
+    ok("add-event", "death", "Dale dies");
+    ok("add-event", "burial", "Dale is buried");
+    ok("set-position", "death", "1954-10-12");
+    ok("set-position", "burial", "1954-10-12 23:30");
+    ok("constrain", "same-night", "death", "before", "burial");
+    expect(ok("contradictions")).toBe("No contradictions.\n");
+    expect(ok("show", "event:burial")).toContain(
+      "position: 12 October 1954, 23:30\n",
+    );
+    ok("add-event", "bus", "The morning bus");
+    ok("set-position", "bus", "1954-10-15");
+    ok("constrain", "after", "burial", "before", "bus", "--gap", "2d");
+    expect(saved().timeline.constraints[0]?.duration?.tolerance).toBeCloseTo(
+      0.5 / 365.2425,
+    );
+    expect(ok("render")).toContain(
+      "- **Dale dies** (12 October 1954) [before Dale is buried]\n- **Dale is buried** (12 October 1954, 23:30)",
+    );
+
+    ok("add-object", "hook", "The sack hook");
+    ok("add-scene", "dock", "The dock");
+    ok("add-scene", "barn", "The barn");
+    ok("set-scene-links", "dock", "plants", "object:hook");
+    ok("set-scene-links", "barn", "pays-off", "object:hook");
+    expect(ok("show", "object:hook")).toBe(
+      'object:hook\nname: The sack hook\nplanted in: scene:dock ("The dock")\npaid off in: scene:barn ("The barn")\n',
+    );
+
+    ok("set-participant", "death", "object:hook", "--role", "the weapon");
+    ok("set-participant", "death", "actor:lew", "--role", "found him");
+    expect(ok("show", "event:death")).toContain(
+      'participant: actor:lew ("Lew") (found him)\nparticipant: object:hook ("The sack hook") (the weapon)\n',
+    );
+    expect(ok("show", "object:hook")).toContain(
+      'in event: event:death ("Dale dies") (the weapon)\n',
+    );
+
+    ok("add-drive", "truth", "Learn the truth", "--actor", "lew");
+    ok("add-drive", "bury", "Bury it", "--actor", "lew");
+    ok("add-drive-turn", "truth", "satisfied", "--at", "burial");
+    ok("add-drive-turn", "truth", "flipped", "--into", "bury", "--at", "bus");
+    expect(ok("show", "drive:truth")).toContain(
+      'life, in order:\n  1. satisfied at event:burial ("Dale is buried")\n  2. flipped into drive:bury ("Bury it") at event:bus ("The morning bus")\n',
+    );
+    expect(ok("show", "drive:bury")).toContain(
+      'flipped from: drive:truth ("Learn the truth")\n',
+    );
+    const wrong = cli(
+      file,
+      "add-drive-turn",
+      "truth",
+      "satisfied",
+      "--into",
+      "bury",
+    );
+    expect(wrong.code).toBe(1);
+    expect(wrong.stderr).toContain(
+      "a drive satisfied doesn't turn into another drive",
+    );
+
+    expect(ok("remove-event", "death")).toBe(
+      "Saved.\nAlso removed: the part of actor:lew in event:death, the part of object:hook in event:death\n",
+    );
+    expect(ok("remove-drive-turn", "truth", "1")).toBe("Saved.\n");
+    expect(saved().drives.find((d) => d.id === "truth")?.turns).toHaveLength(1);
+  });
+
+  test("trace lists dependents mentions misses, scene prose among them, and edits print the top of it", () => {
+    ok("init", "A keeper finds a letter.");
+    ok(
+      "add-event",
+      "wreck",
+      "The wreck",
+      "--summary",
+      "The Alba sank off the northern reef",
+    );
+    ok("set-position", "wreck", "1203");
+    ok("add-event", "letter", "The letter arrives");
+    ok("set-position", "letter", "1213");
+    ok("add-cause", "wreck", "letter");
+    ok(
+      "add-fact",
+      "reef",
+      "Nobody fishes the northern reef since the Alba sank",
+    );
+    ok("add-scene", "harbour", "The harbour");
+    ok("set-scene-events", "harbour", "wreck");
+    mkdirSync(join(dir, "scenes"));
+    writeFileSync(
+      join(dir, "scenes", "harbour.md"),
+      "The gulls were loud.\n\nTen years since the boat went down.\n",
+    );
+    expect(ok("mentions", "event:wreck")).toBe("No free text mentions it.\n");
+    const prose = join(dir, "scenes", "harbour.md");
+    expect(ok("trace", "event:wreck")).toBe(
+      [
+        'What may depend on event:wreck ("The wreck"), likeliest first:',
+        `- ${prose}:3 "Ten years since the boat went down.": "Ten years since" matches the 10 years between The wreck and The letter arrives; in a scene that depicts it`,
+        '- fact:reef ("Nobody fishes the northern reef since the Alba sank"): text shares words: alba, northern, reef, sank',
+        '- event:letter ("The letter arrives"): linked: an event it caused',
+        '- scene:harbour ("The harbour"): linked: a scene that depicts it',
+        `- ${prose}: the scene depicts it`,
+        "",
+      ].join("\n"),
+    );
+    const moved = ok("set-position", "wreck", "1190");
+    expect(moved).toContain(
+      "What may still state the old event:wreck, likeliest first (nothing was rewritten):\n",
+    );
+    expect(moved).toContain(`${prose}:3 "Ten years since the boat went down."`);
+    expect(ok("trace", "event:letter")).toContain(
+      "linked: an event that caused it",
+    );
   });
 
   test("--help lists every command with an example, and every example runs", () => {

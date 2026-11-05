@@ -12,6 +12,12 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { err, ok, Result } from "neverthrow";
 import {
+  describeSpan,
+  parseSpan,
+  parseWhen,
+  type Span,
+} from "../src/story/calendar";
+import {
   applyStoryCommand,
   type StoryCommand,
   type StoryCommandType,
@@ -22,6 +28,7 @@ import {
   type FirstTold,
   knowledgeAlways,
   tellingOrder,
+  tellingWords,
   trueOrder,
 } from "../src/story/learning";
 import { type Mention, whatMentions } from "../src/story/mentions";
@@ -29,12 +36,15 @@ import { eventTime, renderStory, wordCount } from "../src/story/render";
 import { scenesTouching } from "../src/story/scenes";
 import {
   type Candidate,
+  DRIVE_TURN_HOWS,
   GAP_KINDS,
   type GapKind,
   KNOWLEDGE_HOWS,
   type Knowledge,
   newStory,
   type OpenQuestion,
+  PARTICIPANT_KEY,
+  type Participant,
   parseStory,
   type QuestionState,
   questionState,
@@ -51,6 +61,7 @@ import {
   type TouchGroups,
   whatThisTouches,
 } from "../src/story/touches";
+import { type Prose, type Suspect, traceDependents } from "../src/story/trace";
 import { WORLD_FRAME } from "../src/time/timeline";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +78,7 @@ export const KIND_NAMES: Record<Ref["kind"], string> = {
   candidate: "candidate",
   version: "version",
   knowledge: "knowledge",
+  object: "object",
 };
 
 const REF_KIND_BY_NAME = new Map(
@@ -244,6 +256,22 @@ class Reader {
     return n;
   }
 
+  /** A year or a date as a span of fractional years (`./calendar.ts`). */
+  when(value: string, what: string): Span {
+    const span = parseWhen(value);
+    if (span.isOk()) return span.value;
+    this.errors.push(`${what}: ${span.error}`);
+    return { start: 0, end: 0 };
+  }
+
+  /** A length of time in years, and the size of the unit it was given in. */
+  span(value: string, what: string): { years: number; unit: number } {
+    const span = parseSpan(value);
+    if (span.isOk()) return span.value;
+    this.errors.push(`${what}: ${span.error}`);
+    return { years: 0, unit: 1 };
+  }
+
   /** One ref; a bad one is recorded and an actor ref returned. */
   ref(value: string): Ref {
     const ref = parseRef(value);
@@ -321,6 +349,15 @@ const RELATIONS = ["opposes", "allies", "competes"] as const;
 const TIME_RELATIONS = ["before", "after", "during", "simultaneous"] as const;
 
 const text = { value: "<text>" } as const;
+
+/** Scene link kinds as the command line writes them: `pays-off`. */
+const SCENE_LINK_NAMES = [
+  "reveals",
+  "implies",
+  "withholds",
+  "plants",
+  "pays-off",
+] as const;
 const refList = (help: string) =>
   ({ value: "<ref,ref,...>", help: `${help} ("" for none)` }) as const;
 
@@ -397,7 +434,7 @@ export const EDITS: EditSpecs = {
     group: "Actors: people and groups",
     args: ["id"],
     summary:
-      "Remove an actor. Their drives stay, held by nobody; what they know or believe goes, and they stop telling any version. Any knowledge of the actor goes too, with links to that; the edit lists what went.",
+      "Remove an actor. Their drives stay, held by nobody; what they know or believe goes, so do their parts in events, and they stop telling any version. Any knowledge of the actor goes too, with links to that; the edit lists what went.",
     example: ["remove-actor", "mara"],
     build: (a) => ({ type: "removeActor", id: a.arg("id") }),
   },
@@ -447,7 +484,7 @@ export const EDITS: EditSpecs = {
     group: "Events: what happens in story time",
     args: ["id"],
     summary:
-      "Remove an event, its position and constraints, and links to it. Its versions go, and any knowledge of it or of them, with links to those; knowledge held from or until it loses that time. The edit lists what went.",
+      "Remove an event, its position and constraints, and links to it. Its versions and participants go, and any knowledge of it or of them, with links to those; knowledge held from or until it, and drive turns at it, lose that time. The edit lists what went.",
     example: ["remove-event", "wreck"],
     build: (a) => ({ type: "removeEvent", id: a.arg("id") }),
   },
@@ -455,11 +492,14 @@ export const EDITS: EditSpecs = {
     group: "Events: what happens in story time",
     args: ["event-id", "start"],
     flags: {
-      end: { value: "<number>", help: "default: the start" },
+      end: {
+        value: "<year|date>",
+        help: "default: the start, or the end of a date",
+      },
       precision: { value: "<text>", help: 'such as "roughly"' },
     },
     summary:
-      'Place an event at a time in years (start "none" unplaces it). A move that contradicts other events is kept and reported.',
+      'Place an event in story time: a year (1954, 1954.8) is that moment, as before; a date (1954-10, 1954-10-12, "1954-10-12 21:00") is that month, day or minute, so two events on one day can still be ordered with constrain. Start "none" unplaces it. A move that contradicts other events is kept and reported.',
     example: ["set-position", "wreck", "17"],
     build: (a) => {
       const start = a.arg("start");
@@ -473,14 +513,14 @@ export const EDITS: EditSpecs = {
       }
       const end = a.text("end");
       const precision = a.text("precision");
-      const at = a.number(start, "<start>");
+      const from = a.when(start, "<start>");
       return {
         type: "setPosition",
         event: a.arg("event-id"),
         frame: WORLD_FRAME,
         position: {
-          start: at,
-          end: end === undefined ? at : a.number(end, "--end"),
+          start: from.start,
+          end: end === undefined ? from.end : a.when(end, "--end").end,
           ...(precision === undefined ? {} : { precision }),
         },
       };
@@ -490,8 +530,14 @@ export const EDITS: EditSpecs = {
     group: "Events: what happens in story time",
     args: ["id", "a", "relation", "b"],
     flags: {
-      gap: { value: "<years>", help: "with before or after: how long between" },
-      tolerance: { value: "<years>", help: "give or take, with --gap" },
+      gap: {
+        value: "<span>",
+        help: "with before or after: how long between, in years or with a unit (3d, 2w, 6h, 4mo)",
+      },
+      tolerance: {
+        value: "<span>",
+        help: "give or take, with --gap; default half its unit",
+      },
     },
     summary:
       "Order two events: a before|after|during|simultaneous b. The id names the constraint. A contradiction is kept and reported.",
@@ -508,13 +554,21 @@ export const EDITS: EditSpecs = {
         ...(gap === undefined
           ? {}
           : {
-              duration: {
-                amount: a.number(gap, "--gap"),
-                frame: WORLD_FRAME,
-                ...(tolerance === undefined
-                  ? {}
-                  : { tolerance: a.number(tolerance, "--tolerance") }),
-              },
+              duration: (() => {
+                const span = a.span(gap, "--gap");
+                // A gap in years keeps the timeline's default of half a year.
+                const given =
+                  tolerance === undefined
+                    ? span.unit === 1
+                      ? undefined
+                      : span.unit / 2
+                    : a.span(tolerance, "--tolerance").years;
+                return {
+                  amount: span.years,
+                  frame: WORLD_FRAME,
+                  ...(given === undefined ? {} : { tolerance: given }),
+                };
+              })(),
             }),
       };
     },
@@ -547,6 +601,37 @@ export const EDITS: EditSpecs = {
       type: "removeCause",
       cause: a.arg("cause-id"),
       effect: a.arg("effect-id"),
+    }),
+  },
+
+  setParticipant: {
+    group: "Events: what happens in story time",
+    args: ["event-id", "ref"],
+    flags: {
+      role: {
+        value: "<text>",
+        help: 'its part: "did it", "witness", "the weapon"',
+      },
+    },
+    summary:
+      "Say an actor or object takes part in an event. Setting it again replaces the role.",
+    example: ["set-participant", "wreck", "actor:ivo", "--role", "at the helm"],
+    build: (a) => ({
+      type: "setParticipant",
+      event: a.arg("event-id"),
+      who: a.ref(a.arg("ref")),
+      role: a.text("role") ?? "",
+    }),
+  },
+  removeParticipant: {
+    group: "Events: what happens in story time",
+    args: ["event-id", "ref"],
+    summary: "Say an actor or object takes no part in an event after all.",
+    example: ["remove-participant", "wreck", "actor:ivo"],
+    build: (a) => ({
+      type: "removeParticipant",
+      event: a.arg("event-id"),
+      who: a.ref(a.arg("ref")),
     }),
   },
 
@@ -615,7 +700,7 @@ export const EDITS: EditSpecs = {
     group: "Drives: what someone wants",
     args: ["id"],
     summary:
-      "Remove a drive and every link to it. Any knowledge of it goes too, with links to that; the edit lists what went.",
+      "Remove a drive and every link to it; turns of other drives into it lose that link. Any knowledge of it goes too, with links to that; the edit lists what went.",
     example: ["remove-drive", "find-sender"],
     build: (a) => ({ type: "removeDrive", id: a.arg("id") }),
   },
@@ -649,6 +734,53 @@ export const EDITS: EditSpecs = {
     summary: "Remove the relation between two drives.",
     example: ["unrelate-drives", "find-sender", "keep-quiet"],
     build: (a) => ({ type: "unrelateDrives", a: a.arg("a"), b: a.arg("b") }),
+  },
+  addDriveTurn: {
+    group: "Drives: what someone wants",
+    args: ["drive-id", "how"],
+    flags: {
+      at: { value: "<event-id>", help: "the event where it turns" },
+      into: {
+        value: "<drive-id>",
+        help: "with replaced or flipped: the drive it becomes",
+      },
+      note: text,
+    },
+    summary:
+      "Add a turn to a drive's life, after any it has: satisfied (met), renounced (given up), replaced (by another want) or flipped (into its opposite). A drive can turn more than once; one with no turns is still live.",
+    example: [
+      "add-drive-turn",
+      "find-sender",
+      "satisfied",
+      "--at",
+      "letter",
+      "--note",
+      "She learns who wrote it",
+    ],
+    build: (a) => {
+      const at = a.text("at");
+      const into = a.text("into");
+      return {
+        type: "addDriveTurn",
+        drive: a.arg("drive-id"),
+        how: a.choice(a.arg("how"), DRIVE_TURN_HOWS, "<how>"),
+        ...(at === undefined ? {} : { at }),
+        ...(into === undefined ? {} : { into }),
+        note: a.text("note") ?? "",
+      };
+    },
+  },
+  removeDriveTurn: {
+    group: "Drives: what someone wants",
+    args: ["drive-id", "turn"],
+    summary:
+      "Remove a turn from a drive's life, counting from 1 (show lists them).",
+    example: ["remove-drive-turn", "find-sender", "1"],
+    build: (a) => ({
+      type: "removeDriveTurn",
+      drive: a.arg("drive-id"),
+      index: a.number(a.arg("turn"), "<turn>") - 1,
+    }),
   },
 
   addScene: {
@@ -748,14 +880,57 @@ export const EDITS: EditSpecs = {
     group: "Scenes: the telling",
     args: ["id", "how", "ref..."],
     summary:
-      "Set the records the scene reveals (tells the reader), implies (lets the reader infer) or withholds (keeps back where the reader would expect it); none clears them. Any record or candidate can be linked.",
+      "Set the records the scene reveals (tells the reader), implies (lets the reader infer), withholds (keeps back where the reader would expect it), plants (sets up to matter later) or pays-off (brings back what was planted); none clears them. Any record or candidate can be linked.",
     example: ["set-scene-links", "storm", "withholds", "event:letter"],
+    build: (a) => {
+      const how = a.choice(a.arg("how"), SCENE_LINK_NAMES, "<how>");
+      return {
+        type: "setSceneLinks",
+        id: a.arg("id"),
+        how: how === "pays-off" ? "paysOff" : how,
+        refs: a.restRefs(),
+      };
+    },
+  },
+
+  addObject: {
+    group: "Objects: things that matter",
+    args: ["id", "name"],
+    flags: { notes: text },
+    summary:
+      "Add a thing that matters: a knife, a letter. Plant it and pay it off with set-scene-links; give it a part in events with set-participant.",
+    example: ["add-object", "knife", "Doran's knife", "--notes", "Bone handle"],
     build: (a) => ({
-      type: "setSceneLinks",
+      type: "addObject",
       id: a.arg("id"),
-      how: a.choice(a.arg("how"), SCENE_LINK_KINDS, "<how>"),
-      refs: a.restRefs(),
+      name: a.arg("name"),
+      notes: a.text("notes") ?? "",
     }),
+  },
+  updateObject: {
+    group: "Objects: things that matter",
+    args: ["id"],
+    flags: { name: text, notes: text },
+    summary: "Change an object's name or notes.",
+    example: ["update-object", "knife", "--notes", "Bone handle, nicked"],
+    build: (a) => {
+      const name = a.text("name");
+      const notes = a.text("notes");
+      return {
+        type: "updateObject",
+        id: a.arg("id"),
+        ...(name === undefined ? {} : { name }),
+        ...(notes === undefined ? {} : { notes }),
+      };
+    },
+  },
+  removeObject: {
+    group: "Objects: things that matter",
+    args: ["id"],
+    summary:
+      "Remove an object and links to it. Its parts in events go, and any knowledge of it, with links to that; the edit lists what went.",
+    example: ["remove-object", "knife"],
+    build: (a) => ({ type: "removeObject", id: a.arg("id") }),
   },
 
   addFact: {
@@ -1242,6 +1417,7 @@ type ReadName =
   | "touches"
   | "scenes"
   | "reader-order"
+  | "trace"
   | "mentions"
   | "gaps"
   | "contradictions"
@@ -1259,6 +1435,7 @@ export const LIST_KINDS = [
   "candidate",
   "version",
   "knowledge",
+  "object",
 ] as const;
 
 export const READS: Record<ReadName, Spec> = {
@@ -1305,11 +1482,18 @@ export const READS: Record<ReadName, Spec> = {
       "The order the reader learns things in, beside the order they happen: each scene in telling order with what it shows, reveals, implies or withholds and when that is in story time; then events in story order, each with the first scene that tells the reader of it (itself, a version of it, or someone's knowledge of it) and the knowledge that starts then.",
     example: ["reader-order"],
   },
+  trace: {
+    group: "Start and read",
+    args: ["ref"],
+    summary:
+      'What may depend on a record, likeliest first, each with why it is suspected: declared links and one step on (touches), the text naming it (mentions), free text and scene prose sharing its distinctive words, the prose of scenes that touch it (with any span such as "ten years ago" for an event), and scenes revealing an answer since replaced. It suspects and never decides: read each and judge. Edits that change a record print the top of this list.',
+    example: ["trace", "event:wreck"],
+  },
   mentions: {
     group: "Start and read",
     args: ["ref"],
     summary:
-      "Free text that mentions a record: its name, a drive's holder, an event's year, and spans or seasons near an event. Edits that change a record print this too. Nothing is rewritten.",
+      "Free text that mentions a record: its name, a drive's holder, an event's year, and spans or seasons near an event. Records only, not prose; trace adds prose, shared words and links. Nothing is rewritten.",
     example: ["mentions", "event:wreck"],
   },
   gaps: {
@@ -1404,6 +1588,16 @@ export function helpText(): string {
     "what really happened. A scene tells the reader one by revealing it, and",
     "reader-order lists what the reader learns in telling order beside the",
     "order things happen.",
+    "",
+    'Times are years (1954) or dates (1954-10-12, "1954-10-12 21:00"). Objects',
+    "(add-object) are things scenes plant and pay off; set-participant says who",
+    "or what takes part in an event; add-drive-turn says a want was satisfied,",
+    "renounced, replaced or flipped, and where.",
+    "",
+    "After an edit that changes a record, the CLI prints what may still state",
+    "its old version, records and lines of scene prose, each with why; trace",
+    "<ref> lists them all. touches (links only) and mentions (text naming it",
+    "only) are the narrower views it builds on.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -1471,6 +1665,7 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           "drive",
           story.drives.filter((d) => d.actorId === actor.id).map((d) => d.id),
         ),
+        ...participations(story, ref),
         ...ids(
           "knows or believes",
           "knowledge",
@@ -1499,6 +1694,21 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...ids("origins", "event", drive.origins),
         ...drive.relations.map(
           (r) => `${r.type}: ${describe(story, { kind: "drive", id: r.to })}`,
+        ),
+        ...(drive.turns.length === 0
+          ? ["life: live, no turns yet"]
+          : ["life, in order:"]),
+        ...drive.turns.map(
+          (turn, i) =>
+            `  ${i + 1}. ${turn.how}${turn.into === undefined ? "" : ` ${turn.how === "replaced" ? "by" : "into"} ${describe(story, { kind: "drive", id: turn.into })}`}${turn.at === undefined ? "" : ` at ${describe(story, { kind: "event", id: turn.at })}`}${turn.note.trim() === "" ? "" : `: ${turn.note}`}`,
+        ),
+        ...story.drives.flatMap((other) =>
+          other.turns
+            .filter((turn) => turn.into === drive.id)
+            .map(
+              (turn) =>
+                `${turn.how === "replaced" ? "replaces" : "flipped from"}: ${describe(story, { kind: "drive", id: other.id })}`,
+            ),
         ),
       ];
     }
@@ -1534,8 +1744,15 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ...(position === undefined
           ? ["position: none"]
           : [
-              `position: ${position.start}${position.end === position.start ? "" : ` to ${position.end}`} (${story.timeline.worldUnit})${position.precision === null ? "" : `, ${position.precision}`}`,
+              `position: ${describeSpan(position) ?? `${position.start}${position.end === position.start ? "" : ` to ${position.end}`} (${story.timeline.worldUnit})`}${position.precision === null ? "" : `, ${position.precision}`}`,
             ]),
+        ...story.participants
+          .filter((p) => p.event === event.id)
+          .map(
+            (p) =>
+              `participant: ${describe(story, p.who)}${p.role.trim() === "" ? "" : ` (${p.role})`}`,
+          ),
+        ...turnsAt(story, event.id),
         ...story.timeline.constraints
           .filter((c) => c.a === event.id || c.b === event.id)
           .map((c) => `constraint ${constraintLine(c)}`),
@@ -1610,6 +1827,24 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         ),
       ];
     }
+    case "object": {
+      const object = story.objects.find((o) => o.id === ref.id);
+      if (object === undefined) return head;
+      const scenesWith = (how: "plants" | "paysOff") =>
+        story.scenes
+          .filter((scene) =>
+            scene[how].some((r) => r.kind === "object" && r.id === object.id),
+          )
+          .map((scene) => scene.id);
+      return [
+        ...head,
+        `name: ${object.name}`,
+        ...field("notes", object.notes),
+        ...ids("planted in", "scene", scenesWith("plants")),
+        ...ids("paid off in", "scene", scenesWith("paysOff")),
+        ...participations(story, ref),
+      ];
+    }
     case "version": {
       const version = story.versions.find((v) => v.id === ref.id);
       if (version === undefined) return head;
@@ -1680,6 +1915,28 @@ function candidateMark(q: OpenQuestion, c: Candidate): string {
     : ` (ruled out${c.rejected.trim() === "" ? "" : `: ${c.rejected}`})`;
 }
 
+/** `in event: event:wreck ("The wreck") (at the helm)`, for each event it's in. */
+function participations(story: Story, ref: Ref): string[] {
+  return story.participants
+    .filter((p) => p.who.kind === ref.kind && p.who.id === ref.id)
+    .map(
+      (p) =>
+        `in event: ${describe(story, { kind: "event", id: p.event })}${p.role.trim() === "" ? "" : ` (${p.role})`}`,
+    );
+}
+
+/** `drive turn: drive:find-sender satisfied`, for each drive that turns at it. */
+function turnsAt(story: Story, event: string): string[] {
+  return story.drives.flatMap((drive) =>
+    drive.turns
+      .filter((turn) => turn.at === event)
+      .map(
+        (turn) =>
+          `drive turn: ${describe(story, { kind: "drive", id: drive.id })} ${turn.how}`,
+      ),
+  );
+}
+
 /** The record's deliberate gaps, with their reasons. */
 function markLines(story: Story, ref: Ref): string[] {
   return story.deliberateGaps
@@ -1748,6 +2005,8 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
       );
     case "knowledge":
       return story.knowledge.map((k) => line({ kind: "knowledge", id: k.id }));
+    case "object":
+      return story.objects.map((o) => line({ kind: "object", id: o.id }));
     case "candidate":
       return story.openQuestions.flatMap((q) =>
         q.candidates.map(
@@ -1793,7 +2052,7 @@ function firstToldText(story: Story, first: FirstTold | undefined): string {
     first.via.kind === "version"
       ? " (an account, maybe not what happened)"
       : "";
-  return `first told in ${scene}, which ${first.how} ${formatRef(first.via)}${account}`;
+  return `first told in ${scene}, which ${tellingWords(first.how)} ${formatRef(first.via)}${account}`;
 }
 
 /** Telling order, then true order, as `reader-order` prints them. */
@@ -1804,7 +2063,7 @@ function readerOrderLines(story: Story): string[] {
       ? ["   (tells nothing yet)"]
       : told.map(
           ({ how, ref }) =>
-            `   ${how} ${describe(story, ref)}${storyTime(story, ref)}`,
+            `   ${tellingWords(how)} ${describe(story, ref)}${storyTime(story, ref)}`,
         )),
   ]);
   const knowledgeLine = ({
@@ -1843,84 +2102,156 @@ function mentionLines(story: Story, found: readonly Mention[]): string[] {
   );
 }
 
-/** The most mentions an edit prints; `mentions` lists them all. */
+/** The most suspects an edit prints; `trace` lists them all. */
 const MAX_STALE_LINES = 5;
 
-/**
- * The record whose old version free text may still state, when the edit
- * changed something text can state: an actor's name, a drive's want or
- * holder, an event's label or position. An edit that changes none of these
- * prompts nothing.
- */
+/** The record as stored, with an event's position, to see whether an edit changed it. */
+function recordState(story: Story, ref: Ref): string {
+  const find = <T extends { id: string }>(items: readonly T[]) =>
+    items.find((item) => item.id === ref.id);
+  switch (ref.kind) {
+    case "actor":
+      return JSON.stringify(find(story.actors));
+    case "drive":
+      return JSON.stringify(find(story.drives));
+    case "fact":
+      return JSON.stringify(find(story.facts));
+    case "readerQuestion":
+      return JSON.stringify(find(story.readerQuestions));
+    case "event":
+      return JSON.stringify([
+        find(story.timeline.events),
+        story.timeline.positions.find(
+          (p) => p.event === ref.id && p.frame === WORLD_FRAME,
+        ),
+      ]);
+    case "scene":
+      return JSON.stringify(find(story.scenes));
+    case "openQuestion":
+      return JSON.stringify(find(story.openQuestions));
+    case "version":
+      return JSON.stringify(find(story.versions));
+    case "knowledge":
+      return JSON.stringify(find(story.knowledge));
+    case "object":
+      return JSON.stringify(find(story.objects));
+    case "candidate":
+      return JSON.stringify(
+        story.openQuestions
+          .find((q) => q.id === ref.questionId)
+          ?.candidates.find((c) => c.id === ref.id),
+      );
+  }
+}
+
+/** The record an edit changes the content of, if it changed it. */
 function changedRef(
   before: Story,
   after: Story,
   command: StoryCommand,
 ): Ref | undefined {
-  const differs = <T>(find: (story: Story) => T) =>
-    JSON.stringify(find(before)) !== JSON.stringify(find(after));
-  switch (command.type) {
-    case "setPosition": {
-      const id = command.event;
-      return differs((story) =>
-        story.timeline.positions.find(
-          (p) => p.event === id && p.frame === WORLD_FRAME,
-        ),
-      )
-        ? { kind: "event", id }
-        : undefined;
+  const target = ((): Ref | undefined => {
+    switch (command.type) {
+      case "setPosition":
+        return { kind: "event", id: command.event };
+      case "describeEvent":
+        return { kind: "event", id: command.id };
+      case "updateActor":
+        return { kind: "actor", id: command.id };
+      case "updateDrive":
+        return { kind: "drive", id: command.id };
+      case "addDriveTurn":
+      case "removeDriveTurn":
+        return { kind: "drive", id: command.drive };
+      case "updateFact":
+        return { kind: "fact", id: command.id };
+      case "updateReaderQuestion":
+        return { kind: "readerQuestion", id: command.id };
+      case "updateOpenQuestion":
+      case "answerOpenQuestion":
+      case "unanswerOpenQuestion":
+        return { kind: "openQuestion", id: command.id };
+      case "updateCandidate":
+        return {
+          kind: "candidate",
+          questionId: command.questionId,
+          id: command.id,
+        };
+      case "updateVersion":
+        return { kind: "version", id: command.id };
+      case "updateKnowledge":
+        return { kind: "knowledge", id: command.id };
+      case "updateObject":
+        return { kind: "object", id: command.id };
+      default:
+        return undefined;
     }
-    case "describeEvent": {
-      const { id } = command;
-      return differs(
-        (story) => story.timeline.events.find((e) => e.id === id)?.label,
-      )
-        ? { kind: "event", id }
-        : undefined;
-    }
-    case "updateDrive": {
-      const { id } = command;
-      return differs((story) => {
-        const drive = story.drives.find((d) => d.id === id);
-        return [drive?.want, drive?.actorId];
-      })
-        ? { kind: "drive", id }
-        : undefined;
-    }
-    case "updateActor": {
-      const { id } = command;
-      return differs((story) => story.actors.find((a) => a.id === id)?.name)
-        ? { kind: "actor", id }
-        : undefined;
-    }
-    default:
-      return undefined;
-  }
+  })();
+  return target !== undefined &&
+    refExists(after, target) &&
+    recordState(before, target) !== recordState(after, target)
+    ? target
+    : undefined;
 }
 
+/** Each scene's prose file that exists, as `traceDependents` reads it. */
+function readProse(storyPath: string, story: Story): Prose[] {
+  return story.scenes.flatMap((scene) =>
+    readFile(proseFile(storyPath, scene.id))
+      .map((text) => [{ scene: scene.id, text }])
+      .unwrapOr([]),
+  );
+}
+
+/** `- 2. scenes/harbour.md:3 "Twenty years…": reason; reason`. */
+function suspectLines(
+  story: Story,
+  storyPath: string,
+  found: readonly Suspect[],
+): string[] {
+  return found.map(({ target, reasons }) => {
+    const what =
+      target.kind === "record"
+        ? describe(story, target.ref)
+        : target.line === 0
+          ? proseFile(storyPath, target.scene)
+          : `${proseFile(storyPath, target.scene)}:${target.line} "${excerpt(target.text)}"`;
+    return `- ${what}: ${reasons.join("; ")}`;
+  });
+}
+
+const EXCERPT_LENGTH = 60;
+const excerpt = (text: string) =>
+  text.length <= EXCERPT_LENGTH
+    ? text
+    : `${text.slice(0, EXCERPT_LENGTH).trimEnd()}…`;
+
 /**
- * A prompt listing text that may still state what the edit changed, at most
- * `MAX_STALE_LINES` of it.
+ * A prompt listing what may still state what the edit changed: suspects with
+ * a reason in their text, at most `MAX_STALE_LINES`.
  */
 function staleTextLines(
   before: Story,
   after: Story,
   command: StoryCommand,
+  storyPath: string,
 ): string[] {
   const ref = changedRef(before, after, command);
   if (ref === undefined) return [];
-  const found = whatMentions(after, ref, before).unwrapOr([]);
+  const all = traceDependents(after, ref, {
+    was: before,
+    prose: readProse(storyPath, after),
+  }).unwrapOr([]);
+  const found = all.filter((s) => s.inText);
   if (found.length === 0) return [];
   const shown = found.slice(0, MAX_STALE_LINES);
-  const more = found.length - shown.length;
+  const more = all.length - shown.length;
   return [
-    `Free text that mentions ${formatRef(ref)} and may still state the old version (nothing was rewritten):`,
-    ...mentionLines(after, shown),
+    `What may still state the old ${formatRef(ref)}, likeliest first (nothing was rewritten):`,
+    ...suspectLines(after, storyPath, shown),
     ...(more === 0
       ? []
-      : [
-          `...and ${more} more (${found.length} in all): run mentions ${formatRef(ref)} for all.`,
-        ]),
+      : [`...run trace ${formatRef(ref)} for all ${all.length}.`]),
   ];
 }
 
@@ -2027,6 +2358,23 @@ function runRead(
         );
     case "reader-order":
       return ok(readerOrderLines(story));
+    case "trace":
+      return parseRef(a.arg("ref"))
+        .mapErr(usageError)
+        .andThen((ref) =>
+          traceDependents(story, ref, {
+            prose: readProse(storyPath, story),
+          })
+            .mapErr((e) => refused(e.message))
+            .map((found) =>
+              found.length === 0
+                ? ["Nothing seems to depend on it."]
+                : [
+                    `What may depend on ${describe(story, ref)}, likeliest first:`,
+                    ...suspectLines(story, storyPath, found),
+                  ],
+            ),
+        );
     case "mentions":
       return parseRef(a.arg("ref"))
         .mapErr(usageError)
@@ -2138,7 +2486,7 @@ function runEdit(
                 `Cause problem (kept; see contradictions): ${message}`,
             ),
             ...alsoRemovedLines(story, next, command),
-            ...staleTextLines(story, next, command),
+            ...staleTextLines(story, next, command, path),
           ]
             .join("\n")
             .concat("\n"),
@@ -2169,9 +2517,22 @@ function alsoRemovedLines(
     was
       .filter(({ id }) => !now.some((n) => n.id === id) && !named(kind, id))
       .map(({ id }) => describe(before, { kind, id }));
+  // A participant removed on its own isn't news; one that went with its
+  // event, actor or object is.
+  const key = (p: Participant) => JSON.stringify(PARTICIPANT_KEY(p));
+  const participants =
+    command.type === "removeParticipant"
+      ? []
+      : before.participants
+          .filter((p) => !after.participants.some((q) => key(q) === key(p)))
+          .map(
+            (p) =>
+              `${formatRef(p.who)} in ${formatRef({ kind: "event", id: p.event })}`,
+          );
   const removed = [
     ...gone("version", before.versions, after.versions),
     ...gone("knowledge", before.knowledge, after.knowledge),
+    ...participants.map((p) => `the part of ${p}`),
   ];
   return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
 }

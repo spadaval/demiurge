@@ -24,6 +24,7 @@ import type { EventId } from "../time/timeline";
 import {
   type ActorKind,
   type DriveRelationType,
+  type DriveTurnHow,
   describeRef,
   GAP_MARK_KEY,
   GAP_SUBJECTS,
@@ -31,6 +32,7 @@ import {
   isAnswered,
   type KnowledgeHow,
   type OpenQuestion,
+  PARTICIPANT_KEY,
   type Ref,
   refExists,
   type SceneLinkKind,
@@ -220,6 +222,30 @@ export type StoryCommand =
       until?: EventId | null;
     }
   | { type: "removeKnowledge"; id: string }
+  | { type: "addObject"; id: string; name: string; notes: string }
+  | { type: "updateObject"; id: string; name?: string; notes?: string }
+  /** Also removes it as a participant, knowledge of it, and links to it. */
+  | { type: "removeObject"; id: string }
+  /**
+   * An actor or object takes part in an event, with its part in words.
+   * Setting it again replaces the role.
+   */
+  | { type: "setParticipant"; event: EventId; who: Ref; role: string }
+  | { type: "removeParticipant"; event: EventId; who: Ref }
+  /**
+   * Adds a turn at the end of the drive's life. `into` is only for replaced
+   * or flipped, and can't be the drive itself.
+   */
+  | {
+      type: "addDriveTurn";
+      drive: string;
+      how: DriveTurnHow;
+      at?: EventId;
+      into?: string;
+      note: string;
+    }
+  /** `index` counts the drive's turns from 0. */
+  | { type: "removeDriveTurn"; drive: string; index: number }
   /**
    * Marks one gap on one record (or, with `ref` null, on the whole story) as
    * judged fine, so `storyGaps` stops listing it. Marking it again replaces
@@ -396,7 +422,16 @@ export function applyStoryCommand(
             ...story,
             drives: [
               ...story.drives,
-              { id, actorId, want, stakes, method, origins: [], relations: [] },
+              {
+                id,
+                actorId,
+                want,
+                stakes,
+                method,
+                origins: [],
+                relations: [],
+                turns: [],
+              },
             ],
           }),
         );
@@ -640,6 +675,8 @@ export function applyStoryCommand(
                 reveals: [],
                 implies: [],
                 withholds: [],
+                plants: [],
+                paysOff: [],
               },
             ],
           }),
@@ -1123,6 +1160,138 @@ export function applyStoryCommand(
       );
     }
 
+    case "addObject": {
+      const { id, name, notes } = command;
+      return fresh("object", story.objects, id).andThen(() =>
+        kept({ ...story, objects: [...story.objects, { id, name, notes }] }),
+      );
+    }
+
+    case "updateObject":
+      return existing("object", story.objects, command.id).andThen((object) =>
+        kept({
+          ...story,
+          objects: replace(story.objects, object.id, () => ({
+            ...object,
+            name: command.name ?? object.name,
+            notes: command.notes ?? object.notes,
+          })),
+        }),
+      );
+
+    case "removeObject": {
+      const { id } = command;
+      return existing("object", story.objects, id).andThen(() =>
+        kept(
+          withoutRefs(
+            { ...story, objects: story.objects.filter((o) => o.id !== id) },
+            (ref) => ref.kind === "object" && ref.id === id,
+          ),
+        ),
+      );
+    }
+
+    case "setParticipant": {
+      const { event, who, role } = command;
+      return resolve("event", [event], isEvent)
+        .andThen(() =>
+          who.kind === "actor" || who.kind === "object"
+            ? resolveRefs([who])
+            : refuse(
+                "invalid_command",
+                "a participant is an actor or an object",
+              ),
+        )
+        .andThen(() => {
+          const key = JSON.stringify(PARTICIPANT_KEY({ event, who }));
+          return kept({
+            ...story,
+            participants: [
+              ...story.participants.filter(
+                (p) => JSON.stringify(PARTICIPANT_KEY(p)) !== key,
+              ),
+              { event, who, role },
+            ],
+          });
+        });
+    }
+
+    case "removeParticipant": {
+      const key = JSON.stringify(PARTICIPANT_KEY(command));
+      return story.participants.some(
+        (p) => JSON.stringify(PARTICIPANT_KEY(p)) === key,
+      )
+        ? kept({
+            ...story,
+            participants: story.participants.filter(
+              (p) => JSON.stringify(PARTICIPANT_KEY(p)) !== key,
+            ),
+          })
+        : refuse(
+            "unknown_id",
+            `${describeRef(command.who)} is not a participant in event ${command.event}`,
+          );
+    }
+
+    case "addDriveTurn": {
+      const { drive, how, at, into, note } = command;
+      return existing("drive", story.drives, drive)
+        .andThen(() => resolve("event", at === undefined ? [] : [at], isEvent))
+        .andThen(() => {
+          if (into === undefined) return ok(null);
+          if (how !== "replaced" && how !== "flipped") {
+            return refuse(
+              "invalid_command",
+              `a drive ${how} doesn't turn into another drive`,
+            );
+          }
+          if (into === drive) {
+            return refuse(
+              "self_relation",
+              `drive ${drive} can't turn into itself`,
+            );
+          }
+          return resolve("drive", [into], isDrive);
+        })
+        .andThen(() =>
+          kept({
+            ...story,
+            drives: replace(story.drives, drive, (d) => ({
+              ...d,
+              turns: [
+                ...d.turns,
+                {
+                  how,
+                  ...(at === undefined ? {} : { at }),
+                  ...(into === undefined ? {} : { into }),
+                  note,
+                },
+              ],
+            })),
+          }),
+        );
+    }
+
+    case "removeDriveTurn": {
+      const { drive, index } = command;
+      return existing("drive", story.drives, drive).andThen((d) =>
+        Number.isInteger(index) && index >= 0 && index < d.turns.length
+          ? kept({
+              ...story,
+              drives: replace(story.drives, drive, () => ({
+                ...d,
+                turns: d.turns.filter((_, i) => i !== index),
+              })),
+            })
+          : refuse(
+              "invalid_command",
+              d.turns.length === 0
+                ? `drive ${drive} has no turns`
+                : `turn must be a whole number from 1 to ${d.turns.length}`,
+            ),
+      );
+    }
+
     case "addCause": {
       const { cause, effect } = command;
       return resolve("event", [cause, effect], isEvent)
@@ -1338,6 +1507,27 @@ function withoutRefs(story: Story, removed: (ref: Ref) => boolean): Story {
       reveals: kept(scene.reveals),
       implies: kept(scene.implies),
       withholds: kept(scene.withholds),
+      plants: kept(scene.plants),
+      paysOff: kept(scene.paysOff),
+    })),
+    // A participant goes with its event or with who it is.
+    participants: story.participants.filter(
+      (p) => !gone({ kind: "event", id: p.event }) && !gone(p.who),
+    ),
+    drives: story.drives.map((drive) => ({
+      ...drive,
+      turns: drive.turns.map(({ at, into, ...turn }) => {
+        const when = event(at);
+        const next =
+          into === undefined || gone({ kind: "drive", id: into })
+            ? undefined
+            : into;
+        return {
+          ...turn,
+          ...(when === undefined ? {} : { at: when }),
+          ...(next === undefined ? {} : { into: next }),
+        };
+      }),
     })),
     openQuestions: story.openQuestions.map((q) => ({
       ...q,

@@ -25,7 +25,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 1"
-updated_at: "2026-11-05T06:28:35.528501580+00:00"
+updated_at: "2026-11-05T07:58:38.216483433+00:00"
 ---
 
 ## Goal
@@ -39,3 +39,7 @@ The first judged round on the fixed tool (decision worldcrafter-jeue).
 - Four scenes and four story-so-far texts are written, and every judge scores every scene with the rubric.
 - After judging, a reader who is not the writer reads the writer's full transcript and model and reports where it misunderstood the tool and where the tool did something stupid; resulting skill or tool fixes are made, each independently reviewed and merged locally, before Round 2.
 - docs/rounds/round-1.md holds the round log: tool changes, how the writer used the tool (commands, where it struggled, what it ignored), every judge's scores with quotes, and the paths to scenes; reports are recorded as evidence.
+
+## Notes
+
+- 2026-11-05 [note] From review finding worldcrafter-mdk6: timeline problems and mixed year/date positions print raw fractions of a year (contradictions, edit output, show event). If the writer uses dates, fix to the date/unit wording render uses.

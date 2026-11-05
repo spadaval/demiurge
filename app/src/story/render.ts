@@ -25,8 +25,10 @@ import type {
   TimeEvent,
   Timeline,
 } from "../time/timeline";
+import { describeSpan, describeYears } from "./calendar";
 import { storyContradictions } from "./contradictions";
 import {
+  type DriveTurn,
   type OpenQuestion,
   questionState,
   type Ref,
@@ -45,6 +47,7 @@ export function renderStory(story: Story): string {
       "The world",
       story.facts.map((fact) => `- ${sentence(fact.text)}`),
     ),
+    section("Things", objectLines(story)),
     section("Who knows or believes what", knowledgeLines(story)),
     section("Scenes, in telling order", sceneLines(story)),
     section("What the reader is waiting to find out", readerLines(story)),
@@ -184,6 +187,8 @@ function refName(story: Story, ref: Ref): string {
           : refName(story, k.what);
       return `${named(actorName(story, k.actor))} ${k.how}: ${what}`;
     }
+    case "object":
+      return named(story.objects.find((o) => o.id === ref.id)?.name);
   }
 }
 
@@ -222,7 +227,78 @@ function driveLines(
       `${sub}${RELATION_WORDS[relation.type]} ${driveName(story, relation.to)}.`,
     );
   }
+  // Its life, in the order it happens.
+  for (const turn of drive.turns) {
+    lines.push(`${sub}${turnText(story, turn)}`);
+  }
+  for (const other of story.drives) {
+    for (const turn of other.turns) {
+      if (turn.into === id) {
+        lines.push(
+          `${sub}${turn.how === "replaced" ? "Replaces" : "Flipped from"} ${driveName(story, other.id)}.`,
+        );
+      }
+    }
+  }
   return lines;
+}
+
+const TURN_WORDS = {
+  satisfied: "Satisfied",
+  renounced: "Renounced",
+  replaced: "Replaced",
+  flipped: "Flipped",
+} as const;
+
+/** `Replaced by Danny: "Let it go" at The funeral: he lets her be.` */
+function turnText(story: Story, turn: DriveTurn): string {
+  const into =
+    turn.into === undefined
+      ? ""
+      : ` ${turn.how === "replaced" ? "by" : "into"} ${driveName(story, turn.into)}`;
+  const at = turn.at === undefined ? "" : ` at ${eventLabel(story, turn.at)}`;
+  const note = turn.note.trim() === "" ? "" : `: ${turn.note.trim()}`;
+  return sentence(`${TURN_WORDS[turn.how]}${into}${at}${note}`);
+}
+
+/** `- **The knife**. Doran's. Planted in "The gift"; paid off in "The duel".` */
+function objectLines(story: Story): string[] {
+  return story.objects.map((object) => {
+    const ref: Ref = { kind: "object", id: object.id };
+    const scenesWith = (how: "plants" | "paysOff") =>
+      story.scenes
+        .filter((scene) =>
+          scene[how].some((r) => r.kind === "object" && r.id === object.id),
+        )
+        .map((scene) => `"${named(scene.title)}"`)
+        .join(", ");
+    const planted = scenesWith("plants");
+    const paid = scenesWith("paysOff");
+    const events = story.participants
+      .filter((p) => p.who.kind === ref.kind && p.who.id === ref.id)
+      .map(
+        (p) =>
+          `${eventLabel(story, p.event)}${p.role.trim() === "" ? "" : ` (${p.role.trim()})`}`,
+      );
+    return `- ${joined([
+      `**${named(object.name)}**.`,
+      object.notes.trim() === "" ? undefined : sentence(object.notes),
+      planted === "" ? undefined : `Planted in ${planted}.`,
+      paid === "" ? undefined : `Paid off in ${paid}.`,
+      events.length === 0 ? undefined : `In ${events.join("; ")}.`,
+    ])}`;
+  });
+}
+
+/** ` With Ama (the seller), the core.` after an event, or nothing. */
+function participantText(story: Story, event: string): string {
+  const who = story.participants
+    .filter((p) => p.event === event)
+    .map(
+      (p) =>
+        `${refName(story, p.who)}${p.role.trim() === "" ? "" : ` (${p.role.trim()})`}`,
+    );
+  return who.length === 0 ? "" : ` With ${who.join(", ")}.`;
 }
 
 function actorLines(story: Story): string[] {
@@ -246,6 +322,10 @@ function unheldDriveLines(story: Story): string[] {
 function positionText(story: Story, position: Position | undefined): string {
   if (position === undefined) return "";
   const { worldUnit } = story.timeline;
+  const date = worldUnit === "year" ? describeSpan(position) : undefined;
+  if (date !== undefined) {
+    return ` (${date}${position.precision === null ? "" : `, ${position.precision}`})`;
+  }
   const range =
     position.start === position.end
       ? `${position.start}`
@@ -255,10 +335,15 @@ function positionText(story: Story, position: Position | undefined): string {
 
 function constraintText(story: Story, c: Constraint): string {
   const other = eventLabel(story, c.b);
+  const inYears = story.timeline.worldUnit === "year";
+  const span = (amount: number) =>
+    inYears
+      ? describeYears(amount)
+      : `${amount} ${story.timeline.worldUnit}${amount === 1 ? "" : "s"}`;
   const gap =
     c.duration === null
       ? ""
-      : `${c.duration.amount} ${story.timeline.worldUnit}${c.duration.amount === 1 ? "" : "s"}${c.duration.tolerance === undefined ? "" : ` (give or take ${c.duration.tolerance})`} `;
+      : `${span(c.duration.amount)}${c.duration.tolerance === undefined ? "" : ` (give or take ${inYears ? describeYears(c.duration.tolerance) : c.duration.tolerance})`} `;
   switch (c.relation) {
     case "before":
       return `${gap}before ${other}`;
@@ -324,7 +409,7 @@ function eventLines(story: Story): string[] {
     const summary =
       event.summary.trim() === "" ? "" : `: ${sentence(event.summary)}`;
     return [
-      `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}`,
+      `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}${participantText(story, event.id)}`,
       ...story.versions
         .filter((v) => v.event === event.id)
         .map(
@@ -482,10 +567,12 @@ function satisfiedBy(placed: Chronology, c: Constraint): boolean {
   }
 }
 
-const SCENE_LINK_WORDS = {
+const SCENE_LINK_HEADS = {
   reveals: "Reveals",
   implies: "Implies",
   withholds: "Withholds",
+  plants: "Plants",
+  paysOff: "Pays off",
 } as const;
 
 function sceneLines(story: Story): string[] {
@@ -504,7 +591,7 @@ function sceneLines(story: Story): string[] {
         scene[how].length === 0
           ? undefined
           : sentence(
-              `${SCENE_LINK_WORDS[how]}: ${scene[how].map((ref) => refName(story, ref)).join("; ")}`,
+              `${SCENE_LINK_HEADS[how]}: ${scene[how].map((ref) => refName(story, ref)).join("; ")}`,
             ),
       ),
     ];
