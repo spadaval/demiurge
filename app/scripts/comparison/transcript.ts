@@ -207,17 +207,26 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
     .map((path) => ({ tool: name, detail: path }));
 }
 
-/** A line that is only `cat` writing a heredoc to a file, either order. */
-const CAT_HEREDOC_TO_FILE =
-  /^\s*cat\s+(?:>>?\s*[^\s<>|;&]+\s+<<(-?)\s*(['"]?)(\w+)\2|<<(-?)\s*(['"]?)(\w+)\5\s+>>?\s*[^\s<>|;&]+)\s*$/;
+/**
+ * A heredoc whose delimiter is quoted (`'EOF'`, `"EOF"` or `\EOF`), which
+ * bash leaves unexpanded: `$(...)`, backticks and `$VAR` in its body are
+ * plain text.
+ */
+const QUOTED_HEREDOC = String.raw`<<(-?)\s*(?:'(\w+)'|"(\w+)"|\\(\w+))`;
+const TARGET = String.raw`>>?\s*[^\s<>|;&]+`;
+/** A line that is only `cat` writing a quoted heredoc to a file, either order. */
+const CAT_HEREDOC_TO_FILE = new RegExp(
+  String.raw`^\s*cat\s+(?:${TARGET}\s+${QUOTED_HEREDOC}|${QUOTED_HEREDOC}\s+${TARGET})\s*$`,
+);
 
 /**
- * The command without the bodies of heredocs that `cat` writes straight to
- * a file (`cat > f <<'EOF'`, `cat <<EOF >> f`). That text is only written,
- * never run, so prose in a report isn't taken for paths or commands. The
- * `cat` line itself, the terminator and everything around them are kept,
- * and any other heredoc (fed to an interpreter, piped on, or after another
- * command on its line) is kept whole.
+ * The command without the bodies of quoted heredocs that `cat` writes
+ * straight to a file (`cat > f <<'EOF'`, `cat <<"EOF" >> f`). That text is
+ * only written, never run or expanded, so prose in a report isn't taken for
+ * paths or commands. The `cat` line itself, the terminator and everything
+ * around them are kept. Any other heredoc is kept whole: unquoted (bash
+ * expands `$(...)` and backticks in its body), fed to an interpreter, piped
+ * on, or after another command on its line.
  */
 export function withoutFileHeredocs(command: string): string {
   const lines = command.split("\n");
@@ -227,8 +236,10 @@ export function withoutFileHeredocs(command: string): string {
     kept.push(line);
     const match = CAT_HEREDOC_TO_FILE.exec(line);
     if (match === null) continue;
-    const dash = (match[1] ?? match[4]) === "-";
-    const word = match[3] ?? match[6];
+    const dash = (match[1] ?? match[5]) === "-";
+    const word = [2, 3, 4, 6, 7, 8]
+      .map((group) => match[group])
+      .find((w) => w !== undefined);
     const ends = (next: string) =>
       (dash ? next.replace(/^\t+/, "") : next) === word;
     let end = i + 1;

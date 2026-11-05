@@ -407,7 +407,8 @@ describe("transcript check: heredocs written to a file", () => {
     expect(
       outside('cat <<"END" >> notes.md\nkeep / change / drop\nEND'),
     ).toEqual([]);
-    expect(outside("cat > r.md <<-EOF\n\tA / B\n\tEOF")).toEqual([]);
+    expect(outside("cat > r.md <<-'EOF'\n\tA / B\n\tEOF")).toEqual([]);
+    expect(outside("cat > r.md <<\\EOF\nA / B\nEOF")).toEqual([]);
   });
   test("commands outside the heredoc are still checked", () => {
     expect(
@@ -418,6 +419,18 @@ describe("transcript check: heredocs written to a file", () => {
     expect(
       outside("cat > part1.md <<'EOF'\nA\nEOF\ncurl https://example.com"),
     ).toEqual(["Bash (network)"]);
+  });
+  test("an unquoted heredoc's body is expanded by bash, so it's still checked", () => {
+    expect(outside("cat > f.md <<EOF\n$(cat /etc/shadow)\nEOF")).toEqual([
+      "Bash",
+    ]);
+    expect(outside("cat > f.md <<EOF\n`cat /etc/shadow`\nEOF")).toEqual([
+      "Bash",
+    ]);
+    expect(outside("cat <<-EOF >> f.md\n\t$(ls /)\n\tEOF")).toEqual(["Bash"]);
+    // Prose slashes in an unquoted heredoc are still reported: only a
+    // quoted delimiter makes the body plain text.
+    expect(outside("cat > f.md <<EOF\nA / B\nEOF")).toEqual(["Bash"]);
   });
   test("heredocs fed to anything but cat into a file are still checked", () => {
     expect(outside("python3 - <<'EOF'\nopen('/etc/passwd')\nEOF")).toEqual([
