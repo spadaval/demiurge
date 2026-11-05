@@ -361,6 +361,15 @@ const numberWordsPattern = (value: number) =>
     "giu",
   );
 
+/** The text in `text` that states `value`, in digits or words, if any. */
+export function statedNumber(text: string, value: number): string | undefined {
+  const whole = Number.isInteger(value) && value >= 0 && value < 1e6;
+  return (
+    text.match(numberPattern(value))?.[0] ??
+    (whole ? text.match(numberWordsPattern(value))?.[0] : undefined)
+  );
+}
+
 /**
  * The round numbers a text might state `value` as ("over five hundred" for
  * 540): it rounded down and to nearest, to each power of ten from 100 up

@@ -84,6 +84,20 @@ const MIN_SHARED = 2;
 const MIN_SHARED_AFTER_CHANGE = 3;
 
 /**
+ * Shared words alone are weak evidence after a change, so to count as
+ * evidence in a text (what an edit's inline trace shows) they need to be
+ * this many, or every word the change took away if it took fewer, and at
+ * least `MIN_SHARED_PART` of those words: a long summary shares four words
+ * with much of a story by chance. For an event that only moved, shared words
+ * are never that evidence: they say a text is about the same thing, not
+ * that it states the old time, which its year, a span or a season would
+ * (and those are looked for). Weaker shared words still count toward the
+ * score, and `trace` lists them.
+ */
+const MIN_SHARED_IN_TEXT = 4;
+const MIN_SHARED_PART = 0.25;
+
+/**
  * A word in more than this share of the story's texts (and more than
  * `COMMON_FLOOR` of them) is too common in this story to suggest a
  * dependency: a name or a word the story is about, such as its setting.
@@ -124,7 +138,19 @@ function stem(word: string): string {
   return word;
 }
 
-/** The distinctive word stems of a text: four letters or more, not common words. */
+/**
+ * Number words: a number is looked for as a number (`mentions`), and as a
+ * shared word it matches any count.
+ */
+const NUMBER_STEMS = new Set(
+  (
+    "zero four five nine eleven twelve thirteen fourteen fifteen sixteen " +
+    "seventeen eighteen nineteen twenty thirty forty fifty sixty seventy " +
+    "eighty ninety hundr hundred thousand"
+  ).split(" "),
+);
+
+/** The distinctive word stems of a text: four letters or more, not common words or numbers. */
 export function contentStems(text: string): Set<string> {
   const words = text.toLowerCase().match(/\p{L}[\p{L}'’]*/gu) ?? [];
   return new Set(
@@ -132,7 +158,7 @@ export function contentStems(text: string): Set<string> {
       .map((w) => w.replace(/['’]s?$/, ""))
       .filter((w) => w.length >= 4 && !STOPWORDS.has(w))
       .map(stem)
-      .filter((w) => !STOPWORDS.has(w)),
+      .filter((w) => !STOPWORDS.has(w) && !NUMBER_STEMS.has(w)),
   );
 }
 
@@ -212,11 +238,13 @@ const NUMBER_WORDS: Record<string, number> = {
 
 /**
  * When a span such as "ten years since" states the time, in years, between
- * the event and another placed event, the other event and the gap:
- * `10 years between The wreck and The letter arrives`.
+ * the event and another placed event in `story`, and a change to `after`
+ * has made it untrue, the other event and the gap: `10 years between The
+ * wreck and The letter arrives`. A span the change left true isn't stale.
  */
 function gapStated(
   story: Story,
+  after: Story,
   event: string,
   phrase: string,
 ): string | undefined {
@@ -227,21 +255,26 @@ function gapStated(
     ? Number(word)
     : NUMBER_WORDS[word];
   if (count === undefined) return undefined;
-  const at = (id: string) =>
-    story.timeline.positions.find((p) => p.event === id && p.frame === "world")
-      ?.start;
-  const here = at(event);
-  if (here === undefined) return undefined;
-  const label = (id: string) =>
-    story.timeline.events.find((e) => e.id === id)?.label ?? id;
-  const other = story.timeline.events.find((e) => {
-    const there = at(e.id);
+  const holds = (s: Story, other: string) => {
+    const at = (id: string) =>
+      s.timeline.positions.find((p) => p.event === id && p.frame === "world")
+        ?.start;
+    const here = at(event);
+    const there = at(other);
     return (
-      e.id !== event &&
+      here !== undefined &&
       there !== undefined &&
       Math.abs(Math.abs(there - here) - count) <= 0.5
     );
-  });
+  };
+  const label = (id: string) =>
+    story.timeline.events.find((e) => e.id === id)?.label ?? id;
+  const other = story.timeline.events.find(
+    (e) =>
+      e.id !== event &&
+      holds(story, e.id) &&
+      (after === story || !holds(after, e.id)),
+  );
   return other === undefined
     ? undefined
     : `${count} years between ${label(event)} and ${label(other.id)}`;
@@ -357,6 +390,19 @@ export function traceDependents(
     ? whatMentions(story, ref, before, approximate).unwrapOr([])
     : [];
   for (const m of mentioned) {
+    if (m.match === "near" && was !== undefined && ref.kind === "event") {
+      // After a change, a span counts only as one the move made untrue.
+      const gap = moved ? gapStated(before, story, ref.id, m.text) : undefined;
+      if (gap !== undefined) {
+        suspect(
+          record(m.ref),
+          WEIGHT.mention.direct,
+          `${m.field} "${m.text}" matches the ${gap}`,
+          true,
+        );
+      }
+      continue;
+    }
     suspect(
       record(m.ref),
       WEIGHT.mention[m.match],
@@ -411,6 +457,12 @@ export function traceDependents(
             [...source].filter((s) => !common(s)).length,
           ),
         );
+  const uncommon = [...source].filter((s) => !common(s)).length;
+  const onlyMoved = moved && sourceText(before, ref) === sourceText(story, ref);
+  const strong =
+    was === undefined
+      ? needed
+      : Math.max(MIN_SHARED, Math.min(MIN_SHARED_IN_TEXT, uncommon));
   for (const [i, t] of texts.entries()) {
     const shared = [...(stemsOf[i] ?? [])].filter(
       (s) => source.has(s) && !common(s),
@@ -421,7 +473,10 @@ export function traceDependents(
       t.target,
       score,
       `${t.field} shares words: ${shared.sort().join(", ")}`,
-      true,
+      was === undefined ||
+        (!onlyMoved &&
+          shared.length >= strong &&
+          shared.length >= MIN_SHARED_PART * uncommon),
     );
   }
 
@@ -469,7 +524,9 @@ export function traceDependents(
         (was === undefined || moved)
       ) {
         for (const found of para.text.match(TIME_PHRASE) ?? []) {
-          const gap = gapStated(before, ref.id, found);
+          const gap = gapStated(before, story, ref.id, found);
+          // After a change, only a span the move made untrue.
+          if (was !== undefined && gap === undefined) continue;
           suspect(
             target,
             gap === undefined ? WEIGHT.mention.near : WEIGHT.mention.direct,

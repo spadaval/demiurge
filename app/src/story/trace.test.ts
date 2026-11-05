@@ -150,6 +150,48 @@ describe("traceDependents on the fixed example", () => {
       "in a scene that depicts it",
     ]);
     expect(after.some((s) => key(s) === "fact:reef")).toBe(true);
+    // Shared words say a text is about it, not that it states the old time.
+    expect(after.find((s) => key(s) === "fact:reef")?.inText).toBe(false);
+  });
+
+  test("a span the move leaves true isn't evidence", () => {
+    const nudged = run(story, at("wreck", 1203.3));
+    const after = traceDependents(nudged, wreck, {
+      was: story,
+      prose,
+    })._unsafeUnwrap();
+    expect(after.filter((s) => s.inText).map(key)).toEqual([]);
+  });
+
+  test("shared words count in a text only as a part of what the change took away", () => {
+    const long = run(story, {
+      type: "describeEvent",
+      id: "wreck",
+      summary:
+        "The Alba sank in a winter storm off the northern reef, with the bosun, the cook, eleven passengers, a cargo of salted herring, wool bales, copper pans, the parish bell, two oxen, a harpsichord and the mayor's portrait",
+    });
+    const withFact = run(long, {
+      type: "addFact",
+      id: "herring",
+      text: "Nobody fishes the northern reef where the bosun, the herring and the copper went down",
+      about: [],
+    });
+    const reworded = run(withFact, {
+      type: "describeEvent",
+      id: "wreck",
+      summary: "The Alba sank in a winter storm",
+    });
+    const found = traceDependents(reworded, wreck, {
+      was: withFact,
+      prose,
+    })._unsafeUnwrap();
+    // Four of the many words taken away: kept for trace, but not as
+    // evidence in its text.
+    const herring = found.find((s) => key(s) === "fact:herring");
+    expect(herring?.reasons).toEqual([
+      "text shares words: bosun, copper, herr, northern",
+    ]);
+    expect(herring?.inText).toBe(false);
   });
 });
 

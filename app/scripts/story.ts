@@ -43,6 +43,7 @@ import {
 import {
   type CountStep,
   countSeries,
+  noteCountingAcross,
   seriesTexts,
   stepAt,
   stepText,
@@ -1927,11 +1928,16 @@ export function helpText(): string {
     "suspects that may still state its old version, records and lines of",
     "scene prose, each with why; trace <ref> lists them all. Adding a record",
     "or placing an event for the first time prints none, since nothing can",
-    "state an old version yet; a count traces only a changed value, looking",
-    "for the old value at that event in figures, words or, from 100 up,",
-    "rounded. Within one shell command line, the trace leaves out the record",
-    "of the scene whose prose was written since the story file was last",
-    "saved. touches (links only) and mentions (text naming it only) are the",
+    "state an old version yet; a count traces only a changed value no other",
+    "event still has, looking for the old value at that event in figures,",
+    "words or, from 100 up, rounded, and a value added between two others",
+    "checks whether the next one's note states the change it no longer is.",
+    "A moved event is looked for by its old year and by spans the move made",
+    "untrue; shared words alone show only when they are many of the words",
+    "the change took away. Within one shell command line, the trace leaves",
+    "out the record and prose of the scene whose prose was written since the",
+    "story file was last saved, and records added earlier in that command",
+    "line. touches (links only) and mentions (text naming it only) are the",
     "narrower views trace builds on.",
   ];
   let group = "";
@@ -2854,7 +2860,7 @@ function staleTextLines(
   after: Story,
   command: StoryCommand,
   storyPath: string,
-  writing: ReadonlySet<string> = new Set(),
+  batch: Batch = { writing: new Set(), created: new Set() },
 ): string[] {
   const ref = changedRef(before, after, command);
   // Nothing can state where an event was before it had a place.
@@ -2869,20 +2875,33 @@ function staleTextLines(
     !before.counts.some(
       (c) => c.id === command.id && c.values.some((v) => v.at === command.at),
     );
-  if (ref === undefined || firstPlacement || firstValue) return [];
-  const was = countWas(before, command);
+  if (firstValue && command.type === "setCount") {
+    // A value added between two others: the next one's note may count
+    // the change from the value before it.
+    const across = noteCountingAcross(after, command.id, command.at);
+    return across === undefined
+      ? []
+      : [
+          `What may still state the old ${formatRef({ kind: "count", id: command.id })}, likeliest first (nothing was rewritten):`,
+          `- ${formatRef({ kind: "count", id: command.id })} note at ${across.next.at} "${excerpt(across.next.note)}": "${across.stated}" states the change of ${across.was} from ${across.from.value} at ${across.from.at}; from the new ${command.value} at ${command.at} it is ${across.now}`,
+        ];
+  }
+  if (ref === undefined || firstPlacement) return [];
+  const was = countWas(before, after, command);
   if (was === undefined) return [];
   const all = traceDependents(after, ref, {
     was,
     prose: readProse(storyPath, after),
   }).unwrapOr([]);
-  // The record of the scene being written is about to be rewritten anyway.
-  // (Its prose is still listed: a change after writing it can leave it
-  // stale.)
+  // The scene being written, record and prose, is what the writer has in
+  // hand, and a record this batch added was written with the change known.
   const found = all.filter(
     ({ inText, target }) =>
       inText &&
-      !(target.kind === "record" && writing.has(formatRef(target.ref))),
+      !(target.kind === "record"
+        ? batch.writing.has(formatRef(target.ref)) ||
+          batch.created.has(formatRef(target.ref))
+        : batch.writing.has(formatRef({ kind: "scene", id: target.scene }))),
   );
   if (found.length === 0) return [];
   const shown = found.slice(0, MAX_STALE_LINES);
@@ -2899,14 +2918,23 @@ function staleTextLines(
 /**
  * The story before the edit, as the trace should see it. A count's change
  * is only its value at one event, so only that value is looked for, and a
- * change of note alone (the same value) traces nothing: undefined.
+ * change of note alone (the same value), or one that leaves the old value
+ * standing at another event, traces nothing: undefined.
  */
-function countWas(before: Story, command: StoryCommand): Story | undefined {
+function countWas(
+  before: Story,
+  after: Story,
+  command: StoryCommand,
+): Story | undefined {
   if (command.type !== "setCount") return before;
   const old = before.counts
     .find((c) => c.id === command.id)
     ?.values.find((v) => v.at === command.at);
   if (old === undefined || old.value === command.value) return undefined;
+  const standing = after.counts
+    .find((c) => c.id === command.id)
+    ?.values.some((v) => v.value === old.value);
+  if (standing === true) return undefined;
   return {
     ...before,
     counts: before.counts.map((c) =>
@@ -2917,10 +2945,10 @@ function countWas(before: Story, command: StoryCommand): Story | undefined {
 
 // ---------------------------------------------------------------------------
 // The batch: edits run from one shell command line, such as a writer's
-// script of many edits. An edit's inline trace leaves out the record of a
-// scene whose prose was written since the story file was last saved before
-// the batch: the scene being worked on. `trace <ref>` still lists
-// everything. Records an earlier edit in the batch rewrote are still
+// script of many edits. An edit's inline trace leaves out the record and
+// prose of a scene whose prose was written since the story file was last
+// saved before the batch (the scene being worked on), and records an
+// earlier edit in the batch added. `trace <ref>` still lists everything. Records an earlier edit in the batch rewrote are still
 // listed, since the rewrite may have been for another reason and left the
 // old version standing (finding worldcrafter-gu8c).
 
@@ -2993,18 +3021,31 @@ function clearOldBatches(storyPath: string): void {
   }
 }
 
+/** What an edit's inline trace leaves out for its batch, as refs. */
+type Batch = { writing: Set<string>; created: Set<string> };
+
 /**
- * The scenes this batch is writing, as refs: those whose prose file is newer
- * than the story file at the batch's first edit, which saves them for the
- * rest of the batch (each edit rewrites the story file).
+ * The batch's state: the scenes it is writing, those whose prose file is
+ * newer than the story file at the batch's first edit, which saves them
+ * for the rest of the batch (each edit rewrites the story file), and the
+ * records its edits so far added.
  */
-function batchWriting(story: Story, storyPath: string): Set<string> {
+function batchState(story: Story, storyPath: string): Batch {
   const file = batchFile(storyPath);
   const saved = tryRead(file)
     .map((text): unknown => JSON.parse(text))
     .unwrapOr(undefined);
-  if (Array.isArray(saved)) {
-    return new Set(saved.filter((x): x is string => typeof x === "string"));
+  const strings = (x: unknown) =>
+    new Set(
+      Array.isArray(x)
+        ? x.filter((y): y is string => typeof y === "string")
+        : [],
+    );
+  if (typeof saved === "object" && saved !== null && "writing" in saved) {
+    return {
+      writing: strings(saved.writing),
+      created: strings("created" in saved ? saved.created : []),
+    };
   }
   clearOldBatches(storyPath);
   const storyTime = tryMtime(storyPath).unwrapOr(null);
@@ -3019,8 +3060,57 @@ function batchWriting(story: Story, storyPath: string): Set<string> {
             return prose !== null && prose > storyTime;
           })
           .map((scene) => formatRef({ kind: "scene", id: scene.id }));
-  tryWrite(file, JSON.stringify(writing));
-  return new Set(writing);
+  const batch = { writing: new Set(writing), created: new Set<string>() };
+  saveBatch(storyPath, batch);
+  return batch;
+}
+
+function saveBatch(storyPath: string, batch: Batch): void {
+  tryWrite(
+    batchFile(storyPath),
+    JSON.stringify({
+      writing: [...batch.writing],
+      created: [...batch.created],
+    }),
+  );
+}
+
+/** Every record and candidate in the story, as refs. */
+function allRefs(story: Story): string[] {
+  const ids = (kind: RefKind, items: readonly { id: string }[]) =>
+    items.map((item) => formatRef({ kind, id: item.id }));
+  return [
+    ...ids("actor", story.actors),
+    ...ids("drive", story.drives),
+    ...ids("fact", story.facts),
+    ...ids("readerQuestion", story.readerQuestions),
+    ...ids("event", story.timeline.events),
+    ...ids("scene", story.scenes),
+    ...ids("openQuestion", story.openQuestions),
+    ...ids("version", story.versions),
+    ...ids("knowledge", story.knowledge),
+    ...ids("object", story.objects),
+    ...ids("count", story.counts),
+    ...story.openQuestions.flatMap((q) =>
+      q.candidates.map((c) =>
+        formatRef({ kind: "candidate", questionId: q.id, id: c.id }),
+      ),
+    ),
+  ];
+}
+
+/** Adds the records `after` has that `before` didn't to the batch. */
+function recordCreated(
+  storyPath: string,
+  batch: Batch,
+  before: Story,
+  after: Story,
+): void {
+  const had = new Set(allRefs(before));
+  const added = allRefs(after).filter((ref) => !had.has(ref));
+  if (added.length === 0) return;
+  for (const ref of added) batch.created.add(ref);
+  saveBatch(storyPath, batch);
 }
 
 function touchLines(groups: TouchGroups): string[] {
@@ -3300,7 +3390,8 @@ function runEdit(
       return applyStoryCommand(story, command)
         .mapErr((e) => refused(e.message))
         .map(({ story: next, problems }) => {
-          const writing = batchWriting(story, path);
+          const batch = batchState(story, path);
+          recordCreated(path, batch, story, next);
           return {
             story: next,
             stdout: [
@@ -3317,7 +3408,7 @@ function runEdit(
                 ? []
                 : droppedLinkLines(story, next, command)),
               ...crossedLinkLines(story, next),
-              ...staleTextLines(story, next, command, path, writing),
+              ...staleTextLines(story, next, command, path, batch),
             ]
               .map((line) => `${line}\n`)
               .join(""),

@@ -13,6 +13,7 @@
 
 import { compareEvents, compileChronology } from "../time/chronology";
 import type { EventId } from "../time/timeline";
+import { statedNumber } from "./mentions";
 import { eventsInStoryOrder } from "./order";
 import type { Count, Story } from "./story";
 
@@ -162,4 +163,40 @@ export function countProblems(story: Story): CountProblem[] {
     });
     return [...above, ...wrongWay];
   });
+}
+
+/**
+ * After a value is added at `at` between two others, the next value's note
+ * if it states the change from the value before (`Seventy have left since`,
+ * 400 to 330), which now runs from the added value (399 to 330, 69). Cheap
+ * and narrow: only a note stating that difference, in digits or words.
+ */
+export function noteCountingAcross(
+  after: Story,
+  countId: string,
+  at: EventId,
+):
+  | {
+      next: CountStep;
+      stated: string;
+      was: number;
+      now: number;
+      from: CountStep;
+    }
+  | undefined {
+  const count = after.counts.find((c) => c.id === countId);
+  if (count === undefined) return undefined;
+  const series = countSeries(after, count);
+  const i = series.findIndex((step) => step.at === at);
+  const added = series[i];
+  const next = series[i + 1];
+  const from = series[i - 1];
+  if (added === undefined || next === undefined || from === undefined) {
+    return undefined;
+  }
+  const was = Math.abs(next.value - from.value);
+  const now = Math.abs(next.value - added.value);
+  if (was === now || was === 0) return undefined;
+  const stated = statedNumber(next.note, was);
+  return stated === undefined ? undefined : { next, stated, was, now, from };
 }

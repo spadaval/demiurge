@@ -320,9 +320,11 @@ describe("story CLI", () => {
     expect(ok("update-actor", "mara", "--name", "Maren")).toContain(
       'summary "Mara" names it',
     );
-    expect(ok("describe-event", "wreck", "--label", "The sinking")).toContain(
-      "may state when this happened",
-    );
+    // A span near it is stale only when a move made it untrue, not after a
+    // rename.
+    expect(
+      ok("describe-event", "wreck", "--label", "The sinking"),
+    ).not.toContain("may state when this happened");
     // Other edits don't prompt.
     expect(ok("update-scene", "market", "--title", "Market")).toBe("");
   });
@@ -1316,6 +1318,89 @@ describe("story CLI", () => {
     expect(batch(other, reword)).not.toContain("scene:harbour");
     // trace on its own still lists it.
     expect(ok("trace", "event:wreck")).toContain("scene:harbour");
+    restore();
+
+    // Nor is that scene's prose, nor a record the batch added.
+    ok("update-scene", "harbour", "--summary", "Mara on the quay");
+    writeFileSync(
+      join(dir, "scenes", "harbour.md"),
+      "Gulls.\n\nThe ferry Ondine went down off Gull Point in the storm.\n",
+    );
+    const added = [
+      "add-fact",
+      "f3",
+      "They say the ferry Ondine sank off Gull Point in a storm",
+    ];
+    const listed = batch(added, reword);
+    expect(listed).toContain("- fact:f1 (");
+    expect(listed).not.toContain("harbour.md");
+    expect(listed).not.toContain("fact:f3");
+    restore();
+    // In a later command line, both are listed.
+    const later = ok(...reword);
+    expect(later).toContain("harbour.md:3");
+  });
+
+  test("an edit's trace skips what still holds: a span the move left true, a count value still standing, shared words of an event that only moved", () => {
+    ok("init", "A keeper finds a letter.");
+    ok(
+      "add-event",
+      "wreck",
+      "The wreck",
+      "--summary",
+      "The ferry Ondine sinks off Gull Point in a black storm",
+    );
+    ok("set-position", "wreck", "1203");
+    ok("add-event", "letter", "The letter");
+    ok("set-position", "letter", "1213");
+    ok(
+      "add-fact",
+      "f1",
+      "Everyone remembers the ferry Ondine going down off Gull Point in the storm",
+    );
+    ok("add-scene", "harbour", "The harbour");
+    ok("set-scene-events", "harbour", "wreck");
+    mkdirSync(join(dir, "scenes"));
+    writeFileSync(
+      join(dir, "scenes", "harbour.md"),
+      "Ten years since the boat went down.\n\nThree winters on, the lamp still burned.\n",
+    );
+    // A small move leaves "ten years" true, and shared words state no time.
+    expect(ok("set-position", "wreck", "1203-06")).toBe("");
+    // A large one makes it untrue.
+    expect(ok("set-position", "wreck", "1190")).toContain(
+      'harbour.md:1 "Ten years since the boat went down.": "Ten years since" matches the 10 years between The wreck and The letter',
+    );
+    expect(ok("trace", "event:wreck")).toContain("fact:f1");
+
+    // A count value removed while it still stands at another event.
+    ok("add-count", "crew", "Hands");
+    ok("set-count", "crew", "wreck", "540");
+    ok("set-count", "crew", "letter", "540");
+    ok("add-fact", "f2", "Five hundred and forty souls signed on");
+    expect(ok("set-count", "crew", "wreck", "none")).toBe("");
+    expect(ok("set-count", "crew", "letter", "500")).toContain("fact:f2");
+
+    // A value added between two others: the next one's note counts from it.
+    ok("add-event", "storm", "The storm");
+    ok("set-position", "storm", "1220");
+    ok(
+      "set-count",
+      "crew",
+      "storm",
+      "430",
+      "--note",
+      "Seventy lost since the letter",
+    );
+    ok("add-event", "squall", "The squall");
+    ok("set-position", "squall", "1215");
+    expect(ok("set-count", "crew", "squall", "499")).toBe(
+      [
+        "What may still state the old count:crew, likeliest first (nothing was rewritten):",
+        '- count:crew note at storm "Seventy lost since the letter": "Seventy" states the change of 70 from 500 at letter; from the new 499 at squall it is 69',
+        "",
+      ].join("\n"),
+    );
   });
 
   test("trace lists dependents mentions misses, scene prose among them, and edits print the top of it", () => {
@@ -1356,6 +1441,9 @@ describe("story CLI", () => {
         "",
       ].join("\n"),
     );
+    // Once the story is saved after the prose, its scene is no longer the
+    // one being written, so its prose is listed.
+    ok("update-scene", "harbour", "--summary", "Gulls");
     const moved = ok("set-position", "wreck", "1190");
     expect(moved).toContain(
       "What may still state the old event:wreck, likeliest first (nothing was rewritten):\n",
