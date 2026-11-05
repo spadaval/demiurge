@@ -3,6 +3,9 @@ created_at: "2026-11-05T09:28:58.638479742+00:00"
 id: "worldcrafter-5pks"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-5pks
 priority: "P1"
 relationships:
   blocks: []
@@ -20,9 +23,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Round 2"
-updated_at: "2026-11-05T10:24:43.909350497+00:00"
+updated_at: "2026-11-05T10:24:43.972119622+00:00"
 ---
 
 ## Goal
