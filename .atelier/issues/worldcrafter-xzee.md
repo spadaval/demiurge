@@ -51,4 +51,4 @@ The first judged round on the fixed tool (decision worldcrafter-jeue).
 
 ## Close Reason
 
-Round 1 run, judged and read. Writer built a 37-beat outline with a rich bible and four 1,700-1,944-word scenes; all 16 judge runs ok, scores 7-9 (world aliveness 7-9). The reading found the writer silenced the CLI because of first-placement trace noise, and count/day-span errors the model couldn't catch. Log: docs/rounds/round-1.md. Fixes: worldcrafter-3fqq. Next: Round 2 (worldcrafter-5pks).
+Round 1 run, judged and read. Writer built a 37-beat outline with a rich bible and four 1,700-1,944-word scenes; all 16 judge runs ok, criterion scores 6-9, overall 8-9, world aliveness 7-9. The reading found the writer silenced the CLI because of first-placement trace noise, and count/day-span errors the model couldn't catch. Log: docs/rounds/round-1.md. Fixes: worldcrafter-3fqq. Next: Round 2 (worldcrafter-5pks).

@@ -4,7 +4,7 @@ Mission worldcrafter-gwx3, decision worldcrafter-jeue, strategy
 `docs/strategies/world-demo.md`. Scores are per judge and indicative only.
 
 Round directory (outside the repo): `/home/supadava/projects/demiurge-world/round-1/`.
-Copies kept here: `round-1/scores.md` (every judge's scores and quotes, with
+Copies kept here: the four scenes `round-1/scenes/1.md` to `4.md` and their story-so-far texts `round-1/so-far/1.md` to `4.md` (what the judges read), `round-1/scores.md` (every judge's scores and quotes, with
 quote verification), `round-1/reading.md` (the transcript reading),
 `round-1/beats.md` (the 37-beat outline), `round-1/points.json`.
 
@@ -44,8 +44,11 @@ scene panel with sandboxed headless Grok (w716), round runner (x2ij).
   (seed 20261105) and **1 punch-or-fire** (seed 20261106). Scene numbers
   below are telling order: 1 punch-or-fire, 2 coldharbour, 3 the-witness,
   4 one-exact-act. Both random draws fell early and nothing was drawn from
-  beats 20–30; kept as drawn. From Round 2 the random points are drawn one
-  from each half of the arc.
+  beats 20–30; kept as drawn. From Round 2 the random points are drawn as
+  the 5pks record states: the two chosen points are picked first; then one
+  random point is drawn uniformly, with a recorded seed, from beats
+  1..floor(n/2) and one from beats floor(n/2)+1..n, each among beats not
+  already chosen (`choose-random --range`).
 - Scenes: 1,942, 1,944, 1,919, 1,700 words. Story so far: scene 1 opens the
   story ("Nothing yet"), then 428, 613 and 622 words; the last two are over
   "about 300–500". Each story so far used the outline as it stood after all
@@ -106,7 +109,7 @@ Overall and per criterion, per judge (1–10). Full evidence quotes are in
 
 ### World aliveness: what the judges cited
 
-All sixteen scores are 7–9. Every judge cited institutional and economic
+All sixteen world-aliveness scores are 7–9 (criterion scores overall run 6–9; overall scores 8–9). Every judge cited institutional and economic
 texture, not exposition:
 
 - Scene 1: "Pennyfold tin, a hole punched through the middle and the face
@@ -145,7 +148,7 @@ texture, not exposition:
 - Sonnet put its reasons inside the evidence strings, so its quotes fail
   verification ("NOT IN SCENE") although the reports parse. Grok's were
   mostly verbatim; one was a near-quote.
-- No judge noticed the arithmetic or day-count slips in scene 4.
+- On scene 4's arithmetic, the Opus judge noticed that "eight more" makes exactly half, not more, and excused it ("'nine would be tidier' covers it"), still giving continuity 9 (`judging/4/opus/report.md`). No judge noticed the 26-versus-27-day slip.
 
 ## Fixes before Round 2
 
@@ -156,3 +159,11 @@ narration explaining what a scene already shows is a craft issue, not a tool
 one; craft.md is left unchanged so the rounds keep measuring the tool.
 Sonnet's evidence format is left as is; quote checks are reported, not
 enforced.
+
+Deferred, not in 3fqq: the tool half of reading issue 5 (point of view,
+presence and place in a scene; group membership over time) and reading issue
+12 (defeated drives, recognitions, rules that decide events, quoted lines,
+object holders, parallel time, how knowledge was gained). They are model
+additions rather than fixes to what broke, and the skill gets a workaround
+for membership (1h0r). Round 2's reading checks whether they come back; if
+they do, they are planned then.

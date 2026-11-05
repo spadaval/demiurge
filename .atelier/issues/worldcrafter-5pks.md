@@ -31,6 +31,7 @@ The second judged round, from scratch with a fresh writer on the same prompt, af
 
 ## Done when
 
-- As Round 1 (worldcrafter-xzee), with random points drawn one from each half of the arc not covered by the chosen points.
+- As Round 1 (worldcrafter-xzee), except the point draw: the orchestrator picks the two interesting turns first; then one random point is drawn uniformly, with a recorded seed, from beats 1..floor(n/2) and one from beats floor(n/2)+1..n, each among beats not already chosen, using `round.ts choose-random --range <a>-<b>` (built in worldcrafter-3fqq).
+- The round's reading checks whether the deferred Round 1 issues (point of view, presence and place; group membership over time; reading issue 12) come back.
 - docs/rounds/round-2.md holds the round log, including how the writer's use of the tool changed from Round 1.
 - The reading's fixes are recorded as their own increment, or the mission stops if the round shows no meaningful tool or skill issues.
