@@ -19,7 +19,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "First pass at change tracing on content"
-updated_at: "2026-11-05T07:01:29.621786544+00:00"
+updated_at: "2026-11-05T07:43:06.863448669+00:00"
 ---
 
 ## Goal
@@ -36,3 +36,4 @@ After a change, list the records and prose that depend on it by meaning, not jus
 ## Notes
 
 - 2026-11-05 [note] From review finding worldcrafter-ii8m: after a question is re-answered, list scenes whose reveals link names the replaced answer (app/src/story/story.ts:733).
+- 2026-11-05 [note] From 6m2v: change tracing should treat versions and knowledge as depending on their event (and on the record they are of).
