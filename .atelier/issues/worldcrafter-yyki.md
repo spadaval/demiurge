@@ -17,7 +17,7 @@ schema_version: 2
 closed_at: "2026-11-05T17:19:46.323413252+00:00"
 status: "done"
 title: "Trace and span polish; --add on scene lists (Round 4 reading 4, 5, 6)"
-updated_at: "2026-11-05T17:19:46.323413252+00:00"
+updated_at: "2026-11-05T17:20:07.768785762+00:00"
 ---
 
 ## Goal
@@ -31,6 +31,10 @@ Remove the last small frictions the reading found.
 - span and reader-order give ranges for month-precision ends and year-range events, as single years do.
 - set-scene-pressures, set-scene-actors and set-scene-events accept --add and --remove, as set-scene-links does.
 - Tests; --help; bun run check passes.
+
+## Notes
+
+- 2026-11-05 [note] Orchestrator accepts the deviation: a same-line rewritten record is left out only when the earlier rewrite added words from the changed record's new text and shared words are its only evidence, so gu8c's repro keeps passing.
 
 ## Close Reason
 

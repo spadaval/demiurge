@@ -17,7 +17,7 @@ schema_version: 2
 closed_at: "2026-11-05T17:08:34.971093280+00:00"
 status: "done"
 title: "Opening counts and viewpoint marks in reader-order --before (Round 4 reading 2, 3)"
-updated_at: "2026-11-05T17:08:34.971093280+00:00"
+updated_at: "2026-11-05T17:20:07.727651902+00:00"
 ---
 
 ## Goal
@@ -29,6 +29,10 @@ The pre-scene read gives count values as the scene opens and true viewpoint mark
 - reader-order --before prints each count's value entering the scene and each change at the scene's events ('402, then 261 at event:i-did-this').
 - The viewpoint character also holds what a scene reveals or implies when they are an actor in it or take part in its depicted events, and what their own viewpoint scenes imply.
 - Re-run on Round 4's snapshots shows the counts before s24 and s33 and the marks before s24, s33 and s36, with how many remain false by the reading's judgement; tests; --help; bun run check passes.
+
+## Notes
+
+- 2026-11-05 [note] Orchestrator accepts the deviation: 'implies' in a scene through someone else's eyes is not counted, because on Round 4 it made true marks false (s09 dov-bones, s02 cannot-see-face); 'pays off' is counted instead.
 
 ## Close Reason
 
