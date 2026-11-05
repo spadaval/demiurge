@@ -75,14 +75,20 @@ const WEIGHT = {
   replaced: 4,
 } as const;
 
-/** Shared words count only from this many. */
+/**
+ * Shared words count only from this many; after a change, from one more
+ * (or every word the change took away, if it took fewer), since two words a
+ * story uses often enough meet by chance.
+ */
 const MIN_SHARED = 2;
+const MIN_SHARED_AFTER_CHANGE = 3;
 
 /**
  * A word in more than this share of the story's texts (and more than
- * `COMMON_FLOOR` of them) is too common to suggest a dependency.
+ * `COMMON_FLOOR` of them) is too common in this story to suggest a
+ * dependency: a name or a word the story is about, such as its setting.
  */
-const COMMON_SHARE = 0.15;
+const COMMON_SHARE = 0.05;
 const COMMON_FLOOR = 3;
 
 /** Words too common in prose to suggest a dependency. */
@@ -345,8 +351,10 @@ export function traceDependents(
   }
 
   // Names, holders, years and spans in free text.
+  // After a change, a count's old value may be stated roughly too.
+  const approximate = was !== undefined;
   const mentioned = nameChanged
-    ? whatMentions(story, ref, before).unwrapOr([])
+    ? whatMentions(story, ref, before, approximate).unwrapOr([])
     : [];
   for (const m of mentioned) {
     suspect(
@@ -393,11 +401,21 @@ export function traceDependents(
     const count = documents.get(s) ?? 0;
     return count > COMMON_FLOOR && count > texts.length * COMMON_SHARE;
   };
+  const needed =
+    was === undefined
+      ? MIN_SHARED
+      : Math.max(
+          MIN_SHARED,
+          Math.min(
+            MIN_SHARED_AFTER_CHANGE,
+            [...source].filter((s) => !common(s)).length,
+          ),
+        );
   for (const [i, t] of texts.entries()) {
     const shared = [...(stemsOf[i] ?? [])].filter(
       (s) => source.has(s) && !common(s),
     );
-    if (shared.length < MIN_SHARED) continue;
+    if (shared.length < needed) continue;
     const score = shared.reduce((sum, s) => sum + rarity(s), 0) / 2;
     suspect(
       t.target,
@@ -409,7 +427,7 @@ export function traceDependents(
 
   // Prose: names and years as `mentions` looks for them, and the scenes that
   // touch the record, with any span in them for an event.
-  const lookFor = nameChanged ? terms(before, ref) : [];
+  const lookFor = nameChanged ? terms(before, ref, approximate) : [];
   const touching = new Map(
     scenesTouching(story, ref)
       .unwrapOr([])

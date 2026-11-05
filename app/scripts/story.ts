@@ -8,8 +8,17 @@
  * read or written, 2 for a malformed command line.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { err, ok, Result } from "neverthrow";
 import {
   describeBetween,
@@ -47,7 +56,7 @@ import {
   toldBefore,
   trueOrder,
 } from "../src/story/learning";
-import { type Mention, whatMentions } from "../src/story/mentions";
+import { type Mention, storyTexts, whatMentions } from "../src/story/mentions";
 import {
   eventTime,
   RENDER_SECTION_NAMES,
@@ -1820,8 +1829,12 @@ export function helpText(): string {
     "suspects that may still state its old version, records and lines of",
     "scene prose, each with why; trace <ref> lists them all. Adding a record",
     "or placing an event for the first time prints none, since nothing can",
-    "state an old version yet. touches (links only) and mentions (text naming",
-    "it only) are the narrower views trace builds on.",
+    "state an old version yet; a count traces only a changed value, looking",
+    "for the old value at that event in figures, words or rounded. Within one",
+    "shell command line, the trace leaves out records an earlier edit in it",
+    "rewrote and the scene whose prose was written since the story file was",
+    "last saved. touches (links only) and mentions (text naming it only) are",
+    "the narrower views trace builds on.",
   ];
   let group = "";
   const specs: [string, Spec][] = [
@@ -2643,6 +2656,7 @@ function staleTextLines(
   after: Story,
   command: StoryCommand,
   storyPath: string,
+  rewritten: ReadonlySet<string> = new Set(),
 ): string[] {
   const ref = changedRef(before, after, command);
   // Nothing can state where an event was before it had a place.
@@ -2658,11 +2672,20 @@ function staleTextLines(
       (c) => c.id === command.id && c.values.some((v) => v.at === command.at),
     );
   if (ref === undefined || firstPlacement || firstValue) return [];
+  const was = countWas(before, command);
+  if (was === undefined) return [];
   const all = traceDependents(after, ref, {
-    was: before,
+    was,
     prose: readProse(storyPath, after),
   }).unwrapOr([]);
-  const found = all.filter((s) => s.inText);
+  // A record this batch has already rewritten states the new version, and
+  // the scene being written is about to be rewritten anyway. (Prose is still
+  // listed: a change after writing it can leave it stale.)
+  const found = all.filter(
+    ({ inText, target }) =>
+      inText &&
+      !(target.kind === "record" && rewritten.has(formatRef(target.ref))),
+  );
   if (found.length === 0) return [];
   const shown = found.slice(0, MAX_STALE_LINES);
   const more = all.length - shown.length;
@@ -2673,6 +2696,169 @@ function staleTextLines(
       ? []
       : [`...run trace ${formatRef(ref)} for all ${all.length}.`]),
   ];
+}
+
+/**
+ * The story before the edit, as the trace should see it. A count's change
+ * is only its value at one event, so only that value is looked for, and a
+ * change of note alone (the same value) traces nothing: undefined.
+ */
+function countWas(before: Story, command: StoryCommand): Story | undefined {
+  if (command.type !== "setCount") return before;
+  const old = before.counts
+    .find((c) => c.id === command.id)
+    ?.values.find((v) => v.at === command.at);
+  if (old === undefined || old.value === command.value) return undefined;
+  return {
+    ...before,
+    counts: before.counts.map((c) =>
+      c.id === command.id ? { ...c, values: [old] } : c,
+    ),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The batch: edits run from one shell command line, such as a writer's
+// script of many edits. An edit's inline trace leaves out records whose
+// text earlier edits in the batch rewrote, and the record of a scene whose
+// prose was written since the story file was last saved before the batch:
+// the scene being worked on. `trace <ref>` still lists everything.
+
+const tryRead = Result.fromThrowable(
+  (path: string) => readFileSync(path, "utf8"),
+  () => null,
+);
+const tryWrite = Result.fromThrowable(
+  (path: string, text: string) => writeFileSync(path, text),
+  () => null,
+);
+const tryMtime = Result.fromThrowable(
+  (path: string) => statSync(path).mtimeMs,
+  () => null,
+);
+
+/**
+ * The shell running this command line: the parent process, or on Linux the
+ * first ancestor of it that isn't a copy of it (a subshell such as
+ * `$(...)` is a forked copy, with the same command line).
+ */
+function batchKey(): string {
+  const stat = (pid: number) =>
+    tryRead(`/proc/${pid}/stat`)
+      .map((text) => text.slice(text.lastIndexOf(")") + 2).split(" "))
+      .unwrapOr(undefined);
+  const cmdline = (pid: number) =>
+    tryRead(`/proc/${pid}/cmdline`).unwrapOr(undefined);
+  let pid = process.ppid;
+  for (;;) {
+    const parent = Number(stat(pid)?.[1]);
+    const line = cmdline(pid);
+    if (!(parent > 1) || line === undefined || cmdline(parent) !== line) break;
+    pid = parent;
+  }
+  // The start time tells a reused process ID apart.
+  return `${pid}-${stat(pid)?.[19] ?? ""}`;
+}
+
+const BATCH_PREFIX = "story-batch-";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const storyHash = (storyPath: string) =>
+  createHash("sha1").update(resolve(storyPath)).digest("hex").slice(0, 12);
+
+function batchFile(storyPath: string): string {
+  return join(
+    tmpdir(),
+    `${BATCH_PREFIX}${storyHash(storyPath)}-${batchKey()}.json`,
+  );
+}
+
+/** Removes the story's earlier batches' lists, and anyone's a day old. */
+function clearOldBatches(storyPath: string): void {
+  const mine = `${BATCH_PREFIX}${storyHash(storyPath)}-`;
+  const names = Result.fromThrowable(
+    () => readdirSync(tmpdir()),
+    () => null,
+  )().unwrapOr([]);
+  for (const name of names) {
+    if (!name.startsWith(BATCH_PREFIX)) continue;
+    const path = join(tmpdir(), name);
+    const old = (tryMtime(path).unwrapOr(null) ?? 0) < Date.now() - DAY_MS;
+    if (name.startsWith(mine) || old) {
+      Result.fromThrowable(
+        () => unlinkSync(path),
+        () => null,
+      )();
+    }
+  }
+}
+
+/** What this batch has rewritten so far, as refs; seeded on its first edit. */
+function batchRewritten(story: Story, storyPath: string): Set<string> {
+  const saved = tryRead(batchFile(storyPath))
+    .map((text): unknown => JSON.parse(text))
+    .unwrapOr(undefined);
+  if (Array.isArray(saved)) {
+    return new Set(saved.filter((x): x is string => typeof x === "string"));
+  }
+  clearOldBatches(storyPath);
+  const storyTime = tryMtime(storyPath).unwrapOr(null);
+  return new Set(
+    storyTime === null
+      ? []
+      : story.scenes
+          .filter((scene) => {
+            const prose = tryMtime(proseFile(storyPath, scene.id)).unwrapOr(
+              null,
+            );
+            return prose !== null && prose > storyTime;
+          })
+          .map((scene) => formatRef({ kind: "scene", id: scene.id })),
+  );
+}
+
+/** Adds the records whose text an edit changed (not added) to the batch's list. */
+function recordBatch(
+  storyPath: string,
+  rewritten: ReadonlySet<string>,
+  before: Story,
+  after: Story,
+): void {
+  const refs: Ref[] = [
+    ...before.actors.map((x): Ref => ({ kind: "actor", id: x.id })),
+    ...before.drives.map((x): Ref => ({ kind: "drive", id: x.id })),
+    ...before.facts.map((x): Ref => ({ kind: "fact", id: x.id })),
+    ...before.readerQuestions.map(
+      (x): Ref => ({ kind: "readerQuestion", id: x.id }),
+    ),
+    ...before.timeline.events.map((x): Ref => ({ kind: "event", id: x.id })),
+    ...before.scenes.map((x): Ref => ({ kind: "scene", id: x.id })),
+    ...before.openQuestions.map(
+      (x): Ref => ({ kind: "openQuestion", id: x.id }),
+    ),
+    ...before.versions.map((x): Ref => ({ kind: "version", id: x.id })),
+    ...before.knowledge.map((x): Ref => ({ kind: "knowledge", id: x.id })),
+    ...before.objects.map((x): Ref => ({ kind: "object", id: x.id })),
+    ...before.counts.map((x): Ref => ({ kind: "count", id: x.id })),
+  ];
+  // Rewritten means its text changed; new links or a new place don't count.
+  const text = (story: Story) =>
+    new Map(
+      storyTexts(story).map((t) => [`${formatRef(t.ref)} ${t.field}`, t.value]),
+    );
+  const was = text(before);
+  const now = text(after);
+  const changed = refs
+    .map(formatRef)
+    .filter((ref) =>
+      [...was.keys(), ...now.keys()].some(
+        (key) => key.startsWith(`${ref} `) && was.get(key) !== now.get(key),
+      ),
+    );
+  tryWrite(
+    batchFile(storyPath),
+    JSON.stringify([...new Set([...rewritten, ...changed])]),
+  );
 }
 
 function touchLines(groups: TouchGroups): string[] {
@@ -2929,27 +3115,31 @@ function runEdit(
       if (a.errors.length > 0) return err(usageError(a.errors.join("\n")));
       return applyStoryCommand(story, command)
         .mapErr((e) => refused(e.message))
-        .map(({ story: next, problems }) => ({
-          story: next,
-          stdout: [
-            ...problems.map(
-              (p) =>
-                `Timeline problem (kept; see contradictions): ${timelineProblemMessage(next, p)}`,
-            ),
-            ...addedProblems(story, next).map(
-              ({ source, message }) =>
-                `${source === "cause" ? "Cause" : "Count"} problem (kept; see contradictions): ${message}`,
-            ),
-            ...alsoRemovedLines(story, next, command),
-            ...(a.bool("remove") === true
-              ? []
-              : droppedLinkLines(story, next, command)),
-            ...crossedLinkLines(story, next),
-            ...staleTextLines(story, next, command, path),
-          ]
-            .map((line) => `${line}\n`)
-            .join(""),
-        }));
+        .map(({ story: next, problems }) => {
+          const rewritten = batchRewritten(story, path);
+          recordBatch(path, rewritten, story, next);
+          return {
+            story: next,
+            stdout: [
+              ...problems.map(
+                (p) =>
+                  `Timeline problem (kept; see contradictions): ${timelineProblemMessage(next, p)}`,
+              ),
+              ...addedProblems(story, next).map(
+                ({ source, message }) =>
+                  `${source === "cause" ? "Cause" : "Count"} problem (kept; see contradictions): ${message}`,
+              ),
+              ...alsoRemovedLines(story, next, command),
+              ...(a.bool("remove") === true
+                ? []
+                : droppedLinkLines(story, next, command)),
+              ...crossedLinkLines(story, next),
+              ...staleTextLines(story, next, command, path, rewritten),
+            ]
+              .map((line) => `${line}\n`)
+              .join(""),
+          };
+        });
     }),
   );
 }

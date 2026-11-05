@@ -63,12 +63,14 @@ export type Term = {
  *
  * The names and years looked for are those `was` gives the record, so passing
  * the story from before a change finds text that still states the old
- * version. It defaults to `story`.
+ * version. It defaults to `story`. With `approximate`, a count's values are
+ * also looked for rounded (`terms`).
  */
 export function whatMentions(
   story: Story,
   ref: Ref,
   was: Story = story,
+  approximate = false,
 ): Result<Mention[], UnknownRef> {
   if (!refExists(story, ref) || !refExists(was, ref)) {
     return err({
@@ -93,7 +95,7 @@ export function whatMentions(
     });
   };
 
-  for (const term of terms(was, ref)) {
+  for (const term of terms(was, ref, approximate)) {
     for (const text of texts) {
       const { from } = term;
       if (
@@ -289,8 +291,98 @@ const wordsPattern = (text: string) =>
 const numberPattern = (value: number) =>
   new RegExp(`(?<![\\d.])${escaped(String(value))}(?!\\d|\\.\\d)`, "g");
 
-/** What names `ref` in `story`. */
-export function terms(story: Story, ref: Ref): Term[] {
+const ONES = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+];
+const TENS = [
+  "",
+  "",
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+];
+
+/**
+ * A whole number from 0 to 999,999 in English words, as a regular
+ * expression: `five hundred (and) forty`, `twenty-six`, `a thousand`, and
+ * `fourteen hundred (and) sixty` beside `one thousand four hundred …`.
+ */
+function numberWords(n: number): string {
+  const and = "(?:,?\\s+and)?\\s+";
+  const under100 = (x: number) =>
+    x < 20
+      ? (ONES[x] ?? "")
+      : `${TENS[Math.floor(x / 10)] ?? ""}${x % 10 === 0 ? "" : `[\\s-]${ONES[x % 10] ?? ""}`}`;
+  const lead = (x: number) => (x === 1 ? "(?:a|one)" : under100(x));
+  const under1000 = (x: number): string => {
+    if (x < 100) return under100(x);
+    const rest = x % 100;
+    return `${lead(Math.floor(x / 100))}\\s+hundred${rest === 0 ? "" : `${and}${under100(rest)}`}`;
+  };
+  if (n < 1000) return under1000(n);
+  const thousands = Math.floor(n / 1000);
+  const rest = n % 1000;
+  const big = `${thousands === 1 ? "(?:a|one)" : under1000(thousands)}\\s+thousand${rest === 0 ? "" : `${rest < 100 ? and : ",?\\s+"}${under1000(rest)}`}`;
+  // 1100 to 9999 also read as hundreds: "fourteen hundred and sixty".
+  const hundreds = Math.floor(n / 100);
+  return n < 10000 && hundreds % 10 !== 0
+    ? `(?:${big}|${under100(hundreds)}\\s+hundred${n % 100 === 0 ? "" : `${and}${under100(n % 100)}`})`
+    : big;
+}
+
+/** A number written in words, not part of a longer one. */
+const numberWordsPattern = (value: number) =>
+  new RegExp(
+    `(?<![\\p{L}-])${numberWords(value)}(?![\\p{L}-]|,?\\s+(?:and\\s+)?(?:${[...ONES.slice(1), ...TENS.slice(2), "hundred", "thousand"].join("|")})\\b)`,
+    "giu",
+  );
+
+/**
+ * The round numbers a text might state `value` as ("over five hundred" for
+ * 540): it rounded down and to nearest, to each power of ten below it.
+ */
+function roundings(value: number): number[] {
+  const found = new Set<number>();
+  for (let size = 10; size <= Math.abs(value); size *= 10) {
+    for (const r of [
+      Math.floor(value / size) * size,
+      Math.round(value / size) * size,
+    ]) {
+      if (r !== value && r !== 0) found.add(r);
+    }
+  }
+  return [...found];
+}
+
+/**
+ * What names `ref` in `story`. With `approximate`, a count's values are also
+ * looked for rounded, since text often states a number roughly.
+ */
+export function terms(story: Story, ref: Ref, approximate = false): Term[] {
   const name = nameOf(story, ref);
   const found: Term[] = [];
   if (name.value.trim() !== "") {
@@ -343,11 +435,40 @@ export function terms(story: Story, ref: Ref): Term[] {
   if (ref.kind === "count") {
     const count = story.counts.find((c) => c.id === ref.id);
     for (const value of new Set(count?.values.map((v) => v.value))) {
-      found.push({
-        pattern: numberPattern(value),
-        how: `states its value ${value}`,
-        match: "direct",
-      });
+      const whole = Number.isInteger(value) && value >= 0 && value < 1e6;
+      // "One" or "two" in words is everywhere; look for small values in
+      // words only for a value a change took away.
+      const inWords = whole && (value >= 10 || (approximate && value >= 2));
+      found.push(
+        {
+          pattern: numberPattern(value),
+          how: `states its value ${value}`,
+          match: "direct",
+        },
+        ...(inWords
+          ? [
+              {
+                pattern: numberWordsPattern(value),
+                how: `states its value ${value}`,
+                match: "direct" as const,
+              },
+            ]
+          : []),
+        ...(whole && approximate
+          ? roundings(value).flatMap((r) => [
+              {
+                pattern: numberPattern(r),
+                how: `may state its value ${value} roughly`,
+                match: "near" as const,
+              },
+              {
+                pattern: numberWordsPattern(r),
+                how: `may state its value ${value} roughly`,
+                match: "near" as const,
+              },
+            ])
+          : []),
+      );
     }
   }
   return found;

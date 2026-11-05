@@ -23,11 +23,15 @@ const SCRIPT = fileURLToPath(new URL("./story.ts", import.meta.url));
 
 type Run = { code: number; stdout: string; stderr: string };
 
+/**
+ * Runs one command from its own shell, as a writer's command line would, so
+ * each is its own batch (see the CLI's `batchKey`).
+ */
 function cli(...args: string[]): Run {
-  const result = Bun.spawnSync(["bun", SCRIPT, ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const result = Bun.spawnSync(
+    ["bash", "-c", 'bun "$@"; exit $?', "bash", SCRIPT, ...args],
+    { stdout: "pipe", stderr: "pipe" },
+  );
   return {
     code: result.exitCode,
     stdout: result.stdout.toString(),
@@ -1106,6 +1110,89 @@ describe("story CLI", () => {
     expect(ok("reader-order", "--before", "bake")).toBe(
       'Before 1. scene:bake ("Bakehouse"), at event:bakehouse ("The bakehouse") at 1 May 619 (the latest event it shows), the reader has been told:\n(nothing yet)\n',
     );
+  });
+
+  test("set-count traces only a changed value, and finds text stating the old one, in words or rounded", () => {
+    ok("init", "A keeper keeps the light.");
+    ok("add-event", "storm", "The storm");
+    ok("add-event", "calm", "The calm");
+    ok("add-count", "crew", "Hands aboard");
+    ok("set-count", "crew", "storm", "540");
+    ok("set-count", "crew", "calm", "790");
+    ok("add-fact", "rumour", "Over five hundred hands, the harbour says");
+    ok("add-fact", "exact", "Five hundred and forty souls signed on");
+    ok("add-fact", "other", "By the calm, 790 were left");
+    // Only the note changed: nothing to trace.
+    expect(ok("set-count", "crew", "storm", "540", "--note", "Signed on")).toBe(
+      "",
+    );
+    const changed = ok("set-count", "crew", "storm", "450");
+    expect(changed).toContain(
+      '- fact:exact ("Five hundred and forty souls signed on"): text "Five hundred and forty" states its value 540',
+    );
+    expect(changed).toContain(
+      'text "five hundred" may state its value 540 roughly',
+    );
+    // A value the change didn't touch is no suspect.
+    expect(changed).not.toContain("fact:other");
+  });
+
+  test("an edit's trace leaves out what its batch rewrote, and the scene being written", () => {
+    ok("init", "A keeper finds a letter.");
+    ok(
+      "add-event",
+      "wreck",
+      "The wreck",
+      "--summary",
+      "The Alba sank off the northern reef in a gale",
+    );
+    ok("add-scene", "harbour", "The harbour", "--summary", "Mara on the quay");
+    ok("set-scene-events", "harbour", "wreck");
+    const reword = [
+      "describe-event",
+      "wreck",
+      "--summary",
+      "The Alba ran aground on the southern cape",
+    ];
+    const batch = (...commands: string[][]) => {
+      const script = commands
+        .map((c) => ["bun", SCRIPT, file, ...c].map((a) => `'${a}'`).join(" "))
+        .join("; ");
+      return Bun.spawnSync(["bash", "-c", `${script}; exit $?`], {
+        stdout: "pipe",
+      }).stdout.toString();
+    };
+    const summary = [
+      "update-scene",
+      "harbour",
+      "--summary",
+      "Mara on the quay: the Alba sank off the northern reef in a gale",
+    ];
+    // In separate command lines, the scene rewritten first is a suspect.
+    ok(...summary);
+    expect(ok(...reword)).toContain('- scene:harbour ("The harbour")');
+    ok(
+      "describe-event",
+      "wreck",
+      "--summary",
+      "The Alba sank off the northern reef in a gale",
+    );
+    ok("update-scene", "harbour", "--summary", "Mara on the quay");
+    // In one, it isn't.
+    expect(batch(summary, reword)).toBe("");
+    // Nor is the scene whose prose was written since the story was saved.
+    ok(
+      "describe-event",
+      "wreck",
+      "--summary",
+      "The Alba sank off the northern reef in a gale",
+    );
+    ok(...summary);
+    mkdirSync(join(dir, "scenes"));
+    writeFileSync(join(dir, "scenes", "harbour.md"), "Gulls.\n");
+    expect(ok(...reword)).toBe("");
+    // trace on its own still lists it.
+    expect(ok("trace", "event:wreck")).toContain("scene:harbour");
   });
 
   test("trace lists dependents mentions misses, scene prose among them, and edits print the top of it", () => {
