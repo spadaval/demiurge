@@ -1,0 +1,48 @@
+[
+  {
+    "sceneId": "s25-lampwick",
+    "title": "Lampwick",
+    "position": 26,
+    "beats": 38,
+    "how": "chosen",
+    "reason": "Interesting turn (reveal): Lampwick, the quiet regular in Chat, is Saint Iver; chosen by the orchestrator, beat 26 of 38, at least 3 beats from the other turn per the lsu3/hdly rule.",
+    "chosenAt": "2026-11-05T17:55:48.811Z"
+  },
+  {
+    "sceneId": "s34-bell",
+    "title": "The Closing Bell",
+    "position": 36,
+    "beats": 38,
+    "how": "chosen",
+    "reason": "Interesting turn (reversal): the Exchequer calls Iver and Lampwick steps out as Iver beyond the deed's hold; chosen by the orchestrator, beat 36 of 38, in beats ceil(0.8n)..n = 31..38.",
+    "chosenAt": "2026-11-05T17:55:48.872Z"
+  },
+  {
+    "sceneId": "s15-wending",
+    "title": "Wending Fair",
+    "position": 16,
+    "beats": 38,
+    "how": "random",
+    "reason": "Drawn uniformly from the 19 beats in 1-19 not already chosen, with seed 20261113 (mulberry32).",
+    "seed": 20261113,
+    "range": {
+      "from": 1,
+      "to": 19
+    },
+    "chosenAt": "2026-11-05T17:55:48.931Z"
+  },
+  {
+    "sceneId": "s21-dark",
+    "title": "The Gallery in the Dark",
+    "position": 22,
+    "beats": 38,
+    "how": "random",
+    "reason": "Drawn uniformly from the 17 beats in 20-38 not already chosen, with seed 20261114 (mulberry32).",
+    "seed": 20261114,
+    "range": {
+      "from": 20,
+      "to": 38
+    },
+    "chosenAt": "2026-11-05T17:55:48.987Z"
+  }
+]

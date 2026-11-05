@@ -1,0 +1,47 @@
+{
+  "at": "2026-11-05T17:55:34.310Z",
+  "commit": "183931e189fee137bbd274fc21f38403eb805dd5",
+  "transcript": {
+    "initModel": "claude-opus-5-5",
+    "models": [
+      "claude-opus-5-5"
+    ],
+    "skills": [],
+    "mcpServers": [],
+    "plugins": [
+      {
+        "name": "cc-plugin-agents-md",
+        "path": "builtin",
+        "source": "cc-plugin-agents-md@builtin"
+      },
+      {
+        "name": "cc-plugin-telemetry",
+        "path": "builtin",
+        "source": "cc-plugin-telemetry@builtin"
+      },
+      {
+        "name": "cc-plugin-privacy",
+        "path": "builtin",
+        "source": "cc-plugin-privacy@builtin"
+      },
+      {
+        "name": "cc-plugin-plugin-authoring",
+        "path": "builtin",
+        "source": "cc-plugin-plugin-authoring@builtin"
+      }
+    ],
+    "hookEvents": 0,
+    "toolUses": 31,
+    "result": {
+      "subtype": "success",
+      "isError": false,
+      "durationMs": 793520,
+      "numTurns": 32,
+      "costUsd": 2.7138061999999996
+    },
+    "outside": [],
+    "unparsed": 0
+  },
+  "checkProblems": [],
+  "problems": []
+}

@@ -1,7 +1,11 @@
 ---
-status: active
-last_changed: "2026-11-05: opened on Sumeet's direction of 2026-11-05 (decision worldcrafter-jeue), replacing notes-first"
+status: complete
+last_changed: "2026-11-05: complete after Round 0 and five rounds; results in docs/rounds/README.md"
 ---
+
+# Result
+
+Complete on 2026-11-05: Round 0 and five rounds ran as described below. Results, scores per judge, thesis signals and follow-up work are in `docs/rounds/README.md`; the round logs are beside it.
 
 # Why
 
