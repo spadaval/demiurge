@@ -28,7 +28,7 @@ import {
 } from "./packet";
 import { PREMISES, STEPS, stepPrompt } from "./prompts";
 import { ensureToken } from "./sandbox";
-import { checkTranscript, mentionsCalls } from "./transcript";
+import { checkTranscript, mentionsCalls, shellPaths } from "./transcript";
 
 const tool = (name: string, input: Record<string, unknown>) =>
   JSON.stringify({
@@ -712,6 +712,52 @@ describe("transcript check: only top-level cat heredocs are skipped (worldcrafte
     expect(
       outside("python3 - <<'PY'\nprint(1)\nPY\ncat > b.md <<'EOF'\nC / D\nEOF"),
     ).toEqual([]);
+  });
+});
+
+describe("transcript check: sed and perl scripts aren't paths", () => {
+  const run = "/tmp/judge.abc";
+  const outside = (command: string) =>
+    checkTranscript(tool("Bash", { command }), run, {
+      read: [run],
+      write: [run],
+    }).outside.map((f) => f.tool);
+  test("a substitution or address in the script isn't read as a path", () => {
+    // From a judge's Part 1 (worldcrafter-iu6l): the empty replacement after
+    // a comma was read as the root, "//".
+    const flagged =
+      "sed -i 's/ the Jovian-like mechanism is absent,//' part1.md && grep -n \"Jovian-like\" part1.md; echo done";
+    expect(shellPaths(flagged)).toEqual([]);
+    expect(outside(flagged)).toEqual([]);
+    for (const command of [
+      "sed -n '/## Part 1/,/## Part 2/p' part1.md",
+      "sed -e \"s/a,//\" -e '/x/d' part1.md",
+      "sed --expression='s/,//' part1.md",
+      "sed -i.bak 'y/abc/,,,/' part1.md",
+      "sed -E -n '/^, /p' part1.md | head",
+      "sed -ne 's/a,//p' part1.md",
+      "perl -pi -e 's/a, //g' part1.md",
+      "perl -ne 'print if /, //' part1.md",
+    ]) {
+      expect([command, outside(command)]).toEqual([command, []]);
+    }
+  });
+  test("a path argument after the script is still checked", () => {
+    expect(outside("sed -i 's/a/b/' /etc/passwd")).toEqual(["Bash"]);
+    expect(outside("sed -n '/x/p' ../other")).toEqual(["Bash"]);
+    expect(outside("sed -e 's/a//' -i /etc/x part1.md")).toEqual(["Bash"]);
+    expect(outside("sed -f /etc/script.sed part1.md")).toEqual(["Bash"]);
+    expect(outside("sed -nf /etc/script.sed part1.md")).toEqual(["Bash"]);
+    expect(outside("sed --file=/etc/script.sed part1.md")).toEqual(["Bash"]);
+    expect(outside("sed -ne 's/a,//p' /etc/passwd")).toEqual(["Bash"]);
+    expect(outside("perl -pe 's/a//' /etc/passwd")).toEqual(["Bash"]);
+    // A perl script file isn't an inline script.
+    expect(outside("perl /etc/x.pl part1.md")).toEqual(["Bash"]);
+  });
+  test("a bare // elsewhere still counts as the root", () => {
+    expect(shellPaths("ls //")).toEqual(["//"]);
+    expect(outside("echo a,//")).toEqual(["Bash"]);
+    expect(outside("sed 's/a/b/' x; cat //")).toEqual(["Bash"]);
   });
 });
 

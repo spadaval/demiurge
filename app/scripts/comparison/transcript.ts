@@ -352,6 +352,106 @@ function heredocsOpened(line: string): Heredoc[] {
 }
 
 /**
+ * The command with each inline sed or perl script blanked (`''`), so its
+ * substitutions and addresses (`s/a,//`, `/re/p`, `y/a/b/`) aren't read as
+ * paths. Narrow, by each tool's grammar: sed's first operand is the script
+ * unless `-e`/`--expression` (or `-f`/`--file`, a script file) gives it;
+ * perl's script follows a flag ending in `e` (`-e`, `-pe`, `-ne`). Option
+ * arguments such as `-f <file>`, and every operand after the script, the
+ * files it reads, stay as they were.
+ */
+export function withoutInlineScripts(command: string): string {
+  const spans: [number, number][] = [];
+  for (const match of command.matchAll(/(^|[\s;&|(`])(sed|perl)(?=[ \t])/g)) {
+    const tool = match[2];
+    let i = (match.index ?? 0) + match[0].length;
+    let scriptNext = false;
+    // The next word is an option's argument, such as `-f <file>`: kept.
+    let argumentNext = false;
+    let explicit = false;
+    let scriptTaken = false;
+    while (i < command.length) {
+      while (command[i] === " " || command[i] === "\t") i++;
+      if (i >= command.length || /[;&|)`\n]/.test(command[i] ?? "")) break;
+      const start = i;
+      i = wordEnd(command, i);
+      const word = command.slice(start, i);
+      if (scriptNext) {
+        spans.push([start, i]);
+        scriptNext = false;
+        scriptTaken = true;
+      } else if (argumentNext) {
+        argumentNext = false;
+      } else if (word.startsWith("-")) {
+        if (
+          tool === "sed" &&
+          (/^-[A-Za-z]*e$/.test(word) || word === "--expression")
+        ) {
+          scriptNext = explicit = true;
+        } else if (tool === "sed" && word.startsWith("--expression=")) {
+          spans.push([start + "--expression=".length, i]);
+          explicit = true;
+        } else if (
+          tool === "sed" &&
+          (/^-[A-Za-z]*f$/.test(word) || word === "--file")
+        ) {
+          // The script is in a file, which stays checked.
+          argumentNext = explicit = true;
+        } else if (
+          tool === "sed" &&
+          (word.startsWith("--file=") || /^-[A-Za-z]*f./.test(word))
+        ) {
+          explicit = true;
+        } else if (
+          tool === "sed" &&
+          (word === "-l" || word === "--line-length")
+        ) {
+          argumentNext = true;
+        } else if (tool === "perl" && /^-[A-Za-z]*[eE]$/.test(word)) {
+          scriptNext = explicit = true;
+        }
+      } else if (tool === "sed" && !explicit && !scriptTaken) {
+        spans.push([start, i]);
+        scriptTaken = true;
+      } else {
+        // The first operand: the files follow, and stay checked.
+        break;
+      }
+    }
+  }
+  let out = command;
+  for (const [start, end] of spans.reverse()) {
+    out = `${out.slice(0, start)}''${out.slice(end)}`;
+  }
+  return out;
+}
+
+/** Where a shell word starting at `start` ends, through any quotes in it. */
+function wordEnd(command: string, start: number): number {
+  let i = start;
+  while (i < command.length) {
+    const c = command[i];
+    if (c === "'") {
+      const close = command.indexOf("'", i + 1);
+      i = close === -1 ? command.length : close + 1;
+    } else if (c === '"') {
+      i++;
+      while (i < command.length && command[i] !== '"') {
+        i += command[i] === "\\" ? 2 : 1;
+      }
+      i++;
+    } else if (c === "\\") {
+      i += 2;
+    } else if (/[\s;&|)`]/.test(c ?? "")) {
+      break;
+    } else {
+      i++;
+    }
+  }
+  return Math.min(i, command.length);
+}
+
+/**
  * Absolute paths a shell command names, bounded by whitespace, quotes,
  * shell punctuation, braces or commas. The root itself (`ls /`,
  * `find / ...`, `cd / && ...`) and any path whose first segment is a
@@ -362,7 +462,7 @@ function heredocsOpened(line: string): Heredoc[] {
 export function shellPaths(command: string): string[] {
   // Braces and commas bound a path too, as in `{/etc/shadow,x}`, and so
   // does the `}` of `${IFS}`.
-  const found = command.matchAll(
+  const found = withoutInlineScripts(command).matchAll(
     /(?:^|[\s'"=:(<>|;&{},])(\/[^\s'"`;|&<>(){},]*)/g,
   );
   return [...found]
