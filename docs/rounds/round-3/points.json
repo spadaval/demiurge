@@ -1,0 +1,48 @@
+[
+  {
+    "sceneId": "nobody-unmasked",
+    "title": "Nobody-in-Particular",
+    "position": 25,
+    "beats": 35,
+    "how": "chosen",
+    "reason": "Interesting turn (reveal): Agathe has been Nobody-in-Particular all along; chosen by the orchestrator, beat 25 of 35, later in the arc per finding fja2.",
+    "chosenAt": "2026-11-05T13:11:17.850Z"
+  },
+  {
+    "sceneId": "last-evening",
+    "title": "Ember's last evening",
+    "position": 29,
+    "beats": 35,
+    "how": "chosen",
+    "reason": "Interesting turn (cost paid): Ember spends what is left of herself to testify, carried by Chat's poll; chosen by the orchestrator, beat 29 of 35.",
+    "chosenAt": "2026-11-05T13:11:17.906Z"
+  },
+  {
+    "sceneId": "lists",
+    "title": "The Spring Lists",
+    "position": 10,
+    "beats": 35,
+    "how": "random",
+    "reason": "Drawn uniformly from the 17 beats in 1-17 not already chosen, with seed 20261109 (mulberry32).",
+    "seed": 20261109,
+    "range": {
+      "from": 1,
+      "to": 17
+    },
+    "chosenAt": "2026-11-05T13:11:17.964Z"
+  },
+  {
+    "sceneId": "ember-tells",
+    "title": "What the hearth saw",
+    "position": 26,
+    "beats": 35,
+    "how": "random",
+    "reason": "Drawn uniformly from the 16 beats in 18-35 not already chosen, with seed 20261110 (mulberry32).",
+    "seed": 20261110,
+    "range": {
+      "from": 18,
+      "to": 35
+    },
+    "chosenAt": "2026-11-05T13:11:18.020Z"
+  }
+]

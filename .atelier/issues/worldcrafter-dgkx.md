@@ -17,7 +17,7 @@ schema_version: 2
 closed_at: "2026-11-05T11:33:23.569430789+00:00"
 status: "done"
 title: "Add a minimal scene viewpoint and group membership after Round 2"
-updated_at: "2026-11-05T11:36:45.687393595+00:00"
+updated_at: "2026-11-05T14:15:00.582895055+00:00"
 ---
 
 ## Question
@@ -31,6 +31,7 @@ Add a minimal version now: a scene's viewpoint actor, which reader-order --befor
 ## Notes
 
 - 2026-11-05 [note] Clarifications (finding worldcrafter-w2l1): (1) Presence in a scene, which recurred in Round 2 as 'who is conspicuously quiet', stays deferred with the others. (2) The criterion: a gap is added when it recurred in both rounds and has cost the story at least once; membership did (Round 1's Brindle sale on two clocks), and viewpoint recurred as the engine of Round 2's middle act, with dramatic irony unheld. The rest wait for a story cost. (3) 'Small' means the minimal form in worldcrafter-ktfa: one viewpoint field and membership since/until, not the full model the reading's 'larger model change' described.
+- 2026-11-05 [note] After Round 3 (docs/rounds/round-3/reading.md section 5): quoted lines now meet the criterion weakly (one line placed at the wrong scene). The orchestrator takes the cheaper reversible step, a skill line to check earlier scenes before reusing a line, rather than a quoted-line record; if Round 4 shows another cost, add the record. Two identities recurred a third time, central to the plot, with no story cost, so stay deferred.
 
 ## Close Reason
 
