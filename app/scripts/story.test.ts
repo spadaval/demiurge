@@ -261,8 +261,8 @@ describe("story CLI", () => {
     const found = ok("mentions", "event:wreck");
     expect(found).toBe(
       [
-        '- scene:harbour ("The harbour") summary: "Twenty years ago" (may state when this happened)',
         '- fact:charted ("The reef was charted in 1203") text: "1203" (states its year 1203)',
+        '- scene:harbour ("The harbour") summary: "Twenty years ago" (may state when this happened)',
         "",
       ].join("\n"),
     );
@@ -332,6 +332,30 @@ describe("story CLI", () => {
     ok("update-actor", "mara", "--name", "Mara");
     expect(ok("update-drive", "calm", "--actor", "ivo")).toContain(
       "(names its holder Mara)",
+    );
+  });
+
+  test("a cut-short prompt keeps the text stating the old want ahead of the holder's name", () => {
+    ok("init", "A keeper holds the light.");
+    ok("add-actor", "mara", "Mara");
+    ok("add-drive", "d", "keep the light", "--actor", "mara");
+    for (const i of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+      ok("add-scene", `s${i}`, `Scene ${i}`, "--summary", `Mara climbs, ${i}`);
+    }
+    ok("add-fact", "vow", "Her vow to keep the light binds her");
+    // mentions lists the same order.
+    expect(ok("mentions", "drive:d").split("\n")[0]).toContain("fact:vow");
+    const lines = ok("update-drive", "d", "--want", "Leave the island")
+      .trimEnd()
+      .split("\n");
+    expect(lines[2]).toBe(
+      '- fact:vow ("Her vow to keep the light binds her") text: "keep the light" (names it)',
+    );
+    expect(lines.slice(3, 7).every((l) => l.includes("names its holder"))).toBe(
+      true,
+    );
+    expect(lines[7]).toBe(
+      "...and 8 more (13 in all): run mentions drive:d for all.",
     );
   });
 

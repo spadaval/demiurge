@@ -30,7 +30,17 @@ export type Mention = {
   text: string;
   /** Why it was listed: `names it`, `states its year 17`. */
   how: string;
+  /**
+   * How closely it states the record: `direct` names it or states its year,
+   * `holder` names a drive's holder, and `near` is a span or season in text
+   * near an event. Mentions are listed in that order.
+   */
+  match: MentionMatch;
 };
+
+export type MentionMatch = "direct" | "holder" | "near";
+
+const MATCH_ORDER: readonly MentionMatch[] = ["direct", "holder", "near"];
 
 /** A record's free text, field by field. */
 type Text = { ref: Ref; field: string; value: string };
@@ -39,6 +49,7 @@ type Text = { ref: Ref; field: string; value: string };
 type Term = {
   pattern: RegExp;
   how: string;
+  match: MentionMatch;
   from?: { ref: Ref; field: string };
 };
 
@@ -67,7 +78,7 @@ export function whatMentions(
   const texts = storyTexts(story);
   const mentions: Mention[] = [];
   const seen = new Set<string>();
-  const add = (text: Text, found: string, how: string) => {
+  const add = (text: Text, found: string, how: string, match: MentionMatch) => {
     const key = JSON.stringify([refKey(text.ref), text.field, found, how]);
     if (seen.has(key)) return;
     seen.add(key);
@@ -77,6 +88,7 @@ export function whatMentions(
       field: text.field,
       text: found,
       how,
+      match,
     });
   };
 
@@ -91,7 +103,7 @@ export function whatMentions(
         continue;
       }
       for (const found of text.value.match(term.pattern) ?? []) {
-        add(text, found, term.how);
+        add(text, found, term.how, term.match);
       }
     }
   }
@@ -106,12 +118,12 @@ export function whatMentions(
     for (const text of texts) {
       if (!near.has(refKey(text.ref))) continue;
       for (const found of text.value.match(TIME_PHRASE) ?? []) {
-        add(text, found, "may state when this happened");
+        add(text, found, "may state when this happened", "near");
       }
     }
   }
 
-  return ok(sortedByRecord(texts, mentions));
+  return ok(sortedByMatch(texts, mentions));
 }
 
 const refKey = (ref: Ref) =>
@@ -121,11 +133,12 @@ const refKey = (ref: Ref) =>
     ref.id,
   ]);
 
-/** Mentions in the order `storyTexts` lists their records and fields. */
-function sortedByRecord(
-  texts: readonly Text[],
-  mentions: Mention[],
-): Mention[] {
+/**
+ * Closest matches first (`MATCH_ORDER`), so a list cut short keeps the text
+ * that states the record itself; within each, in the order `storyTexts`
+ * lists records and fields.
+ */
+function sortedByMatch(texts: readonly Text[], mentions: Mention[]): Mention[] {
   const order = new Map(
     texts.map((text, i) => [JSON.stringify([refKey(text.ref), text.field]), i]),
   );
@@ -133,7 +146,13 @@ function sortedByRecord(
     order.get(JSON.stringify([refKey(m.ref), m.field])) ?? 0;
   return mentions
     .map((mention, i) => ({ mention, i }))
-    .sort((a, b) => rank(a.mention) - rank(b.mention) || a.i - b.i)
+    .sort(
+      (a, b) =>
+        MATCH_ORDER.indexOf(a.mention.match) -
+          MATCH_ORDER.indexOf(b.mention.match) ||
+        rank(a.mention) - rank(b.mention) ||
+        a.i - b.i,
+    )
     .map(({ mention }) => mention);
 }
 
@@ -239,6 +258,7 @@ function terms(story: Story, ref: Ref): Term[] {
     found.push({
       pattern: wordsPattern(name.value),
       how: "names it",
+      match: "direct",
       from: { ref, field: name.field },
     });
   }
@@ -249,6 +269,7 @@ function terms(story: Story, ref: Ref): Term[] {
       found.push({
         pattern: wordsPattern(actor.name),
         how: `names its holder ${actor.name}`,
+        match: "holder",
         from: { ref: { kind: "actor", id: actor.id }, field: "name" },
       });
     }
@@ -265,6 +286,7 @@ function terms(story: Story, ref: Ref): Term[] {
       found.push({
         pattern: numberPattern(year),
         how: `states its ${story.timeline.worldUnit} ${year}`,
+        match: "direct",
       });
     }
   }

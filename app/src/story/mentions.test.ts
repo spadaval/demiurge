@@ -89,10 +89,10 @@ const lines = (found: Mention[]) =>
 describe("whatMentions", () => {
   test("an event: its label, its year as written, and spans in connected text", () => {
     expect(lines(mentions({ kind: "event", id: "wreck" }))).toEqual([
-      'drive:avenge stakes: "Twenty years" (may state when this happened)',
-      'scene:harbour summary: "Twenty years ago" (may state when this happened)',
       'fact:charted text: "1203" (states its year 1203)',
       'candidate:why/vow answer: "the wreck" (names it)',
+      'drive:avenge stakes: "Twenty years" (may state when this happened)',
+      'scene:harbour summary: "Twenty years ago" (may state when this happened)',
     ]);
   });
 
@@ -132,9 +132,20 @@ describe("whatMentions", () => {
         )._unsafeUnwrap(),
       ),
     ).toEqual([
-      'scene:harbour summary: "Mara" (names its holder Mara)',
       'candidate:why/vow answer: "avenge her brother" (names it)',
+      'scene:harbour summary: "Mara" (names its holder Mara)',
     ]);
+  });
+
+  test("lists text that states the record itself first, then its holder, then times near it", () => {
+    expect(
+      whatMentions(story, { kind: "drive", id: "avenge" })
+        ._unsafeUnwrap()
+        .map((m) => m.match),
+    ).toEqual(["direct", "holder"]);
+    expect(
+      mentions({ kind: "event", id: "wreck" }).map((m) => m.match),
+    ).toEqual(["direct", "direct", "near", "near"]);
   });
 
   test("an unrelated record isn't listed", () => {
