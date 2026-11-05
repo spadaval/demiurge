@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { applyStoryCommand, type StoryCommand } from "./commands";
-import { type GapKind, storyGaps } from "./gaps";
-import { newStory, type Ref, type Story } from "./story";
+import { deliberateGaps, type GapKind, storyGaps } from "./gaps";
+import { GAP_KINDS, newStory, type Ref, type Story } from "./story";
 
 function run(story: Story, ...commands: StoryCommand[]): Story {
   return commands.reduce(
@@ -336,5 +336,55 @@ describe("storyGaps", () => {
         message: "Aldric has no drive yet: what do they want?",
       },
     ]);
+  });
+});
+
+describe("a gap marked deliberate", () => {
+  test("every kind of gap has a case above", () => {
+    expect(cases.map(([kind]) => kind).sort()).toEqual([...GAP_KINDS].sort());
+  });
+
+  test.each(
+    cases,
+  )("%s stops being listed, and comes back when unmarked", (gap, commands, ref) => {
+    const story = run(woven, ...commands);
+    const listed = (s: Story) =>
+      storyGaps(s)
+        .filter((g) => g.kind === gap)
+        .map((g) => g.ref);
+    expect(listed(story)).toEqual([ref]);
+    const reason = "Judged fine";
+    const marked = run(story, { type: "markGapDeliberate", gap, ref, reason });
+    expect(listed(marked)).toEqual([]);
+    expect(deliberateGaps(marked)).toEqual(
+      storyGaps(story)
+        .filter((g) => g.kind === gap)
+        .map((g) => ({ gap: g, reason })),
+    );
+    // Other gaps are still listed.
+    expect(storyGaps(marked)).toEqual(
+      storyGaps(story).filter((g) => g.kind !== gap),
+    );
+    const unmarked = run(marked, { type: "unmarkGapDeliberate", gap, ref });
+    expect(storyGaps(unmarked)).toEqual(storyGaps(story));
+  });
+
+  test("a mark on one record leaves the same gap on another listed", () => {
+    const story = run(woven, drive("calm", "a"), drive("idle", "b"));
+    const origins = (s: Story) =>
+      storyGaps(s)
+        .filter((g) => g.kind === "drive_without_origin")
+        .map((g) => g.ref);
+    expect(origins(story)).toEqual([
+      { kind: "drive", id: "calm" },
+      { kind: "drive", id: "idle" },
+    ]);
+    const marked = run(story, {
+      type: "markGapDeliberate",
+      gap: "drive_without_origin",
+      ref: { kind: "drive", id: "calm" },
+      reason: "Temperament",
+    });
+    expect(origins(marked)).toEqual([{ kind: "drive", id: "idle" }]);
   });
 });

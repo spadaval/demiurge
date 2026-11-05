@@ -870,7 +870,15 @@ describe("answering an open question", () => {
     );
     expect(answered.openQuestions[0]?.answer).toBe("bored");
     const undone = run(answered, { type: "unanswerOpenQuestion", id: "why" });
-    expect(serializeStory(undone)).toBe(serializeStory(linked));
+    const { superseded, ...question } = undone.openQuestions[0] ?? {};
+    expect(superseded).toEqual([
+      { candidate: "cargo", answer: "The caravans", by: "bored" },
+      { candidate: "bored", answer: "Adventure" },
+    ]);
+    expect(question).toEqual(linked.openQuestions[0] ?? {});
+    expect(undone.openQuestions.slice(1)).toEqual(
+      linked.openQuestions.slice(1),
+    );
   });
 
   test("the answer's implications are the agent's own commands", () => {
@@ -992,5 +1000,157 @@ describe("causes between events", () => {
       id: "war",
     });
     expect(story.causes).toEqual([]);
+  });
+});
+
+describe("answers keep their history", () => {
+  const why = (story: Story) => story.openQuestions.find((q) => q.id === "why");
+  const answer = (candidateId: string): StoryCommand => ({
+    type: "answerOpenQuestion",
+    id: "why",
+    candidateId,
+  });
+
+  test("changing the answer keeps the old one, with what replaced it", () => {
+    const reworked = run(linked, answer("cargo"), answer("bored"));
+    expect(why(reworked)?.answer).toBe("bored");
+    expect(why(reworked)?.superseded).toEqual([
+      { candidate: "cargo", answer: "The caravans", by: "bored" },
+    ]);
+    const parsed = parseStory(serializeStory(reworked))._unsafeUnwrap();
+    expect(why(parsed)?.superseded).toEqual(why(reworked)?.superseded);
+  });
+
+  test("unanswering keeps it, with nothing in its place", () => {
+    const undone = run(linked, answer("cargo"), {
+      type: "unanswerOpenQuestion",
+      id: "why",
+    });
+    expect(why(undone)?.answer).toBeUndefined();
+    expect(why(undone)?.superseded).toEqual([
+      { candidate: "cargo", answer: "The caravans" },
+    ]);
+  });
+
+  test("keeps the text it had, after the candidate changes or goes", () => {
+    const story = run(
+      linked,
+      answer("cargo"),
+      answer("bored"),
+      { type: "updateCandidate", questionId: "why", id: "cargo", answer: "X" },
+      { type: "removeCandidate", questionId: "why", id: "bored" },
+    );
+    expect(why(story)?.answer).toBeUndefined();
+    expect(why(story)?.superseded).toEqual([
+      { candidate: "cargo", answer: "The caravans", by: "bored" },
+      { candidate: "bored", answer: "Adventure" },
+    ]);
+  });
+
+  test("choosing the same answer again, or answering an open question, adds nothing", () => {
+    const story = run(linked, answer("cargo"), answer("cargo"));
+    expect(why(story)?.superseded).toBeUndefined();
+    expect(
+      why(run(linked, { type: "unanswerOpenQuestion", id: "why" }))?.superseded,
+    ).toBeUndefined();
+  });
+
+  test("history is in the order it happened", () => {
+    const story = run(
+      linked,
+      answer("cargo"),
+      answer("bored"),
+      answer("cargo"),
+    );
+    const expected = [
+      { candidate: "cargo", answer: "The caravans", by: "bored" },
+      { candidate: "bored", answer: "Adventure", by: "cargo" },
+    ];
+    expect(why(story)?.superseded).toEqual(expected);
+    const parsed = parseStory(serializeStory(story))._unsafeUnwrap();
+    expect(why(parsed)?.superseded).toEqual(expected);
+  });
+});
+
+describe("deliberate gaps", () => {
+  const velan: Ref = { kind: "drive", id: "leave" };
+  const mark: StoryCommand = {
+    type: "markGapDeliberate",
+    gap: "drive_without_origin",
+    ref: velan,
+    reason: "From temperament, not an event",
+  };
+
+  test("are kept in the file, and a second mark replaces the reason", () => {
+    const marked = run(linked, mark);
+    expect(marked.deliberateGaps).toEqual([
+      {
+        gap: "drive_without_origin",
+        ref: velan,
+        reason: "From temperament, not an event",
+      },
+    ]);
+    const parsed = parseStory(serializeStory(marked))._unsafeUnwrap();
+    expect(parsed.deliberateGaps).toEqual(marked.deliberateGaps);
+    const again = run(marked, { ...mark, reason: "Stubborn" });
+    expect(again.deliberateGaps.map((m) => m.reason)).toEqual(["Stubborn"]);
+  });
+
+  test("unmarking removes the mark, and the file is as before", () => {
+    const unmarked = run(linked, mark, {
+      type: "unmarkGapDeliberate",
+      gap: "drive_without_origin",
+      ref: velan,
+    });
+    expect(serializeStory(unmarked)).toBe(serializeStory(linked));
+    expect(serializeStory(unmarked)).not.toContain("deliberateGaps");
+  });
+
+  test("a story-wide gap is marked with no record", () => {
+    const marked = run(linked, {
+      type: "markGapDeliberate",
+      gap: "no_reader_question",
+      ref: null,
+      reason: "A story with no mystery",
+    });
+    expect(marked.deliberateGaps[0]?.ref).toBeNull();
+  });
+
+  test("refuses a missing record, the wrong kind, a blank reason and an absent mark", () => {
+    expect(
+      refusal(linked, { ...mark, ref: { kind: "drive", id: "nope" } }).kind,
+    ).toBe("unknown_id");
+    expect(
+      refusal(linked, { ...mark, ref: { kind: "scene", id: "found" } }),
+    ).toMatchObject({
+      kind: "invalid_command",
+      message: "drive_without_origin is about a drive",
+    });
+    expect(refusal(linked, { ...mark, ref: null }).kind).toBe(
+      "invalid_command",
+    );
+    expect(
+      refusal(linked, {
+        type: "markGapDeliberate",
+        gap: "no_reader_question",
+        ref: velan,
+        reason: "x",
+      }).kind,
+    ).toBe("invalid_command");
+    expect(refusal(linked, { ...mark, reason: "  " }).message).toBe(
+      "a deliberate gap needs a reason",
+    );
+    expect(
+      refusal(linked, {
+        type: "unmarkGapDeliberate",
+        gap: "drive_without_origin",
+        ref: velan,
+      }).kind,
+    ).toBe("invalid_command");
+  });
+
+  test("removing the record removes its marks", () => {
+    const story = run(linked, mark, { type: "removeDrive", id: "leave" });
+    expect(story.deliberateGaps).toEqual([]);
   });
 });

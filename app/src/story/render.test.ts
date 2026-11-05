@@ -148,6 +148,37 @@ describe("renderStory", () => {
     expect(text).not.toContain("chosen");
   });
 
+  test("leaves out superseded answers, which stay in the file", () => {
+    const reworked = run(
+      sketch,
+      {
+        type: "addCandidate",
+        questionId: "who",
+        id: "keeper",
+        answer: "The old keeper",
+        touches: [],
+      },
+      { type: "answerOpenQuestion", id: "who", candidateId: "ferry" },
+      {
+        type: "updateCandidate",
+        questionId: "who",
+        id: "ferry",
+        answer: "The ferryman's son",
+      },
+      { type: "answerOpenQuestion", id: "who", candidateId: "keeper" },
+    );
+    expect(reworked.openQuestions[0]?.superseded).toHaveLength(1);
+    const text = renderStory(reworked);
+    expect(text).toContain("## Decided\n\n- Who wrote it? The old keeper.\n");
+    expect(text).not.toContain("ferryman");
+    expect(text).not.toMatch(/supersed|replaced/i);
+    const withoutHistory = {
+      ...reworked,
+      openQuestions: reworked.openQuestions.map(({ superseded: _, ...q }) => q),
+    };
+    expect(text).toBe(renderStory(withoutHistory));
+  });
+
   test("lists events in story order", () => {
     const text = renderStory(sketch);
     expect(text.indexOf("The wreck")).toBeLessThan(

@@ -291,6 +291,77 @@ describe("story CLI", () => {
     expect(ok("update-scene", "market", "--title", "Market")).toBe("Saved.\n");
   });
 
+  test("show lists a reworked answer's history, and render doesn't", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-open-question", "who", "Who wrote it?");
+    ok("add-candidate", "who", "ferry", "The ferryman");
+    ok("add-candidate", "who", "keeper", "The old keeper");
+    ok("answer-open-question", "who", "ferry");
+    ok("answer-open-question", "who", "keeper");
+    ok("unanswer-open-question", "who");
+    ok("answer-open-question", "who", "keeper");
+    expect(ok("show", "open-question:who")).toContain(
+      [
+        "superseded answers, oldest first:",
+        "  ferry: The ferryman (replaced by candidate:who/keeper)",
+        "  keeper: The old keeper (unanswered)",
+      ].join("\n"),
+    );
+    const rendered = ok("render");
+    expect(rendered).toContain("- Who wrote it? The old keeper.");
+    expect(rendered).not.toContain("ferryman");
+  });
+
+  test("a gap marked deliberate stops being listed until it is unmarked", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-actor", "velan", "Velan");
+    ok("add-drive", "calm", "Stay calm", "--actor", "velan");
+    const gap = "[drive-without-origin drive:calm]";
+    expect(ok("gaps")).toContain(
+      `- The drive "Stay calm" doesn't come from any event yet. ${gap}\n`,
+    );
+    const noReason = cli(
+      file,
+      "mark-gap-deliberate",
+      "drive-without-origin",
+      "drive:calm",
+    );
+    expect(noReason.code).toBe(1);
+    expect(noReason.stderr).toContain("needs a reason");
+    expect(
+      cli(file, "mark-gap-deliberate", "drive-bored", "drive:calm").code,
+    ).toBe(2);
+
+    ok(
+      "mark-gap-deliberate",
+      "drive-without-origin",
+      "drive:calm",
+      "--reason",
+      "Temperament, not an event",
+    );
+    const gaps = ok("gaps");
+    expect(gaps).not.toContain("doesn't come from any event");
+    expect(gaps).toContain(`Marked deliberate, so not listed (1): ${gap}\n`);
+    expect(ok("show", "drive:calm")).toContain(
+      "deliberate gap: drive-without-origin (Temperament, not an event)",
+    );
+    expect(saved().deliberateGaps).toEqual([
+      {
+        gap: "drive_without_origin",
+        ref: { kind: "drive", id: "calm" },
+        reason: "Temperament, not an event",
+      },
+    ]);
+
+    ok("mark-gap-deliberate", "no-reader-question", "story", "--reason", "x");
+    expect(saved().deliberateGaps).toHaveLength(2);
+    ok("unmark-gap-deliberate", "no-reader-question", "story");
+
+    ok("unmark-gap-deliberate", "drive-without-origin", "drive:calm");
+    expect(ok("gaps")).toContain("doesn't come from any event");
+    expect(readFileSync(file, "utf8")).not.toContain("deliberateGaps");
+  });
+
   test("a refused edit leaves the file alone and exits non-zero", () => {
     ok("init", "A premise.");
     ok("add-actor", "joel", "Joel");

@@ -75,6 +75,19 @@ export type Scene = {
 export type Candidate = { id: string; answer: string; touches: Ref[] };
 
 /**
+ * An answer that was chosen and then replaced or withdrawn, oldest first.
+ * `answer` is its text when it stopped being chosen, so the history reads the
+ * same if the candidate is later changed or removed.
+ */
+export type SupersededAnswer = {
+  /** The candidate's ID. */
+  candidate: string;
+  answer: string;
+  /** The candidate chosen in its place; absent if the question was unanswered. */
+  by?: string;
+};
+
+/**
  * What the story's makers haven't decided, unlike a reader question. With
  * `conflict`, it records a contradiction someone noticed.
  */
@@ -93,6 +106,8 @@ export type OpenQuestion = {
    * before the field existed read the same.
    */
   working?: true;
+  /** Absent when empty, so files written before the field existed read the same. */
+  superseded?: SupersededAnswer[];
 };
 
 /**
@@ -101,6 +116,49 @@ export type OpenQuestion = {
  * first is for `storyContradictions`.
  */
 export type Cause = { cause: EventId; effect: EventId };
+
+/** The kinds of gap `storyGaps` reports (`./gaps.ts`). */
+export const GAP_KINDS = [
+  "person_without_drive",
+  "drive_without_actor",
+  "drive_without_origin",
+  "drive_unopposed",
+  "scene_without_pressure",
+  "drive_without_scene",
+  "event_unreferenced",
+  "fact_unconnected",
+  "no_reader_question",
+  "reader_question_never_opens",
+  "reader_question_never_answered",
+  "open_question_without_candidates",
+  "open_question_one_candidate",
+] as const;
+
+export type GapKind = (typeof GAP_KINDS)[number];
+
+/** The kind of record each gap is about, or null for the whole story. */
+export const GAP_SUBJECTS: Record<GapKind, RefKind | null> = {
+  person_without_drive: "actor",
+  drive_without_actor: "drive",
+  drive_without_origin: "drive",
+  drive_unopposed: "drive",
+  scene_without_pressure: "scene",
+  drive_without_scene: "drive",
+  event_unreferenced: "event",
+  fact_unconnected: "fact",
+  no_reader_question: null,
+  reader_question_never_opens: "readerQuestion",
+  reader_question_never_answered: "readerQuestion",
+  open_question_without_candidates: "openQuestion",
+  open_question_one_candidate: "openQuestion",
+};
+
+/**
+ * A gap the team has judged fine, such as a drive that comes from temperament
+ * and no event, so `storyGaps` doesn't list it. `ref` is the record the gap is
+ * about, or null for a gap about the whole story.
+ */
+export type DeliberateGap = { gap: GapKind; ref: Ref | null; reason: string };
 
 export type RefKind =
   | "actor"
@@ -137,6 +195,8 @@ export type Story = {
   openQuestions: OpenQuestion[];
   /** Left out of the file when empty, so older files read the same. */
   causes: Cause[];
+  /** Left out of the file when empty, as `causes` is. */
+  deliberateGaps: DeliberateGap[];
   timeline: Timeline;
 };
 
@@ -191,6 +251,7 @@ export function newStory(premise: string): Story {
     scenes: [],
     openQuestions: [],
     causes: [],
+    deliberateGaps: [],
     timeline: emptyTimeline,
   };
 }
@@ -443,8 +504,13 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     "answer",
     "conflict",
     "working",
+    "superseded",
   ]);
   if (known.isErr()) return err(known.error);
+  const superseded: Check<SupersededAnswer[]> =
+    v.superseded === undefined
+      ? ok([])
+      : checkRecords(v.superseded, `${at}.superseded`, checkSuperseded);
   const working: Check<boolean> =
     v.working === undefined || typeof v.working === "boolean"
       ? ok(v.working === true)
@@ -461,18 +527,91 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
     checkOptionalString(v.answer, `${at}.answer`),
     conflict,
     working,
-  ]).map(([id, question, about, candidates, answer, conflict, working]) => ({
-    id,
-    question,
-    about,
-    candidates,
-    ...(answer === undefined ? {} : { answer }),
-    conflict,
-    ...(working ? { working: true as const } : {}),
+    superseded,
+  ]).map(
+    ([
+      id,
+      question,
+      about,
+      candidates,
+      answer,
+      conflict,
+      working,
+      superseded,
+    ]) => ({
+      id,
+      question,
+      about,
+      candidates,
+      ...(answer === undefined ? {} : { answer }),
+      conflict,
+      ...(working ? { working: true as const } : {}),
+      ...(superseded.length === 0 ? {} : { superseded }),
+    }),
+  );
+}
+
+function checkSuperseded(v: JsonRecord, at: string): Check<SupersededAnswer> {
+  const known = checkKeys(v, at, ["candidate", "answer", "by"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkString(v.candidate, `${at}.candidate`),
+    checkString(v.answer, `${at}.answer`),
+    checkOptionalString(v.by, `${at}.by`),
+  ]).map(([candidate, answer, by]) => ({
+    candidate,
+    answer,
+    ...(by === undefined ? {} : { by }),
   }));
 }
 
+function checkDeliberateGap(v: JsonRecord, at: string): Check<DeliberateGap> {
+  const known = checkKeys(v, at, ["gap", "ref", "reason"]);
+  if (known.isErr()) return err(known.error);
+  const ref: Check<Ref | null> =
+    v.ref === null
+      ? ok(null)
+      : isRecord(v.ref)
+        ? checkRef(v.ref, `${at}.ref`)
+        : err(`${at}.ref must be a ref or null`);
+  return Result.combine([
+    checkOneOf(v.gap, GAP_KINDS, `${at}.gap`),
+    ref,
+    checkString(v.reason, `${at}.reason`),
+  ]).map(([gap, ref, reason]) => ({ gap, ref, reason }));
+}
+
+/** A gap marked twice would make the file's text depend on the edit. */
+function checkDeliberateGaps(value: unknown): Check<DeliberateGap[]> {
+  if (value === undefined) return ok([]);
+  return checkRecords(value, "deliberateGaps", checkDeliberateGap).andThen(
+    (marks) => {
+      const seen = new Set<string>();
+      for (const mark of marks) {
+        const key = JSON.stringify(GAP_MARK_KEY(mark));
+        if (seen.has(key)) return err(`deliberateGaps has duplicate ${key}`);
+        seen.add(key);
+      }
+      return ok(marks);
+    },
+  );
+}
+
 const CAUSE_KEY = ({ cause, effect }: Cause) => [cause, effect];
+
+const refKey = (ref: Ref | null): string[] =>
+  ref === null
+    ? []
+    : [ref.kind, ref.kind === "candidate" ? ref.questionId : "", ref.id];
+
+/** Identifies a deliberate gap: one mark per gap and record. */
+export const GAP_MARK_KEY = ({
+  gap,
+  ref,
+}: {
+  gap: GapKind;
+  ref: Ref | null;
+}) => [gap, ...refKey(ref)];
 
 function checkCause(v: JsonRecord, at: string): Check<Cause> {
   const known = checkKeys(v, at, ["cause", "effect"]);
@@ -574,6 +713,7 @@ function checkStory(value: JsonValue): Check<Story> {
     "scenes",
     "openQuestions",
     "causes",
+    "deliberateGaps",
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
@@ -595,6 +735,7 @@ function checkStory(value: JsonValue): Check<Story> {
     checkIdentified(value.scenes, "scenes", checkScene),
     checkIdentified(value.openQuestions, "openQuestions", checkOpenQuestion),
     checkCauses(value.causes),
+    checkDeliberateGaps(value.deliberateGaps),
     parseTimeline(value.timeline ?? null)
       .mapErr((message) => `timeline: ${message}`)
       .andThen(checkTimelineKeys),
@@ -608,6 +749,7 @@ function checkStory(value: JsonValue): Check<Story> {
       scenes,
       openQuestions,
       causes,
+      deliberateGaps,
       timeline,
     ]): Story => ({
       version: STORY_VERSION,
@@ -619,6 +761,7 @@ function checkStory(value: JsonValue): Check<Story> {
       scenes,
       openQuestions,
       causes,
+      deliberateGaps,
       timeline,
     }),
   );
@@ -676,8 +819,12 @@ function normalized(story: Story): Story {
       pressures: sortedStrings(scene.pressures),
     })),
     openQuestions: byId(
-      story.openQuestions.map((question) => ({
+      story.openQuestions.map(({ superseded, ...question }) => ({
         ...question,
+        // In the order they happened.
+        ...(superseded === undefined || superseded.length === 0
+          ? {}
+          : { superseded }),
         about: sortedRefs(question.about),
         candidates: byId(
           question.candidates.map((candidate) => ({
@@ -688,6 +835,7 @@ function normalized(story: Story): Story {
       })),
     ),
     causes: sortedBy(story.causes, CAUSE_KEY),
+    deliberateGaps: sortedBy(story.deliberateGaps, GAP_MARK_KEY),
     timeline: {
       ...timeline,
       events: byId(timeline.events),
@@ -726,6 +874,7 @@ const KEY_ORDER = [
   "scenes",
   "openQuestions",
   "causes",
+  "deliberateGaps",
   "timeline",
   "id",
   "kind",
@@ -747,12 +896,18 @@ const KEY_ORDER = [
   "answeredAt",
   "about",
   "candidates",
+  "candidate",
   "answer",
   "touches",
   "conflict",
   "working",
   "cause",
   "effect",
+  "superseded",
+  "by",
+  "gap",
+  "ref",
+  "reason",
 ];
 
 const keyRank = (key: string) => {
@@ -773,7 +928,11 @@ function withOrderedKeys(value: unknown): unknown {
 
 /** The file's text. Equal stories give equal text, however they were edited. */
 export function serializeStory(story: Story): string {
-  const { causes, ...rest } = normalized(story);
-  const written = causes.length === 0 ? rest : { ...rest, causes };
+  const { causes, deliberateGaps, ...rest } = normalized(story);
+  const written = {
+    ...rest,
+    ...(causes.length === 0 ? {} : { causes }),
+    ...(deliberateGaps.length === 0 ? {} : { deliberateGaps }),
+  };
   return `${JSON.stringify(withOrderedKeys(written), null, 2)}\n`;
 }

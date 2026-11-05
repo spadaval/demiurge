@@ -16,10 +16,12 @@ import {
   type StoryCommandType,
 } from "../src/story/commands";
 import { storyContradictions } from "../src/story/contradictions";
-import { storyGaps } from "../src/story/gaps";
+import { deliberateGaps, storyGaps } from "../src/story/gaps";
 import { type Mention, whatMentions } from "../src/story/mentions";
 import { renderStory, wordCount } from "../src/story/render";
 import {
+  GAP_KINDS,
+  type GapKind,
   newStory,
   parseStory,
   type Ref,
@@ -212,6 +214,25 @@ class Reader {
     return n;
   }
 
+  /** One ref, or null for `story`. */
+  refOrStory(value: string): Ref | null {
+    if (value === "story") return null;
+    const ref = parseRef(value);
+    if (ref.isOk()) return ref.value;
+    this.errors.push(ref.error);
+    return null;
+  }
+
+  /** A gap kind, written in kebab case: `drive-without-origin`. */
+  gapKind(value: string): GapKind {
+    const found = GAP_KINDS.find((kind) => gapName(kind) === value);
+    if (found !== undefined) return found;
+    this.errors.push(
+      `<gap> must be one of ${GAP_KINDS.map(gapName).join(", ")}`,
+    );
+    return GAP_KINDS[0];
+  }
+
   /** A comma-separated list of refs; an empty string is an empty list. */
   refs(flag: string): Ref[] | undefined {
     const value = this.text(flag);
@@ -226,6 +247,9 @@ class Reader {
     return refs;
   }
 }
+
+/** `drive_without_origin` as the command line writes it: `drive-without-origin`. */
+const gapName = (kind: GapKind) => kind.replaceAll("_", "-");
 
 type EditSpec<C extends StoryCommand> = Spec & {
   build: (a: Reader, story: Story) => C;
@@ -879,7 +903,7 @@ export const EDITS: EditSpecs = {
     group: "Open questions: what isn't decided yet",
     args: ["question-id", "candidate-id"],
     summary:
-      "Choose a candidate. Nothing else changes: make what it implies with other commands.",
+      "Choose a candidate. An answer it replaces is kept as superseded, which show lists and render leaves out. Nothing else changes: make what it implies with other commands.",
     example: ["answer-open-question", "who-wrote", "ferryman"],
     build: (a) => ({
       type: "answerOpenQuestion",
@@ -890,7 +914,7 @@ export const EDITS: EditSpecs = {
   unanswerOpenQuestion: {
     group: "Open questions: what isn't decided yet",
     args: ["question-id"],
-    summary: "Make the question open again.",
+    summary: "Make the question open again. The answer is kept as superseded.",
     example: ["unanswer-open-question", "who-wrote"],
     build: (a) => ({ type: "unanswerOpenQuestion", id: a.arg("question-id") }),
   },
@@ -907,6 +931,42 @@ export const EDITS: EditSpecs = {
       type: "setOpenQuestionWorking",
       id: a.arg("question-id"),
       working: a.bool("stop") !== true,
+    }),
+  },
+
+  markGapDeliberate: {
+    group: "Gaps: what isn't woven in yet",
+    args: ["gap", "ref"],
+    flags: { reason: { value: "<text>", help: "why it's fine; required" } },
+    summary:
+      "Mark one gap on one record as deliberate, so gaps stops listing it. The gap and ref are as gaps prints them; story stands for the whole story.",
+    example: [
+      "mark-gap-deliberate",
+      "drive-without-origin",
+      "drive:find-sender",
+      "--reason",
+      "She has always been stubborn",
+    ],
+    build: (a) => ({
+      type: "markGapDeliberate",
+      gap: a.gapKind(a.arg("gap")),
+      ref: a.refOrStory(a.arg("ref")),
+      reason: a.text("reason") ?? "",
+    }),
+  },
+  unmarkGapDeliberate: {
+    group: "Gaps: what isn't woven in yet",
+    args: ["gap", "ref"],
+    summary: "Remove the mark, so gaps lists the gap again.",
+    example: [
+      "unmark-gap-deliberate",
+      "drive-without-origin",
+      "drive:find-sender",
+    ],
+    build: (a) => ({
+      type: "unmarkGapDeliberate",
+      gap: a.gapKind(a.arg("gap")),
+      ref: a.refOrStory(a.arg("ref")),
     }),
   },
 };
@@ -987,7 +1047,8 @@ export const READS: Record<ReadName, Spec> = {
   gaps: {
     group: "Start and read",
     args: [],
-    summary: "What isn't woven in yet. Prompts, not a to-do list.",
+    summary:
+      "What isn't woven in yet, each with its [gap ref] for mark-gap-deliberate. Prompts, not a to-do list.",
     example: ["gaps"],
   },
   contradictions: {
@@ -1204,6 +1265,13 @@ function showRecord(story: Story, ref: Ref): string[] {
           (c) =>
             `  ${formatRef({ kind: "candidate", questionId: q.id, id: c.id })}${c.id === q.answer ? " (chosen)" : ""}: ${c.answer}`,
         ),
+        ...((q.superseded ?? []).length === 0
+          ? []
+          : ["superseded answers, oldest first:"]),
+        ...(q.superseded ?? []).map(
+          (old) =>
+            `  ${old.candidate}: ${old.answer} (${old.by === undefined ? "unanswered" : `replaced by ${formatRef({ kind: "candidate", questionId: q.id, id: old.by })}`})`,
+        ),
       ];
     }
     case "candidate": {
@@ -1219,6 +1287,13 @@ function showRecord(story: Story, ref: Ref): string[] {
       ];
     }
   }
+}
+
+/** The record's deliberate gaps, with their reasons. */
+function markLines(story: Story, ref: Ref): string[] {
+  return story.deliberateGaps
+    .filter((m) => m.ref !== null && formatRef(m.ref) === formatRef(ref))
+    .map((m) => `deliberate gap: ${gapName(m.gap)} (${m.reason})`);
 }
 
 /** `drive:find-sender ("Learn who wrote the letter")`. */
@@ -1378,7 +1453,7 @@ function runRead(
         .mapErr(usageError)
         .andThen((ref) =>
           refExists(story, ref)
-            ? ok(showRecord(story, ref))
+            ? ok([...showRecord(story, ref), ...markLines(story, ref)])
             : err(refused(`${formatRef(ref)} does not exist`)),
         );
     case "list": {
@@ -1424,14 +1499,21 @@ function runRead(
         );
     case "gaps": {
       const gaps = storyGaps(story);
-      return ok(
-        gaps.length === 0
+      const marked = deliberateGaps(story);
+      const where = (g: { kind: GapKind; ref: Ref | null }) =>
+        `[${gapName(g.kind)} ${g.ref === null ? "story" : formatRef(g.ref)}]`;
+      return ok([
+        ...(gaps.length === 0
           ? ["No gaps found."]
-          : gaps.map(
-              (g) =>
-                `- ${g.message}${g.ref === null ? "" : ` [${formatRef(g.ref)}]`}`,
-            ),
-      );
+          : gaps.map((g) => `- ${g.message} ${where(g)}`)),
+        ...(marked.length === 0
+          ? []
+          : [
+              `Marked deliberate, so not listed (${marked.length}): ${marked
+                .map(({ gap }) => where(gap))
+                .join(", ")}`,
+            ]),
+      ]);
     }
     case "contradictions": {
       const found = storyContradictions(story);

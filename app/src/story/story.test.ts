@@ -896,3 +896,94 @@ describe("causes in the file", () => {
     expect(parseStory(text).isOk()).toBe(true);
   });
 });
+
+describe("answer history and deliberate gaps in the file", () => {
+  const withHistory: Story = {
+    ...fullStory,
+    openQuestions: fullStory.openQuestions.map((q) =>
+      q.id === "why-left"
+        ? {
+            ...q,
+            superseded: [
+              { candidate: "adventure", answer: "Wanderlust", by: "cargo" },
+              { candidate: "cargo", answer: "Old cargo" },
+            ],
+          }
+        : q,
+    ),
+    deliberateGaps: [
+      {
+        gap: "drive_without_origin",
+        ref: { kind: "drive", id: "leave" },
+        reason: "Temperament",
+      },
+      { gap: "no_reader_question", ref: null, reason: "None wanted" },
+    ],
+  };
+
+  test("a file written before them reads and writes back the same", () => {
+    const text = serializeStory(fullStory);
+    expect(text).not.toContain("superseded");
+    expect(text).not.toContain("deliberateGaps");
+    const story = parseStory(text)._unsafeUnwrap();
+    expect(story.deliberateGaps).toEqual([]);
+    expect(story.openQuestions.every((q) => q.superseded === undefined)).toBe(
+      true,
+    );
+    expect(serializeStory(story)).toBe(text);
+  });
+
+  test("are kept; history keeps its order, and marks are sorted", () => {
+    const text = serializeStory(withHistory);
+    const story = parseStory(text)._unsafeUnwrap();
+    expect(
+      story.openQuestions.find((q) => q.id === "why-left")?.superseded,
+    ).toEqual([
+      { candidate: "adventure", answer: "Wanderlust", by: "cargo" },
+      { candidate: "cargo", answer: "Old cargo" },
+    ]);
+    expect(story.deliberateGaps.map((m) => m.gap)).toEqual([
+      "drive_without_origin",
+      "no_reader_question",
+    ]);
+    expect(serializeStory(story)).toBe(text);
+    expect(text).toContain(
+      '"superseded": [\n        {\n          "candidate": "adventure",\n          "answer": "Wanderlust",\n          "by": "cargo"\n        },',
+    );
+  });
+
+  test.each<[string, JsonValue, string]>([
+    [
+      "an unknown gap",
+      [{ gap: "drive_bored", ref: null, reason: "" }],
+      "deliberateGaps[0].gap must be one of",
+    ],
+    [
+      "a ref that isn't one",
+      [{ gap: "no_reader_question", ref: "story", reason: "" }],
+      "deliberateGaps[0].ref must be a ref or null",
+    ],
+    [
+      "a repeated mark",
+      [
+        { gap: "no_reader_question", ref: null, reason: "a" },
+        { gap: "no_reader_question", ref: null, reason: "b" },
+      ],
+      "deliberateGaps has duplicate",
+    ],
+  ])("rejects %s", (_name, deliberateGaps, message) => {
+    const text = JSON.stringify({
+      ...JSON.parse(serializeStory(fullStory)),
+      deliberateGaps,
+    });
+    expect(parseStory(text)._unsafeUnwrapErr().message).toContain(message);
+  });
+
+  test("rejects a superseded answer with an unknown key", () => {
+    const value = JSON.parse(serializeStory(withHistory));
+    value.openQuestions[0].superseded[0].when = "then";
+    expect(
+      parseStory(JSON.stringify(value))._unsafeUnwrapErr().message,
+    ).toContain("superseded[0].when is not a known field");
+  });
+});

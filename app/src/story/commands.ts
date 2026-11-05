@@ -25,6 +25,9 @@ import {
   type ActorKind,
   type DriveRelationType,
   describeRef,
+  GAP_MARK_KEY,
+  GAP_SUBJECTS,
+  type GapKind,
   isAnswered,
   type OpenQuestion,
   type Ref,
@@ -131,14 +134,19 @@ export type StoryCommand =
       answer?: string;
       touches?: Ref[];
     }
-  /** Clears the question's answer if this was the chosen candidate. */
+  /**
+   * Clears the question's answer if this was the chosen candidate, keeping it
+   * as superseded.
+   */
   | { type: "removeCandidate"; questionId: string; id: string }
   /**
    * Records the chosen candidate, and clears the question's working mark, and
    * changes nothing else: whoever answers makes what the answer implies as
-   * commands of their own.
+   * commands of their own. A different answer already chosen is kept as
+   * superseded, with what replaced it.
    */
   | { type: "answerOpenQuestion"; id: string; candidateId: string }
+  /** The answer is kept as superseded, with nothing in its place. */
   | { type: "unanswerOpenQuestion"; id: string }
   /**
    * Whether the question's candidates are being weighed. The readable form
@@ -159,6 +167,13 @@ export type StoryCommand =
    * causes.
    */
   | { type: "removeEvent"; id: EventId }
+  /**
+   * Marks one gap on one record (or, with `ref` null, on the whole story) as
+   * judged fine, so `storyGaps` stops listing it. Marking it again replaces
+   * the reason.
+   */
+  | { type: "markGapDeliberate"; gap: GapKind; ref: Ref | null; reason: string }
+  | { type: "unmarkGapDeliberate"; gap: GapKind; ref: Ref | null }
   | Extract<
       TimelineCommand,
       { type: "setPosition" | "constrain" | "removeConstraint" }
@@ -198,6 +213,23 @@ export function applyStoryCommand(
     return missing === undefined
       ? ok(null)
       : refuse("unknown_id", `${describeRef(missing)} does not exist`);
+  };
+  /** Refuses a record that doesn't exist or isn't the kind the gap is about. */
+  const gapTarget = (gap: GapKind, ref: Ref | null): Checked<null> => {
+    const subject = GAP_SUBJECTS[gap];
+    if (ref === null || subject === null) {
+      return ref === subject
+        ? ok(null)
+        : refuse(
+            "invalid_command",
+            subject === null
+              ? `${gap} is about the whole story, not a record`
+              : `${gap} is about a ${subject}`,
+          );
+    }
+    return ref.kind !== subject
+      ? refuse("invalid_command", `${gap} is about a ${subject}`)
+      : resolveRefs([ref]);
   };
   const isActor = (id: string) => has(story.actors, id);
   const isDrive = (id: string) => has(story.drives, id);
@@ -721,11 +753,14 @@ export function applyStoryCommand(
       return question(questionId)
         .andThen((q) => existing("candidate", q.candidates, id))
         .andThen(() => {
-          const removed = withQuestion(questionId, ({ answer, ...q }) => ({
-            ...q,
-            candidates: q.candidates.filter((c) => c.id !== id),
-            ...(answer === undefined || answer === id ? {} : { answer }),
-          }));
+          const removed = withQuestion(questionId, (q) => {
+            const { answer, ...rest } = q.answer === id ? superseding(q) : q;
+            return {
+              ...rest,
+              candidates: q.candidates.filter((c) => c.id !== id),
+              ...(answer === undefined || answer === id ? {} : { answer }),
+            };
+          });
           return removed.map(({ story: next }) => ({
             story: withoutRefs(
               next,
@@ -745,15 +780,21 @@ export function applyStoryCommand(
           existing("candidate", q.candidates, command.candidateId),
         )
         .andThen(() =>
-          withQuestion(command.id, ({ working: _, ...q }) => ({
-            ...q,
-            answer: command.candidateId,
-          })),
+          withQuestion(command.id, (q) => {
+            const { working: _, ...rest } =
+              q.answer === command.candidateId
+                ? q
+                : superseding(q, command.candidateId);
+            return { ...rest, answer: command.candidateId };
+          }),
         );
 
     case "unanswerOpenQuestion":
       return question(command.id).andThen(() =>
-        withQuestion(command.id, ({ answer: _, ...q }) => q),
+        withQuestion(command.id, (q) => {
+          const { answer: _, ...rest } = superseding(q);
+          return rest;
+        }),
       );
 
     case "setOpenQuestionWorking":
@@ -879,6 +920,47 @@ export function applyStoryCommand(
         );
     }
 
+    case "markGapDeliberate": {
+      const { gap, ref, reason } = command;
+      const mark = { gap, ref, reason };
+      return gapTarget(gap, ref)
+        .andThen(() =>
+          reason.trim() === ""
+            ? refuse("invalid_command", "a deliberate gap needs a reason")
+            : ok(null),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            deliberateGaps: [
+              ...story.deliberateGaps.filter((m) => !sameMark(m, mark)),
+              mark,
+            ],
+          }),
+        );
+    }
+
+    case "unmarkGapDeliberate": {
+      const { gap, ref } = command;
+      return gapTarget(gap, ref)
+        .andThen(() =>
+          story.deliberateGaps.some((m) => sameMark(m, command))
+            ? ok(null)
+            : refuse(
+                "invalid_command",
+                `${gap} on ${ref === null ? "the story" : describeRef(ref)} is not marked deliberate`,
+              ),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            deliberateGaps: story.deliberateGaps.filter(
+              (m) => !sameMark(m, command),
+            ),
+          }),
+        );
+    }
+
     case "setPosition":
       return resolve("event", [command.event], isEvent).andThen(() =>
         onTimeline(command),
@@ -912,6 +994,32 @@ function replace<T extends { id: string }>(
   return items.map((item) => (item.id === id ? change(item) : item));
 }
 
+const sameMark = (
+  a: { gap: GapKind; ref: Ref | null },
+  b: { gap: GapKind; ref: Ref | null },
+) => JSON.stringify(GAP_MARK_KEY(a)) === JSON.stringify(GAP_MARK_KEY(b));
+
+/**
+ * The question with its chosen answer, if it has one, added to what it
+ * superseded, replaced by `by` if given. The answer itself is left for the
+ * caller to change.
+ */
+function superseding(q: OpenQuestion, by?: string): OpenQuestion {
+  const chosen = q.candidates.find((c) => c.id === q.answer);
+  if (chosen === undefined) return q;
+  return {
+    ...q,
+    superseded: [
+      ...(q.superseded ?? []),
+      {
+        candidate: chosen.id,
+        answer: chosen.answer,
+        ...(by === undefined ? {} : { by }),
+      },
+    ],
+  };
+}
+
 const hasCause = (story: Story, cause: string, effect: string) =>
   story.causes.some((c) => c.cause === cause && c.effect === effect);
 
@@ -924,11 +1032,17 @@ function relationBetween(story: Story, a: string, b: string): boolean {
   );
 }
 
-/** Drops the refs `gone` matches from every fact, open question and candidate. */
+/**
+ * Drops the refs `gone` matches from every fact, open question and candidate,
+ * and the deliberate gaps on them.
+ */
 function withoutRefs(story: Story, gone: (ref: Ref) => boolean): Story {
   const kept = (refs: readonly Ref[]) => refs.filter((ref) => !gone(ref));
   return {
     ...story,
+    deliberateGaps: story.deliberateGaps.filter(
+      ({ ref }) => ref === null || !gone(ref),
+    ),
     facts: story.facts.map((fact) => ({ ...fact, about: kept(fact.about) })),
     openQuestions: story.openQuestions.map((q) => ({
       ...q,

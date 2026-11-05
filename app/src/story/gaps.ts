@@ -5,26 +5,21 @@
  *
  * The list is a first guess (docs/strategies/structure-first.md, Risks): each
  * kind of gap is one entry in `GAP_RULES`, so adding, dropping or rewording
- * one touches only that entry.
+ * one touches only that entry (and its name in `GAP_KINDS`). A gap the team
+ * has judged fine can be marked deliberate in the story, and isn't listed.
  */
 
-import { isAnswered, type Ref, refExists, type Story } from "./story";
+import {
+  GAP_MARK_KEY,
+  type GapKind,
+  isAnswered,
+  type Ref,
+  refExists,
+  type Story,
+} from "./story";
 import { refLabel } from "./touches";
 
-export type GapKind =
-  | "person_without_drive"
-  | "drive_without_actor"
-  | "drive_without_origin"
-  | "drive_unopposed"
-  | "scene_without_pressure"
-  | "drive_without_scene"
-  | "event_unreferenced"
-  | "fact_unconnected"
-  | "no_reader_question"
-  | "reader_question_never_opens"
-  | "reader_question_never_answered"
-  | "open_question_without_candidates"
-  | "open_question_one_candidate";
+export type { GapKind };
 
 /** `ref` is the record the gap is about, or null for the story as a whole. */
 export type Gap = { kind: GapKind; ref: Ref | null; message: string };
@@ -244,9 +239,37 @@ const GAP_RULES: readonly GapRule[] = [
 const unanswered = (story: Story) =>
   story.openQuestions.filter((q) => !isAnswered(q));
 
-/** What isn't woven in yet, in `GAP_RULES` order. */
-export function storyGaps(story: Story): Gap[] {
+/** Every gap found, marked deliberate or not, in `GAP_RULES` order. */
+function foundGaps(story: Story): Gap[] {
   return GAP_RULES.flatMap(({ kind, find }) =>
     find(story).map(({ ref, message }) => ({ kind, ref, message })),
   );
+}
+
+const markKey = (gap: Gap) =>
+  JSON.stringify(GAP_MARK_KEY({ gap: gap.kind, ref: gap.ref }));
+
+/**
+ * What isn't woven in yet, in `GAP_RULES` order, leaving out the gaps the
+ * story marks as deliberate.
+ */
+export function storyGaps(story: Story): Gap[] {
+  const marked = new Set(
+    story.deliberateGaps.map((mark) => JSON.stringify(GAP_MARK_KEY(mark))),
+  );
+  return foundGaps(story).filter((gap) => !marked.has(markKey(gap)));
+}
+
+/** The gaps `storyGaps` leaves out because they're marked deliberate. */
+export function deliberateGaps(story: Story): { gap: Gap; reason: string }[] {
+  const reasons = new Map(
+    story.deliberateGaps.map((mark) => [
+      JSON.stringify(GAP_MARK_KEY(mark)),
+      mark.reason,
+    ]),
+  );
+  return foundGaps(story).flatMap((gap) => {
+    const reason = reasons.get(markKey(gap));
+    return reason === undefined ? [] : [{ gap, reason }];
+  });
 }
