@@ -33,7 +33,7 @@ Fix what the Round 1 reading (/home/supadava/projects/demiurge-world/round-1/rea
 
 ## Done when
 
-- The three children are closed, each independently reviewed, and merged into local master before Round 2 starts.
+- All four children (b0la, w2hx, 1h0r, te8t) are closed, each independently reviewed, and merged into local master before Round 2 starts.
 
 ## Notes
 
