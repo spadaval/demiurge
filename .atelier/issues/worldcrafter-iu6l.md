@@ -27,9 +27,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "in_progress"
+closed_at: "2026-11-05T05:28:52.476831143+00:00"
+status: "done"
 title: "Verdict on the changed tool: a judging panel reads the second comparison"
-updated_at: "2026-11-05T05:27:05.055799819+00:00"
+updated_at: "2026-11-05T05:28:52.476831143+00:00"
 ---
 
 ## Goal
@@ -49,3 +50,7 @@ Find out whether the changed tool is at least as good as plain notes. A judging 
   Reason: Flag rule from d2401a0 on worldcrafter-i2uz: a flag starts a diagnosis; replace only on an incomplete report or a real read or write outside the material. Diagnosis before any other step: the flagged command is sed -i 's/ the Jovian-like mechanism is absent,//' part1.md, editing its own report inside its run dir; the token flagged is '//' from the sed pattern. Every tool call in the transcript (1 Bash cd/cat/ls/wc in the run dir, 8 Reads of its packets, 1 Write of part1.md, the sed) stays in /tmp/judge.B5XZ2y. Recorded before Part 2 and before any verdict is known; Part 1 reports carry no verdict.
 - 2026-11-05 [decision] Verdict: drop the tool. The next step is a replan of the strategy, decided by agents and reviewed (decision worldcrafter-zybl)
   Reason: Opus drop, Fable drop, Sonnet change (dissent). Notes won the held-back premise-c pairs for all three judges, and the tuned-on Thukker pairs too wherever both arms delivered. Reasons: following a change through, the tool's central promise, failed in every tool log (mentions and set-position missed what the old version left in scene summaries; sessions found leftovers by reading, as the notes arm did); open questions rendered flat, with the weighing invisible; the render still taxed links, so sessions cut true structure. Opus and Fable: what would fix it is a redesign (knowledge and belief, objects, event participants, drive lifecycle, finer time, a content-based dependency tracer, a render that shows weighing), not a change; the gaps logs and the notes sessions' working methods should seed what comes next. Reports in docs/verdicts/comparison-2/.
+
+## Close Reason
+
+Verdict: drop (keep 0, change 1 [sonnet], drop 2 [opus, fable]) by a panel of three isolated judges over docs/verdicts/comparison-2-rubric.md at e72f280; procedure review approved (worldcrafter-qxcm). Reports and verdict in docs/verdicts/comparison-2/. Main reasons: the notes arm won the held-back premise for every judge and the tuned-on one wherever both arms delivered; the changed tool still failed at its central promise, following a change through (mentions and set-position missed what scene summaries still stated; sessions found leftovers by reading); open questions rendered flat; the render still taxed links. What judges would change is a redesign (knowledge and belief, objects, event participants, a drive lifecycle, finer time, a content-based dependency tracer, a render that shows weighing). Deviations: Sonnet's Part 1 was flagged on a sed pattern, kept by a decision recorded first (dd49ddd), check fixed and reviewed, run rechecked. Next step: replan the strategy, decided by agents and reviewed (decision worldcrafter-zybl); the backlog increments stay blocked until then.
