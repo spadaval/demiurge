@@ -20,7 +20,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Extend the harness for long runs with a read budget, and try it once"
-updated_at: "2026-11-05T05:44:05.215656852+00:00"
+updated_at: "2026-11-05T05:45:42.070462823+00:00"
 ---
 
 ## Goal
@@ -37,3 +37,7 @@ The comparison harness runs a premise to a finished novella across many fresh se
 - The target length, the number of sessions and the budget are fixed in the change and recorded with the reason for each.
 - The change is independently reviewed before any run.
 - One trial run goes on a premise used before (Thukker), never the sealed one. It is not judged. Use it to settle the length, the budget and the cost, and to check that the budget measurement works. Record the numbers on worldcrafter-efis.
+
+## Notes
+
+- 2026-11-05 [note] From planning review finding worldcrafter-p8h4: the read budget can be bypassed through the notes. Log per session the notes' size and their word-for-word overlap with the draft, and check it in the trial run. Measure it, don't forbid it.
