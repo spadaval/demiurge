@@ -432,6 +432,51 @@ describe("transcript check: heredocs written to a file", () => {
     // quoted delimiter makes the body plain text.
     expect(outside("cat > f.md <<EOF\nA / B\nEOF")).toEqual(["Bash"]);
   });
+  test("a quoted heredoc after a leading cd is skipped too", () => {
+    // The shape of a judge's Part 2 command (sonnet part2-failed-1), with
+    // a stand-in for its report.
+    const report = "# Part 2 (key open)\n\nkeep / change / drop, A / B\n";
+    const run6 = "/tmp/judge.6ub61Q";
+    const check = (command: string) =>
+      checkTranscript(tool("Bash", { command }), run6, {
+        read: [run6],
+        write: [run6],
+      }).outside.map((f) => f.tool);
+    expect(
+      check(
+        `cd ${run6}; cat > part2.md <<'EOF'\n${report}EOF\ntail -3 part2.md`,
+      ),
+    ).toEqual([]);
+    expect(check(`cd ${run6} && cat > part2.md <<"EOF"\n${report}EOF`)).toEqual(
+      [],
+    );
+    // The cd target and what follows the terminator are still checked.
+    expect(check(`cd /etc; cat > part2.md <<'EOF'\n${report}EOF`)).toEqual([
+      "Bash",
+    ]);
+    expect(
+      check(
+        `cd ${run6}; cat > part2.md <<'EOF'\n${report}EOF\ncat /etc/passwd`,
+      ),
+    ).toEqual(["Bash"]);
+  });
+  test("but not unquoted, or after anything other than a cd", () => {
+    expect(outside("cd /tmp/judge.abc; cat > f.md <<EOF\nA / B\nEOF")).toEqual([
+      "Bash",
+    ]);
+    expect(
+      outside("cd /tmp/judge.abc; cat > f.md <<EOF\n$(cat /etc/shadow)\nEOF"),
+    ).toEqual(["Bash"]);
+    expect(outside("echo hi; cat > f.md <<'EOF'\nA / B\nEOF")).toEqual([
+      "Bash",
+    ]);
+    expect(
+      outside("cd /tmp/judge.abc; ls; cat > f.md <<'EOF'\nA / B\nEOF"),
+    ).toEqual(["Bash"]);
+    expect(
+      outside("cd /tmp/judge.abc | cat > f.md <<'EOF'\nA / B\nEOF"),
+    ).toEqual(["Bash"]);
+  });
   test("heredocs fed to anything but cat into a file are still checked", () => {
     expect(outside("python3 - <<'EOF'\nopen('/etc/passwd')\nEOF")).toEqual([
       "Bash",

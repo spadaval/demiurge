@@ -214,19 +214,29 @@ function toolFindings(name: string, input: Json, inside: Inside): Finding[] {
  */
 const QUOTED_HEREDOC = String.raw`<<(-?)\s*(?:'(\w+)'|"(\w+)"|\\(\w+))`;
 const TARGET = String.raw`>>?\s*[^\s<>|;&]+`;
-/** A line that is only `cat` writing a quoted heredoc to a file, either order. */
+/**
+ * An optional leading `cd <dir>;` or `cd <dir> &&`, with a plain directory:
+ * no quotes, `$` or backticks. The line is kept, so the directory is still
+ * checked.
+ */
+const LEADING_CD = String.raw`(?:cd\s+[^\s;&|<>()\`$'"]+\s*(?:;|&&)\s*)?`;
+/**
+ * A line that is only `cat` writing a quoted heredoc to a file, either
+ * order, after at most a leading `cd`.
+ */
 const CAT_HEREDOC_TO_FILE = new RegExp(
-  String.raw`^\s*cat\s+(?:${TARGET}\s+${QUOTED_HEREDOC}|${QUOTED_HEREDOC}\s+${TARGET})\s*$`,
+  String.raw`^\s*${LEADING_CD}cat\s+(?:${TARGET}\s+${QUOTED_HEREDOC}|${QUOTED_HEREDOC}\s+${TARGET})\s*$`,
 );
 
 /**
  * The command without the bodies of quoted heredocs that `cat` writes
- * straight to a file (`cat > f <<'EOF'`, `cat <<"EOF" >> f`). That text is
+ * straight to a file (`cat > f <<'EOF'`, `cat <<"EOF" >> f`, also after a
+ * leading `cd <dir>;` or `cd <dir> &&`). That text is
  * only written, never run or expanded, so prose in a report isn't taken for
  * paths or commands. The `cat` line itself, the terminator and everything
  * around them are kept. Any other heredoc is kept whole: unquoted (bash
  * expands `$(...)` and backticks in its body), fed to an interpreter, piped
- * on, or after another command on its line.
+ * on, or after any command but a plain `cd` on its line.
  */
 export function withoutFileHeredocs(command: string): string {
   const lines = command.split("\n");
