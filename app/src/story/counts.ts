@@ -127,6 +127,28 @@ export function stepAt(
   return series.filter((step) => at(step.at) <= at(event)).at(-1);
 }
 
+/**
+ * A count around a scene that shows `events`: the step in effect as it
+ * opens (the last before the earliest of them, in story order) and the
+ * steps from that event to the latest of them, in story order, which are
+ * the changes the scene spans.
+ */
+export function stepsAround(
+  story: Story,
+  series: CountStep[],
+  events: readonly EventId[],
+): { entering?: CountStep; during: CountStep[] } {
+  const at = storyIndex(story);
+  if (events.length === 0) return { during: [] };
+  const first = Math.min(...events.map(at));
+  const last = Math.max(...events.map(at));
+  const entering = series.filter((step) => at(step.at) < first).at(-1);
+  const during = series.filter(
+    (step) => at(step.at) >= first && at(step.at) <= last,
+  );
+  return { ...(entering === undefined ? {} : { entering }), during };
+}
+
 export type CountProblem = { count: string; at: EventId; message: string };
 
 /** Values above their total, and declared directions broken; see the top. */

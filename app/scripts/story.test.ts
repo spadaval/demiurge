@@ -1025,9 +1025,15 @@ describe("story CLI", () => {
 
     ok("add-scene", "storm", "Storm");
     ok("set-scene-events", "storm", "e4");
+    // The value the scene opens on, then each change while it runs.
     expect(ok("reader-order", "--before", "storm")).toContain(
-      'Counts as of the scene:\n- count:oil ("Lamp oil"): 80, reaching 50, since event:e4 at 13 October 1954\n',
+      'Counts as the scene opens, then as they change during it:\n- count:oil ("Lamp oil"): 11, 39 short of 50, since event:e3 at 12 October 1954; then 80, reaching 50 at event:e4\n',
     );
+    ok("set-scene-events", "storm", "e2", "e4");
+    expect(ok("reader-order", "--before", "storm")).toContain(
+      '- count:oil ("Lamp oil"): 60, reaching 50, since event:e1 at 10 October 1954; then 70, reaching 50 at event:e2; then 11, 39 short of 50 at event:e3; then 80, reaching 50 at event:e4\n',
+    );
+    ok("set-scene-events", "storm", "e4");
 
     // A scene that tells and withholds one ref is noted, once.
     ok("set-scene-links", "storm", "implies", "event:e2");

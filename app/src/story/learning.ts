@@ -250,11 +250,12 @@ export type ViewpointGap = {
  * believe that instead. Without them, the actor
  * holds it from what the story shows them doing: an event from the time
  * they take part in it, and an object in it; a version they tell, from its
- * event; and what a scene told through their eyes shows or reveals, from
- * that scene's now (its latest event) on, the scene being written aside.
- * With `at` undefined (a scene that shows no placed event) time is left
- * out: any knowledge of it counts, and any scene through their eyes told
- * before this one. Undefined when the actor holds it, or it isn't tracked.
+ * event; what a scene told through their eyes shows, reveals, pays off or
+ * implies; and what a scene through other eyes reveals or pays off when
+ * they are in it or take part in what it shows. A scene tells them from its now (its
+ * latest event) on, the scene being written aside. With `at` undefined (a
+ * scene that shows no placed event) time is left out: any knowledge of it
+ * counts, and any such scene told before this one. Undefined when the actor holds it, or it isn't tracked.
  */
 export function viewpointGap(
   story: Story,
@@ -315,7 +316,7 @@ export function viewpointGap(
 
 /**
  * Where in story order `actor` comes to hold `ref` by what the story shows:
- * taking part, telling, or seeing it in a scene through their eyes.
+ * taking part, telling, or being told it in a scene they see or are in.
  * A scene's place is just after its now, so the scene at its own time
  * hasn't yet told it; with no time, a scene told before `scene` comes first.
  */
@@ -347,11 +348,26 @@ function shownFrom(
           .filter((v) => v.id === ref.id && v.by.includes(actor))
           .map((v) => place(v.event))
       : [];
+  // Paying something off brings it back before the people in the scene.
+  const reveals = (s: Scene) =>
+    s.reveals.some((r) => sameRef(r, ref)) ||
+    s.paysOff.some((r) => sameRef(r, ref));
+  const implies = (s: Scene) => s.implies.some((r) => sameRef(r, ref));
   const seen = story.scenes.flatMap((s, i) => {
-    if (i === scene || s.viewpoint !== actor) return [];
-    const shown =
-      (ref.kind === "event" && s.depicts.includes(ref.id)) ||
-      s.reveals.some((r) => sameRef(r, ref));
+    if (i === scene) return [];
+    // Through their eyes: what the scene shows, reveals, pays off or
+    // implies. In it or in what it shows, through other eyes: what it
+    // reveals or pays off, but not
+    // what it implies, which the reader may infer from the viewpoint's
+    // own thoughts.
+    const own = s.viewpoint === actor;
+    const present =
+      s.actors.includes(actor) || s.depicts.some((e) => takesPart(e));
+    const shown = own
+      ? (ref.kind === "event" && s.depicts.includes(ref.id)) ||
+        reveals(s) ||
+        implies(s)
+      : present && reveals(s);
     if (!shown) return [];
     const now = sceneNow(story, s);
     if (at === undefined || now === undefined) {

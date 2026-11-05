@@ -265,7 +265,7 @@ describe("what the story shows the viewpoint", () => {
     });
   });
 
-  test("what a scene through her eyes shows or reveals, after that scene's now", () => {
+  test("what a scene through her eyes shows, reveals or implies, or one she is in reveals, after that scene's now", () => {
     // night (scene 0) is at the wreck; post (scene 1) at the confession.
     const seen = run(
       story,
@@ -286,7 +286,8 @@ describe("what the story shows the viewpoint", () => {
       later: false,
       believes: [],
     });
-    // Through someone else's eyes, it tells her nothing.
+    // Through someone else's eyes, it tells her nothing, unless she is in
+    // the scene or takes part in what it shows.
     const other = run(seen, {
       type: "setSceneViewpoint",
       id: "night",
@@ -296,6 +297,54 @@ describe("what the story shows the viewpoint", () => {
       later: false,
       believes: [],
     });
+    const there = run(other, {
+      type: "setSceneActors",
+      id: "night",
+      actors: ["ivo", "mara"],
+    });
+    expect(viewpointGap(there, "mara", lamp, "confession", 1)).toBeUndefined();
+    expect(
+      viewpointGap(run(other, part("wreck")), "mara", lamp, "confession", 1),
+    ).toBeUndefined();
+    // What it only implies there is the reader's to infer, not hers; what
+    // it pays off is before her.
+    const implied = run(
+      there,
+      { type: "setSceneLinks", id: "night", how: "reveals", refs: [] },
+      { type: "setSceneLinks", id: "night", how: "implies", refs: [lamp] },
+    );
+    expect(viewpointGap(implied, "mara", lamp, "confession", 1)).toEqual({
+      later: false,
+      believes: [],
+    });
+    expect(
+      viewpointGap(
+        run(implied, {
+          type: "setSceneLinks",
+          id: "night",
+          how: "paysOff",
+          refs: [lamp],
+        }),
+        "mara",
+        lamp,
+        "confession",
+        1,
+      ),
+    ).toBeUndefined();
+    // Through her own eyes, what it implies counts.
+    expect(
+      viewpointGap(
+        run(implied, {
+          type: "setSceneViewpoint",
+          id: "night",
+          actor: "mara",
+        }),
+        "mara",
+        lamp,
+        "confession",
+        1,
+      ),
+    ).toBeUndefined();
     // With no time for the scene, a scene through her eyes told before counts.
     expect(viewpointGap(seen, "mara", lamp, undefined, 1)).toBeUndefined();
     expect(viewpointGap(seen, "mara", lamp, undefined, 0)).toEqual({

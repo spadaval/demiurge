@@ -46,6 +46,7 @@ import {
   noteCountingAcross,
   seriesTexts,
   stepAt,
+  stepsAround,
   stepText,
 } from "../src/story/counts";
 import { deliberateGaps, storyGaps } from "../src/story/gaps";
@@ -93,6 +94,7 @@ import {
   type RefKind,
   refExists,
   SCENE_LINK_KINDS,
+  type Scene,
   type Story,
   serializeStory,
 } from "../src/story/story";
@@ -1775,7 +1777,7 @@ export const READS: Record<ReadName, Spec> = {
     flags: {
       before: {
         value: "<scene-id>",
-        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, each way it was told and where first (planted in 3, revealed in 7), and, if the scene has a viewpoint, whether that actor doesn't know it (by their knowledge records of it; without any, they know an event they take part in and the objects in it, a version they tell, and what a scene through their eyes shows or reveals, from that scene's latest event on); then what was held back and not yet told or answered; then each count's value as of the scene",
+        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, each way it was told and where first (planted in 3, revealed in 7), and, if the scene has a viewpoint, whether that actor doesn't know it (by their knowledge records of it; without any, they know an event they take part in and the objects in it, a version they tell, what a scene through their eyes shows, reveals, implies or pays off, and what a scene they are in, or whose events they take part in, reveals or pays off, from that scene's latest event on); then what was held back and not yet told or answered; then each count's value as the scene opens and each change from its earliest event to its latest",
       },
     },
     summary:
@@ -1916,10 +1918,10 @@ export function helpText(): string {
     "told through someone's eyes (set-scene-viewpoint) marks what the reader",
     "has been told that they don't know: a told record is marked only when",
     "someone's knowledge of it is recorded, and they hold it by their own",
-    "knowledge records or, without any, by taking part in it, telling it or",
-    "being shown it in a scene through their eyes. Who belongs to a group,",
-    "and from and until when, is a membership (add-membership); show actor:",
-    "lists it for the member and the group.",
+    "knowledge records or, without any, by taking part in it, telling it, or",
+    "being told it in a scene through their eyes or one they are in. Who",
+    "belongs to a group, and from and until when, is a membership",
+    "(add-membership); show actor: lists it for the member and the group.",
     "",
     "After an edit that changes a record, the CLI prints the top three",
     "suspects that may still state its old version, records and lines of",
@@ -2694,22 +2696,42 @@ function toldBeforeLines(story: Story, index: number): string[] {
           "Held back and not told yet:",
           ...withheld.map((ref) => `- ${shortDescribe(story, ref)}`),
         ]),
-    ...countsBefore(story, anchor),
+    ...countsBefore(story, scene),
   ];
 }
 
 /** Each count's value in effect at `event`, with how it stands. */
-function countsBefore(story: Story, event: string | undefined): string[] {
-  if (event === undefined) return [];
+/**
+ * Each count's value as the scene opens and each change from its earliest
+ * event to its latest: `402, since event:surge at …; then 261 at
+ * event:confession`.
+ */
+function countsBefore(story: Story, scene: Scene): string[] {
+  if (scene.depicts.length === 0) return [];
   const lines = story.counts.flatMap((count) => {
-    const step = stepAt(story, countSeries(story, count), event);
-    if (step === undefined) return [];
-    const at = countTime(story, step.at);
+    const { entering, during } = stepsAround(
+      story,
+      countSeries(story, count),
+      scene.depicts,
+    );
+    if (entering === undefined && during.length === 0) return [];
+    const at =
+      entering === undefined ? undefined : countTime(story, entering.at);
+    const opens =
+      entering === undefined
+        ? "none yet"
+        : `${stepText(count, entering)}, since ${formatRef({ kind: "event", id: entering.at })}${at === undefined ? "" : ` at ${at}`}`;
+    const then = during.map(
+      (step) =>
+        `; then ${stepText(count, step)} at ${formatRef({ kind: "event", id: step.at })}`,
+    );
     return [
-      `- ${shortDescribe(story, { kind: "count", id: count.id })}: ${stepText(count, step)}, since ${formatRef({ kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}`,
+      `- ${shortDescribe(story, { kind: "count", id: count.id })}: ${opens}${then.join("")}`,
     ];
   });
-  return lines.length === 0 ? [] : ["Counts as of the scene:", ...lines];
+  return lines.length === 0
+    ? []
+    : ["Counts as the scene opens, then as they change during it:", ...lines];
 }
 
 /** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
