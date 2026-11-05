@@ -944,3 +944,53 @@ describe("marking an open question as working", () => {
     }
   });
 });
+
+describe("causes between events", () => {
+  const cause = (from: string, to: string): StoryCommand => ({
+    type: "addCause",
+    cause: from,
+    effect: to,
+  });
+
+  test("records and removes a cause", () => {
+    const story = run(linked, cause("war", "exile"));
+    expect(story.causes).toEqual([{ cause: "war", effect: "exile" }]);
+    const parsed = parseStory(serializeStory(story))._unsafeUnwrap();
+    expect(parsed.causes).toEqual(story.causes);
+    const removed = run(story, {
+      type: "removeCause",
+      cause: "war",
+      effect: "exile",
+    });
+    expect(serializeStory(removed)).toBe(serializeStory(linked));
+    expect(serializeStory(removed)).not.toContain("causes");
+  });
+
+  test("refuses unknown events, a self-cause and a duplicate", () => {
+    expect(refusal(linked, cause("war", "nope"))).toMatchObject({
+      kind: "unknown_id",
+      command: "addCause",
+    });
+    expect(refusal(linked, cause("nope", "war")).kind).toBe("unknown_id");
+    expect(refusal(linked, cause("war", "war")).kind).toBe("self_relation");
+    const once = run(linked, cause("war", "exile"));
+    expect(refusal(once, cause("war", "exile")).kind).toBe("relation_exists");
+    expect(
+      refusal(linked, { type: "removeCause", cause: "war", effect: "exile" })
+        .kind,
+    ).toBe("invalid_command");
+  });
+
+  test("keeps a cycle of causes", () => {
+    const story = run(linked, cause("war", "exile"), cause("exile", "war"));
+    expect(story.causes).toHaveLength(2);
+  });
+
+  test("removing an event removes its causes", () => {
+    const story = run(linked, cause("war", "exile"), {
+      type: "removeEvent",
+      id: "war",
+    });
+    expect(story.causes).toEqual([]);
+  });
+});

@@ -270,6 +270,24 @@ describe("storyGaps", () => {
     ).toEqual([]);
   });
 
+  test("an event linked to another only as a cause or an effect is woven in", () => {
+    const stormy = run(
+      woven,
+      { type: "addEvent", id: "storm", label: "", summary: "" },
+      { type: "addEvent", id: "wreck", label: "", summary: "" },
+    );
+    const unreferenced = (story: Story) =>
+      storyGaps(story)
+        .filter((gap) => gap.kind === "event_unreferenced")
+        .map((gap) => gap.ref);
+    expect(unreferenced(stormy)).toHaveLength(2);
+    expect(
+      unreferenced(
+        run(stormy, { type: "addCause", cause: "storm", effect: "wreck" }),
+      ),
+    ).toEqual([]);
+  });
+
   test("a fact about nothing that something refers to is woven in", () => {
     const fact: StoryCommand = {
       type: "addFact",

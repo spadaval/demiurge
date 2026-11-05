@@ -95,6 +95,13 @@ export type OpenQuestion = {
   working?: true;
 };
 
+/**
+ * One event happened because of another. Stored on the story, not the
+ * timeline, since it says why and not when; whether the cause still comes
+ * first is for `storyContradictions`.
+ */
+export type Cause = { cause: EventId; effect: EventId };
+
 export type RefKind =
   | "actor"
   | "drive"
@@ -128,6 +135,8 @@ export type Story = {
   /** In telling order. */
   scenes: Scene[];
   openQuestions: OpenQuestion[];
+  /** Left out of the file when empty, so older files read the same. */
+  causes: Cause[];
   timeline: Timeline;
 };
 
@@ -181,6 +190,7 @@ export function newStory(premise: string): Story {
     readerQuestions: [],
     scenes: [],
     openQuestions: [],
+    causes: [],
     timeline: emptyTimeline,
   };
 }
@@ -462,6 +472,31 @@ function checkOpenQuestion(v: JsonRecord, at: string): Check<OpenQuestion> {
   }));
 }
 
+const CAUSE_KEY = ({ cause, effect }: Cause) => [cause, effect];
+
+function checkCause(v: JsonRecord, at: string): Check<Cause> {
+  const known = checkKeys(v, at, ["cause", "effect"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkString(v.cause, `${at}.cause`),
+    checkString(v.effect, `${at}.effect`),
+  ]).map(([cause, effect]) => ({ cause, effect }));
+}
+
+/** A repeated cause would make the file's text depend on the edit. */
+function checkCauses(value: unknown): Check<Cause[]> {
+  if (value === undefined) return ok([]);
+  return checkRecords(value, "causes", checkCause).andThen((causes) => {
+    const seen = new Set<string>();
+    for (const cause of causes) {
+      const key = JSON.stringify(CAUSE_KEY(cause));
+      if (seen.has(key)) return err(`causes has duplicate ${key}`);
+      seen.add(key);
+    }
+    return ok(causes);
+  });
+}
+
 const POSITION_KEY = ({ event, frame }: Position) => [event, frame];
 const PLACEMENT_KEY = ({ scene }: ScenePlacement) => [scene];
 const FOLLOWING_KEY = ({ entity }: Following) => [entity];
@@ -538,6 +573,7 @@ function checkStory(value: JsonValue): Check<Story> {
     "readerQuestions",
     "scenes",
     "openQuestions",
+    "causes",
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
@@ -558,6 +594,7 @@ function checkStory(value: JsonValue): Check<Story> {
     ),
     checkIdentified(value.scenes, "scenes", checkScene),
     checkIdentified(value.openQuestions, "openQuestions", checkOpenQuestion),
+    checkCauses(value.causes),
     parseTimeline(value.timeline ?? null)
       .mapErr((message) => `timeline: ${message}`)
       .andThen(checkTimelineKeys),
@@ -570,6 +607,7 @@ function checkStory(value: JsonValue): Check<Story> {
       readerQuestions,
       scenes,
       openQuestions,
+      causes,
       timeline,
     ]): Story => ({
       version: STORY_VERSION,
@@ -580,6 +618,7 @@ function checkStory(value: JsonValue): Check<Story> {
       readerQuestions,
       scenes,
       openQuestions,
+      causes,
       timeline,
     }),
   );
@@ -648,6 +687,7 @@ function normalized(story: Story): Story {
         ),
       })),
     ),
+    causes: sortedBy(story.causes, CAUSE_KEY),
     timeline: {
       ...timeline,
       events: byId(timeline.events),
@@ -685,6 +725,7 @@ const KEY_ORDER = [
   "readerQuestions",
   "scenes",
   "openQuestions",
+  "causes",
   "timeline",
   "id",
   "kind",
@@ -710,6 +751,8 @@ const KEY_ORDER = [
   "touches",
   "conflict",
   "working",
+  "cause",
+  "effect",
 ];
 
 const keyRank = (key: string) => {
@@ -730,5 +773,7 @@ function withOrderedKeys(value: unknown): unknown {
 
 /** The file's text. Equal stories give equal text, however they were edited. */
 export function serializeStory(story: Story): string {
-  return `${JSON.stringify(withOrderedKeys(normalized(story)), null, 2)}\n`;
+  const { causes, ...rest } = normalized(story);
+  const written = causes.length === 0 ? rest : { ...rest, causes };
+  return `${JSON.stringify(withOrderedKeys(written), null, 2)}\n`;
 }

@@ -442,6 +442,29 @@ export const EDITS: EditSpecs = {
     example: ["remove-constraint", "wreck-first"],
     build: (a) => ({ type: "removeConstraint", id: a.arg("id") }),
   },
+  addCause: {
+    group: "Events: what happens in story time",
+    args: ["cause-id", "effect-id"],
+    summary:
+      "Record that the effect happened because of the cause. An effect placed before its cause, or a circle of causes, is kept and reported.",
+    example: ["add-cause", "wreck", "letter"],
+    build: (a) => ({
+      type: "addCause",
+      cause: a.arg("cause-id"),
+      effect: a.arg("effect-id"),
+    }),
+  },
+  removeCause: {
+    group: "Events: what happens in story time",
+    args: ["cause-id", "effect-id"],
+    summary: "Remove a cause recorded between two events.",
+    example: ["remove-cause", "wreck", "letter"],
+    build: (a) => ({
+      type: "removeCause",
+      cause: a.arg("cause-id"),
+      effect: a.arg("effect-id"),
+    }),
+  },
 
   addDrive: {
     group: "Drives: what someone wants",
@@ -961,7 +984,8 @@ export const READS: Record<ReadName, Spec> = {
   contradictions: {
     group: "Start and read",
     args: [],
-    summary: "Timeline problems and open questions marked as conflicts.",
+    summary:
+      "Timeline problems, effects placed before their causes, circles of causes, and open questions marked as conflicts.",
     example: ["contradictions"],
   },
   render: {
@@ -1131,6 +1155,16 @@ function showRecord(story: Story, ref: Ref): string[] {
         ...story.timeline.constraints
           .filter((c) => c.a === event.id || c.b === event.id)
           .map((c) => `constraint ${constraintLine(c)}`),
+        ...ids(
+          "because of",
+          "event",
+          story.causes.filter((c) => c.effect === event.id).map((c) => c.cause),
+        ),
+        ...ids(
+          "caused",
+          "event",
+          story.causes.filter((c) => c.cause === event.id).map((c) => c.effect),
+        ),
       ];
     }
     case "scene": {
@@ -1415,12 +1449,38 @@ function runEdit(
               (p) =>
                 `Timeline problem (kept; see contradictions): ${p.message}`,
             ),
+            ...addedCauseProblems(story, next).map(
+              (message) =>
+                `Cause problem (kept; see contradictions): ${message}`,
+            ),
           ]
             .join("\n")
             .concat("\n"),
         }));
     }),
   );
+}
+
+/** Cause contradictions in `after` that weren't in `before`. */
+function addedCauseProblems(before: Story, after: Story): string[] {
+  const found = (story: Story) =>
+    storyContradictions(story).flatMap((c) =>
+      c.source !== "cause"
+        ? []
+        : [
+            {
+              key: JSON.stringify([
+                c.kind,
+                ...(c.kind === "cycle" ? c.events : [c.cause, c.effect]),
+              ]),
+              message: c.message,
+            },
+          ],
+    );
+  const old = new Set(found(before).map(({ key }) => key));
+  return found(after)
+    .filter(({ key }) => !old.has(key))
+    .map(({ message }) => message);
 }
 
 if (import.meta.main) {

@@ -146,6 +146,10 @@ const GAP_RULES: readonly GapRule[] = [
             !story.timeline.constraints.some(
               (c) => (c.a === id || c.b === id) && c.a !== c.b,
             ) &&
+            !story.causes.some(
+              (c) =>
+                (c.cause === id || c.effect === id) && c.cause !== c.effect,
+            ) &&
             !refersToEvent(held, id),
         )
         .map(({ id }) => ({

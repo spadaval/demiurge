@@ -4,10 +4,11 @@
  *
  * A command holds what it's told. It is refused only when it is malformed: a
  * blank or duplicate ID, an ID that doesn't exist in its target or in a link
- * it sets, a drive related to itself, or a relation the two drives already
- * have. Anything else is kept, contradictions included: a timeline edit that
- * contradicts the rest of story time is applied, and the problems it added
- * come back with the story (docs/rebuild/story-model.md, Fluidity).
+ * it sets, a drive related to itself or an event that causes itself, or a
+ * relation or cause already recorded. Anything else is kept, contradictions
+ * included: a timeline edit that contradicts the rest of story time is
+ * applied, and the problems it added come back with the story; a cycle of
+ * causes is kept too (docs/rebuild/story-model.md, Fluidity).
  *
  * A link can only point at something that exists, so add a record first,
  * unconnected if need be. Removing a record removes every reference to it.
@@ -147,7 +148,16 @@ export type StoryCommand =
   | { type: "setOpenQuestionWorking"; id: string; working: boolean }
   | { type: "addEvent"; id: EventId; label: string; summary: string }
   | { type: "describeEvent"; id: EventId; label?: string; summary?: string }
-  /** Also removes the event's positions, constraints and correspondences. */
+  /**
+   * `effect` happened because of `cause`. A cycle of causes, or an effect
+   * placed before its cause, is kept and listed by `storyContradictions`.
+   */
+  | { type: "addCause"; cause: EventId; effect: EventId }
+  | { type: "removeCause"; cause: EventId; effect: EventId }
+  /**
+   * Also removes the event's positions, constraints, correspondences and
+   * causes.
+   */
   | { type: "removeEvent"; id: EventId }
   | Extract<
       TimelineCommand,
@@ -809,6 +819,9 @@ export function applyStoryCommand(
                 ...scene,
                 depicts: without(scene.depicts, id),
               })),
+              causes: story.causes.filter(
+                ({ cause, effect }) => cause !== id && effect !== id,
+              ),
               timeline: {
                 ...timeline,
                 events: timeline.events.filter((event) => event.id !== id),
@@ -825,6 +838,45 @@ export function applyStoryCommand(
           ),
         ),
       );
+    }
+
+    case "addCause": {
+      const { cause, effect } = command;
+      return resolve("event", [cause, effect], isEvent)
+        .andThen(() =>
+          cause === effect
+            ? refuse("self_relation", `event ${cause} cannot cause itself`)
+            : hasCause(story, cause, effect)
+              ? refuse(
+                  "relation_exists",
+                  `event ${cause} already causes ${effect}`,
+                )
+              : ok(null),
+        )
+        .andThen(() =>
+          kept({ ...story, causes: [...story.causes, { cause, effect }] }),
+        );
+    }
+
+    case "removeCause": {
+      const { cause, effect } = command;
+      return resolve("event", [cause, effect], isEvent)
+        .andThen(() =>
+          hasCause(story, cause, effect)
+            ? ok(null)
+            : refuse(
+                "invalid_command",
+                `event ${cause} is not recorded as causing ${effect}`,
+              ),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            causes: story.causes.filter(
+              (c) => c.cause !== cause || c.effect !== effect,
+            ),
+          }),
+        );
     }
 
     case "setPosition":
@@ -859,6 +911,9 @@ function replace<T extends { id: string }>(
 ): T[] {
   return items.map((item) => (item.id === id ? change(item) : item));
 }
+
+const hasCause = (story: Story, cause: string, effect: string) =>
+  story.causes.some((c) => c.cause === cause && c.effect === effect);
 
 /** Whether either drive holds a relation to the other. */
 function relationBetween(story: Story, a: string, b: string): boolean {

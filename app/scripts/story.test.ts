@@ -199,6 +199,48 @@ describe("story CLI", () => {
     expect(words(ok("render")).count).toBe(open.count);
   });
 
+  test("records causes, renders them, and reports a move that puts an effect first", () => {
+    ok("init", "A storm wrecks a boat.");
+    ok("add-event", "storm", "The storm");
+    ok("add-event", "wreck", "The wreck");
+    ok("set-position", "storm", "10");
+    ok("set-position", "wreck", "12");
+    expect(ok("add-cause", "storm", "wreck")).toBe("Saved.\n");
+    expect(saved().causes).toEqual([{ cause: "storm", effect: "wreck" }]);
+    expect(ok("show", "event:wreck")).toContain(
+      'because of: event:storm ("The storm")',
+    );
+    expect(ok("show", "event:storm")).toContain(
+      'caused: event:wreck ("The wreck")',
+    );
+    expect(ok("render")).toContain(
+      "- **The wreck** (year 12), because of The storm.",
+    );
+    expect(ok("touches", "event:storm")).toContain(
+      'event:wreck ("The wreck"): an event it caused',
+    );
+
+    const moved = ok("set-position", "storm", "14");
+    expect(moved).toContain(
+      'Cause problem (kept; see contradictions): "The wreck" happens before "The storm", which is recorded as its cause.',
+    );
+    expect(ok("contradictions")).toContain("recorded as its cause");
+    // Reported once, by the edit that made it.
+    expect(ok("set-position", "storm", "15")).toBe("Saved.\n");
+    expect(ok("set-position", "storm", "12")).toBe("Saved.\n");
+    expect(ok("contradictions")).toBe("No contradictions.\n");
+
+    const self = cli(file, "add-cause", "storm", "storm");
+    expect(self.code).toBe(1);
+    expect(self.stderr).toContain("cannot cause itself");
+    expect(cli(file, "add-cause", "storm", "wreck").code).toBe(1);
+    expect(cli(file, "add-cause", "storm", "nothing").code).toBe(1);
+    expect(ok("add-cause", "wreck", "storm")).toContain("in a circle");
+    ok("remove-cause", "wreck", "storm");
+    ok("remove-cause", "storm", "wreck");
+    expect(readFileSync(file, "utf8")).not.toContain("causes");
+  });
+
   test("a refused edit leaves the file alone and exits non-zero", () => {
     ok("init", "A premise.");
     ok("add-actor", "joel", "Joel");

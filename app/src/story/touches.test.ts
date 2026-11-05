@@ -425,3 +425,48 @@ describe("what it skips", () => {
     ).toEqual({ kind: "unknown_ref", message: "drive nope does not exist" });
   });
 });
+
+describe("causes", () => {
+  // The drowning of the archive is why she sealed the gate.
+  const caused = run(ninefold, {
+    type: "addCause",
+    cause: "drowning",
+    effect: "seal",
+  });
+
+  test("are followed in both directions", () => {
+    const seal = touches(caused, { kind: "event", id: "seal" });
+    expect(seal.direct.event).toContainEqual({
+      ref: { kind: "event", id: "drowning" },
+      label: "The archive drowns",
+      how: ["an event that caused it"],
+    });
+    const drowning = touches(caused, { kind: "event", id: "drowning" });
+    expect(drowning.direct.event).toEqual([
+      {
+        ref: { kind: "event", id: "seal" },
+        label: "The Salt Gate is sealed",
+        how: ["an event it caused"],
+      },
+    ]);
+  });
+
+  test("a cause reaches what its effects reach, one step on", () => {
+    const before = touches(ninefold, { kind: "event", id: "drowning" });
+    expect(ids(before.further)).toEqual({ scene: ["5.1"] });
+    const drowning = touches(caused, { kind: "event", id: "drowning" });
+    expect(ids(drowning.further)).toEqual({
+      drive: ["shut"],
+      event: ["coronation"],
+      scene: ["5.1", "3.2"],
+      openQuestion: ["why-seal"],
+      candidate: ["why-seal/order"],
+    });
+    expect(drowning.further.scene[1]?.how).toEqual([
+      "a scene that depicts it, of event seal, which it caused",
+    ]);
+    // An effect doesn't carry back to its cause's other links.
+    const seal = touches(caused, { kind: "event", id: "seal" });
+    expect(ids(seal.further)).toEqual({ scene: ["4.2", "5.1"] });
+  });
+});

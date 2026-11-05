@@ -831,3 +831,68 @@ describe("open questions can be marked as working", () => {
     );
   });
 });
+
+describe("causes in the file", () => {
+  const caused: Story = {
+    ...fullStory,
+    causes: [
+      { cause: "exile", effect: "adoption" },
+      { cause: "adoption", effect: "exile" },
+    ],
+  };
+
+  test("a file written before causes existed reads and writes back the same", () => {
+    const text = serializeStory(fullStory);
+    expect(text).not.toContain("causes");
+    expect(serializeStory(parseStory(text)._unsafeUnwrap())).toBe(text);
+    expect(parseStory(text)._unsafeUnwrap().causes).toEqual([]);
+  });
+
+  test("are kept, sorted, before the timeline", () => {
+    const text = serializeStory(caused);
+    const story = parseStory(text)._unsafeUnwrap();
+    expect(story.causes).toEqual([
+      { cause: "adoption", effect: "exile" },
+      { cause: "exile", effect: "adoption" },
+    ]);
+    expect(serializeStory(story)).toBe(text);
+    expect(Object.keys(JSON.parse(text)).slice(-2)).toEqual([
+      "causes",
+      "timeline",
+    ]);
+  });
+
+  test.each<[string, JsonValue, string]>([
+    ["a list that isn't one", {}, "causes must be a list"],
+    [
+      "an unknown key",
+      [{ cause: "a", effect: "b", because: "c" }],
+      "causes[0].because is not a known field",
+    ],
+    ["a missing effect", [{ cause: "a" }], "causes[0].effect must be a string"],
+    [
+      "a repeated cause",
+      [
+        { cause: "a", effect: "b" },
+        { cause: "a", effect: "b" },
+      ],
+      'causes has duplicate ["a","b"]',
+    ],
+  ])("rejects %s", (_name, causes, message) => {
+    const text = JSON.stringify({
+      ...JSON.parse(serializeStory(fullStory)),
+      causes,
+    });
+    const error = parseStory(text)._unsafeUnwrapErr();
+    expect(error.kind).toBe("invalid_story");
+    expect(error.message).toContain(message);
+  });
+
+  test("a cause between events that don't exist still loads", () => {
+    const text = serializeStory({
+      ...fullStory,
+      causes: [{ cause: "gone", effect: "gone" }],
+    });
+    expect(parseStory(text).isOk()).toBe(true);
+  });
+});

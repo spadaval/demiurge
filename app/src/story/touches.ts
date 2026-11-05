@@ -171,6 +171,10 @@ function directLinks(story: Story, ref: Ref): Link[] {
           add("a scene that depicts it", sceneRef(scene));
         }
       }
+      for (const { cause, effect } of story.causes) {
+        if (cause === id) add("an event it caused", eventRef(effect));
+        if (effect === id) add("an event that caused it", eventRef(cause));
+      }
       for (const c of story.timeline.constraints) {
         const other = c.a === id ? c.b : c.b === id ? c.a : undefined;
         if (other !== undefined && other !== id) {
@@ -292,8 +296,8 @@ function carriedLinks(story: Story, ref: Ref): Link[] {
             .map((drive) => ({ ref: driveRef(drive.id), how }));
         });
     }
-    case "event":
-      return story.drives
+    case "event": {
+      const pressured = story.drives
         .filter((drive) => drive.origins.includes(id))
         .flatMap((drive) => {
           const how = `a scene that puts ${drive.id}, a drive it created, under pressure`;
@@ -301,6 +305,19 @@ function carriedLinks(story: Story, ref: Ref): Link[] {
             .filter((scene) => scene.pressures.includes(drive.id))
             .map((scene) => ({ ref: sceneRef(scene), how }));
         });
+      // A change to a cause carries to what its effects reach.
+      const effects = story.causes
+        .filter(({ cause, effect }) => cause === id && effect !== id)
+        .map(({ effect }) => eventRef(effect))
+        .filter((effect) => refExists(story, effect));
+      const caused = effects.flatMap((effect) =>
+        directLinks(story, effect).map((link) => ({
+          ref: link.ref,
+          how: `${link.how}, of ${describeRef(effect)}, which it caused`,
+        })),
+      );
+      return [...pressured, ...caused];
+    }
     case "candidate":
       return candidateTouches(story, ref)
         .filter((touched) => refExists(story, touched))

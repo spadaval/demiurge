@@ -169,6 +169,53 @@ describe("renderStory", () => {
     );
   });
 
+  test("says what happened because of what", () => {
+    const caused = run(sketch, {
+      type: "addCause",
+      cause: "z-wreck",
+      effect: "a-letter",
+    });
+    expect(renderStory(caused)).toContain(
+      "- **The wreck** [before The letter]\n- **The letter**, because of The wreck.\n",
+    );
+    const described = run(caused, {
+      type: "describeEvent",
+      id: "a-letter",
+      summary: "It names her brother",
+    });
+    expect(renderStory(described)).toContain(
+      "- **The letter**: It names her brother. Because of The wreck.\n",
+    );
+    expect(renderStory(sketch)).not.toContain("ecause");
+    const long = run(caused, {
+      type: "describeEvent",
+      id: "z-wreck",
+      label: "The wreck of the Alba on the reef in the storm",
+    });
+    expect(renderStory(long)).toContain(
+      "- **The letter**, because of The wreck of the Alba on…\n",
+    );
+  });
+
+  test("describes an effect placed before its cause, and a circle of causes, in words", () => {
+    const backwards = run(sketch, {
+      type: "addCause",
+      cause: "a-letter",
+      effect: "z-wreck",
+    });
+    expect(renderStory(backwards)).toContain(
+      "## Where the story pulls against itself\n\n- The wreck happens before The letter, though it happens because of it.\n",
+    );
+    const circle = run(backwards, {
+      type: "addCause",
+      cause: "z-wreck",
+      effect: "a-letter",
+    });
+    expect(renderStory(circle)).toContain(
+      "- These events cause each other in a circle: The letter; The wreck.",
+    );
+  });
+
   test("prints an open question's candidates in a line each, without what they touch", () => {
     const text = renderStory(sketch);
     expect(text).toContain(
@@ -482,6 +529,20 @@ function linkCommands(): StoryCommand[] {
         pressures,
       })),
     ]),
+    ...(
+      [
+        [0, 1],
+        [2, 3],
+        [1, 3],
+        [4, 7],
+      ] as const
+    ).map(
+      ([cause, effect]): StoryCommand => ({
+        type: "addCause",
+        cause: `e${cause}`,
+        effect: `e${effect}`,
+      }),
+    ),
     ...growing(
       [
         { kind: "drive", id: "d4" },

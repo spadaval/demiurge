@@ -7,6 +7,7 @@
  * full only under its actor and named in a few words elsewhere, a relation is
  * printed once, a constraint the positions already satisfy is left out, and
  * so are rejected candidates and the candidates of a question being weighed.
+ * An event's causes are named after it ("because of …") in a few words each.
  */
 
 import {
@@ -271,8 +272,30 @@ function eventLines(story: Story): string[] {
     const when = stated.length === 0 ? "" : ` [${stated.join("; ")}]`;
     const summary =
       event.summary.trim() === "" ? "" : `: ${sentence(event.summary)}`;
-    return `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}`;
+    return `- **${named(event.label)}**${positionText(story, worldPosition(event.id))}${when}${summary}${becauseText(story, event.id, summary !== "")}`;
   });
+}
+
+/** "Because of" takes two of a link's eight words. */
+const CAUSE_WORDS = MAX_SHORT_WORDS - 2;
+
+/**
+ * ` Because of The wreck; The storm.` after a summary, `, because of …`
+ * without one, or nothing for an event with no cause.
+ */
+function becauseText(story: Story, id: string, afterSummary: boolean): string {
+  const causes = story.causes
+    .filter(({ effect, cause }) => effect === id && cause !== id)
+    .map(({ cause }) => cause)
+    .filter((cause) => story.timeline.events.some((e) => e.id === cause));
+  if (causes.length === 0) return "";
+  const names = causes.map((cause) =>
+    firstWords(eventLabel(story, cause), CAUSE_WORDS),
+  );
+  const because = `ecause of ${names.join("; ")}`;
+  return afterSummary
+    ? ` ${sentence(`B${because}`)}`
+    : `, ${sentence(`b${because}`)}`;
 }
 
 /** The order the timeline's positions alone give, without its constraints. */
@@ -424,10 +447,22 @@ function concerns(story: Story, about: readonly Ref[]): string {
     : ` Concerns ${about.map((ref) => refName(story, ref)).join("; ")}.`;
 }
 
-/** Timeline problems in words; open conflicts are already marked above. */
+/**
+ * Timeline and cause problems in words; open conflicts are already marked
+ * above.
+ */
 function contradictionLines(story: Story): string[] {
   return storyContradictions(story).flatMap((c) => {
-    if (c.source !== "timeline") return [];
+    if (c.source === "openQuestion") return [];
+    if (c.source === "cause") {
+      return c.kind === "effect_first"
+        ? [
+            `- ${eventLabel(story, c.effect)} happens before ${eventLabel(story, c.cause)}, though it happens because of it.`,
+          ]
+        : [
+            `- These events cause each other in a circle: ${c.events.map((e) => eventLabel(story, e)).join("; ")}.`,
+          ];
+    }
     const { problem } = c;
     switch (problem.kind) {
       case "contradiction":

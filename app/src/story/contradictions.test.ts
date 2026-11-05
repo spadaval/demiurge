@@ -91,3 +91,81 @@ describe("storyContradictions", () => {
     expect(storyContradictions(answered)).toEqual([]);
   });
 });
+
+describe("causes", () => {
+  const at = (event: string, start: number): StoryCommand => ({
+    type: "setPosition",
+    event,
+    frame: "world",
+    position: { start, end: start },
+  });
+  const placed = run(
+    newStory("A storm, then a wreck."),
+    { type: "addEvent", id: "storm", label: "The storm", summary: "" },
+    { type: "addEvent", id: "wreck", label: "The wreck", summary: "" },
+    at("storm", 10),
+    at("wreck", 12),
+    { type: "addCause", cause: "storm", effect: "wreck" },
+  );
+
+  test("a cause before its effect is no contradiction", () => {
+    expect(storyContradictions(placed)).toEqual([]);
+  });
+
+  test("moving a cause after its effect is kept and listed, and moving it back clears it", () => {
+    const moved = applyStoryCommand(placed, at("storm", 14))._unsafeUnwrap();
+    expect(moved.problems).toEqual([]);
+    expect(storyContradictions(moved.story)).toEqual([
+      {
+        source: "cause",
+        kind: "effect_first",
+        cause: "storm",
+        effect: "wreck",
+        message:
+          '"The wreck" happens before "The storm", which is recorded as its cause.',
+      },
+    ]);
+    const back = run(moved.story, at("storm", 10));
+    expect(storyContradictions(back)).toEqual([]);
+  });
+
+  test("a cause and effect at the same position aren't listed", () => {
+    expect(storyContradictions(run(placed, at("storm", 12)))).toEqual([]);
+  });
+
+  test("a cause ordered after its effect by a constraint is listed", () => {
+    const story = run(
+      newStory("P"),
+      { type: "addEvent", id: "a", label: "A", summary: "" },
+      { type: "addEvent", id: "b", label: "B", summary: "" },
+      { type: "constrain", id: "c", a: "b", relation: "before", b: "a" },
+      { type: "addCause", cause: "a", effect: "b" },
+    );
+    expect(storyContradictions(story).map((c) => c.source)).toEqual(["cause"]);
+  });
+
+  test("a circle of causes is kept and listed once", () => {
+    const story = run(
+      newStory("P"),
+      { type: "addEvent", id: "c", label: "C", summary: "" },
+      { type: "addEvent", id: "a", label: "A", summary: "" },
+      { type: "addEvent", id: "b", label: "B", summary: "" },
+      { type: "addEvent", id: "d", label: "D", summary: "" },
+      { type: "addCause", cause: "a", effect: "b" },
+      { type: "addCause", cause: "b", effect: "c" },
+      { type: "addCause", cause: "c", effect: "a" },
+      { type: "addCause", cause: "c", effect: "d" },
+    );
+    expect(storyContradictions(story)).toEqual([
+      {
+        source: "cause",
+        kind: "cycle",
+        events: ["a", "b", "c"],
+        message:
+          'These events are recorded as causing each other, in a circle: "A"; "B"; "C".',
+      },
+    ]);
+    const broken = run(story, { type: "removeCause", cause: "c", effect: "a" });
+    expect(storyContradictions(broken)).toEqual([]);
+  });
+});

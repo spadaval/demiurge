@@ -4,19 +4,40 @@
  * this lists them so they can be worked on.
  */
 
-import { compileChronology, type TimelineProblem } from "../time/chronology";
+import {
+  type Chronology,
+  compareEvents,
+  compileChronology,
+  type TimelineProblem,
+} from "../time/chronology";
 import { timelineProblems } from "../time/commands";
+import type { EventId } from "../time/timeline";
 import { isAnswered, type Ref, type Story } from "./story";
+import { refLabel } from "./touches";
 
 export type Contradiction =
   | { source: "timeline"; problem: TimelineProblem; message: string }
   /** An unanswered open question marked as a conflict. */
-  | { source: "openQuestion"; ref: Ref; message: string };
+  | { source: "openQuestion"; ref: Ref; message: string }
+  /**
+   * An effect that story time puts strictly before its cause. One at the
+   * same time as its cause, or not ordered against it, isn't listed.
+   */
+  | {
+      source: "cause";
+      kind: "effect_first";
+      cause: EventId;
+      effect: EventId;
+      message: string;
+    }
+  /** Events that are each other's causes, in a circle, sorted by ID. */
+  | { source: "cause"; kind: "cycle"; events: EventId[]; message: string };
 
-/** The timeline's problems, then the open conflicts. */
+/** The timeline's problems, then the causes', then the open conflicts. */
 export function storyContradictions(story: Story): Contradiction[] {
   // Story scenes aren't in the timeline, as in `applyStoryCommand`.
-  const timeline = timelineProblems(compileChronology(story.timeline, [])).map(
+  const chronology = compileChronology(story.timeline, []);
+  const timeline = timelineProblems(chronology).map(
     (problem): Contradiction => ({
       source: "timeline",
       problem,
@@ -32,5 +53,87 @@ export function storyContradictions(story: Story): Contradiction[] {
         message: `Not settled yet: ${q.question}`,
       }),
     );
-  return [...timeline, ...conflicts];
+  return [...timeline, ...causeContradictions(story, chronology), ...conflicts];
+}
+
+function causeContradictions(
+  story: Story,
+  chronology: Chronology,
+): Contradiction[] {
+  const events = new Set(story.timeline.events.map(({ id }) => id));
+  const causes = story.causes.filter(
+    ({ cause, effect }) => events.has(cause) && events.has(effect),
+  );
+  const label = (id: string) => `"${refLabel(story, { kind: "event", id })}"`;
+  const effectFirst = causes
+    .filter(
+      ({ cause, effect }) =>
+        cause !== effect &&
+        compareEvents(chronology, effect, cause) === "before",
+    )
+    .map(
+      ({ cause, effect }): Contradiction => ({
+        source: "cause",
+        kind: "effect_first",
+        cause,
+        effect,
+        message: `${label(effect)} happens before ${label(cause)}, which is recorded as its cause.`,
+      }),
+    );
+  const cycles = causeCycles(causes).map(
+    (cycle): Contradiction => ({
+      source: "cause",
+      kind: "cycle",
+      events: cycle,
+      message: `These events are recorded as causing each other, in a circle: ${cycle.map(label).join("; ")}.`,
+    }),
+  );
+  return [...effectFirst, ...cycles];
+}
+
+/**
+ * Each set of events joined in a circle by causes (a strongly connected
+ * component, by Tarjan's algorithm), sorted by ID, in order of their first ID.
+ */
+function causeCycles(
+  causes: readonly { cause: EventId; effect: EventId }[],
+): EventId[][] {
+  const next = new Map<EventId, EventId[]>();
+  for (const { cause, effect } of causes) {
+    next.set(cause, [...(next.get(cause) ?? []), effect]);
+  }
+  const index = new Map<EventId, number>();
+  const low = new Map<EventId, number>();
+  const stack: EventId[] = [];
+  const onStack = new Set<EventId>();
+  const cycles: EventId[][] = [];
+  const visit = (event: EventId) => {
+    index.set(event, index.size);
+    low.set(event, index.get(event) ?? 0);
+    stack.push(event);
+    onStack.add(event);
+    for (const to of next.get(event) ?? []) {
+      if (!index.has(to)) {
+        visit(to);
+        low.set(event, Math.min(low.get(event) ?? 0, low.get(to) ?? 0));
+      } else if (onStack.has(to)) {
+        low.set(event, Math.min(low.get(event) ?? 0, index.get(to) ?? 0));
+      }
+    }
+    if (low.get(event) !== index.get(event)) return;
+    const component: EventId[] = [];
+    let member: EventId | undefined;
+    do {
+      member = stack.pop();
+      if (member === undefined) break;
+      onStack.delete(member);
+      component.push(member);
+    } while (member !== event);
+    const selfCause = (next.get(event) ?? []).includes(event);
+    if (component.length > 1 || selfCause) cycles.push(component.sort());
+  };
+  for (const event of [...next.keys()].sort()) {
+    if (!index.has(event)) visit(event);
+  }
+  return cycles.sort((a, b) => ((a[0] ?? "") < (b[0] ?? "") ? -1 : 1));
 }
