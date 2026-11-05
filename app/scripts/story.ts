@@ -17,6 +17,7 @@ import {
 } from "../src/story/commands";
 import { storyContradictions } from "../src/story/contradictions";
 import { storyGaps } from "../src/story/gaps";
+import { type Mention, whatMentions } from "../src/story/mentions";
 import { renderStory, wordCount } from "../src/story/render";
 import {
   newStory,
@@ -929,6 +930,7 @@ type ReadName =
   | "show"
   | "list"
   | "touches"
+  | "mentions"
   | "gaps"
   | "contradictions"
   | "render";
@@ -972,8 +974,15 @@ export const READS: Record<ReadName, Spec> = {
     group: "Start and read",
     args: ["ref"],
     summary:
-      "What a record or candidate is connected to: its declared links, plus one step further. Only declared links count, not what free text mentions.",
+      "What a record or candidate is connected to: its declared links, plus one step further. Only declared links count; for what free text mentions, use mentions.",
     example: ["touches", "candidate:who-wrote/ferryman"],
+  },
+  mentions: {
+    group: "Start and read",
+    args: ["ref"],
+    summary:
+      "Free text that mentions a record: its name, a drive's holder, an event's year, and spans or seasons near an event. Edits that change a record print this too. Nothing is rewritten.",
+    example: ["mentions", "event:wreck"],
   },
   gaps: {
     group: "Start and read",
@@ -1276,6 +1285,49 @@ function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
   }
 }
 
+/** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
+function mentionLines(story: Story, found: readonly Mention[]): string[] {
+  return found.map(
+    (m) => `- ${describe(story, m.ref)} ${m.field}: "${m.text}" (${m.how})`,
+  );
+}
+
+/**
+ * The record an edit changes whose old version free text may still state,
+ * for the edits that change a name, a time, a want or an actor.
+ */
+function changedRef(command: StoryCommand): Ref | undefined {
+  switch (command.type) {
+    case "setPosition":
+      return { kind: "event", id: command.event };
+    case "describeEvent":
+      return { kind: "event", id: command.id };
+    case "updateDrive":
+      return { kind: "drive", id: command.id };
+    case "updateActor":
+      return { kind: "actor", id: command.id };
+    default:
+      return undefined;
+  }
+}
+
+/** A prompt listing text that may still state what the edit changed. */
+function staleTextLines(
+  before: Story,
+  after: Story,
+  command: StoryCommand,
+): string[] {
+  const ref = changedRef(command);
+  if (ref === undefined) return [];
+  const found = whatMentions(after, ref, before).unwrapOr([]);
+  return found.length === 0
+    ? []
+    : [
+        `Free text that mentions ${formatRef(ref)} and may still state the old version (nothing was rewritten):`,
+        ...mentionLines(after, found),
+      ];
+}
+
 function touchLines(groups: TouchGroups): string[] {
   const lines = TOUCH_KINDS.flatMap((kind) =>
     groups[kind].map(
@@ -1359,6 +1411,17 @@ function runRead(
           "One step further:",
           ...touchLines(t.further),
         ]);
+    case "mentions":
+      return parseRef(a.arg("ref"))
+        .mapErr(usageError)
+        .andThen((ref) =>
+          whatMentions(story, ref).mapErr((e) => refused(e.message)),
+        )
+        .map((found) =>
+          found.length === 0
+            ? ["No free text mentions it."]
+            : mentionLines(story, found),
+        );
     case "gaps": {
       const gaps = storyGaps(story);
       return ok(
@@ -1453,6 +1516,7 @@ function runEdit(
               (message) =>
                 `Cause problem (kept; see contradictions): ${message}`,
             ),
+            ...staleTextLines(story, next, command),
           ]
             .join("\n")
             .concat("\n"),

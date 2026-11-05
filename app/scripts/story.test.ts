@@ -241,6 +241,56 @@ describe("story CLI", () => {
     expect(readFileSync(file, "utf8")).not.toContain("causes");
   });
 
+  test("mentions finds free text, and edits that change a record prompt with it", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-actor", "mara", "Mara");
+    ok("add-event", "wreck", "The wreck");
+    ok("set-position", "wreck", "1203");
+    ok("add-drive", "avenge", "Avenge her brother", "--actor", "mara");
+    ok(
+      "add-scene",
+      "harbour",
+      "The harbour",
+      "--summary",
+      "Twenty years ago the boat went down; Mara watches the reef",
+    );
+    ok("set-scene-events", "harbour", "wreck");
+    ok("add-fact", "charted", "The reef was charted in 1203");
+    ok("add-scene", "market", "Market day", "--summary", "Fish in spring");
+
+    const found = ok("mentions", "event:wreck");
+    expect(found).toBe(
+      [
+        '- scene:harbour ("The harbour") summary: "Twenty years ago" (may state when this happened)',
+        '- fact:charted ("The reef was charted in 1203") text: "1203" (states its year 1203)',
+        "",
+      ].join("\n"),
+    );
+    expect(ok("mentions", "scene:market")).toBe("No free text mentions it.\n");
+    expect(cli(file, "mentions", "event:nope").code).toBe(1);
+
+    const before = readFileSync(file, "utf8");
+    const moved = ok("set-position", "wreck", "1213");
+    expect(moved).toContain(
+      "Free text that mentions event:wreck and may still state the old version (nothing was rewritten):",
+    );
+    expect(moved).toContain('text: "1203" (states its year 1203)');
+    expect(saved().facts[0]?.text).toBe("The reef was charted in 1203");
+    expect(readFileSync(file, "utf8")).not.toBe(before);
+
+    expect(ok("update-drive", "avenge", "--want", "Forgive")).toContain(
+      'summary: "Mara" (names its holder Mara)',
+    );
+    expect(ok("update-actor", "mara", "--name", "Maren")).toContain(
+      'summary: "Mara" (names it)',
+    );
+    expect(ok("describe-event", "wreck", "--label", "The sinking")).toContain(
+      "may state when this happened",
+    );
+    // Other edits don't prompt.
+    expect(ok("update-scene", "market", "--title", "Market")).toBe("Saved.\n");
+  });
+
   test("a refused edit leaves the file alone and exits non-zero", () => {
     ok("init", "A premise.");
     ok("add-actor", "joel", "Joel");
