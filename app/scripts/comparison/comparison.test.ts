@@ -28,7 +28,12 @@ import {
 } from "./packet";
 import { PREMISES, STEPS, stepPrompt } from "./prompts";
 import { ensureToken } from "./sandbox";
-import { checkTranscript, mentionsCalls, shellPaths } from "./transcript";
+import {
+  checkTranscript,
+  mentionsCalls,
+  shellPaths,
+  shellWordValue,
+} from "./transcript";
 
 const tool = (name: string, input: Record<string, unknown>) =>
   JSON.stringify({
@@ -780,6 +785,29 @@ describe("transcript check: sed and perl scripts aren't paths", () => {
       "Bash",
     ]);
     expect(outside(`perl -e 'system("cat /etc/shadow")'`)).toEqual(["Bash"]);
+  });
+  test("a script of quoted pieces run together is blanked too (worldcrafter-x2ij)", () => {
+    // From the round smoke's writer: an apostrophe spliced in with '"'"'.
+    const flagged =
+      "sed -i 's/ Snow hissed against the back window\\.//; s/about Hartmann'\"'\"'s temper, //' scenes/waiting.md && wc -w scenes/waiting.md";
+    expect(shellPaths(flagged)).toEqual([]);
+    expect(outside(flagged)).toEqual([]);
+    expect(outside(`sed 's/a,//'"x"'/b/' part1.md`)).toEqual([]);
+    // A piece that could expand leaves the word whole, so it is still read.
+    expect(outside(`sed 's/a,//'"$X"'/b/' part1.md`)).toEqual(["Bash"]);
+    // What the script reads or writes stays checked.
+    expect(outside(`sed 's/it'"'"'s//; 1r /etc/shadow' part1.md`)).toEqual([
+      "Bash",
+    ]);
+    expect(outside(`sed 's/it'"'"'s//' /etc/passwd`)).toEqual(["Bash"]);
+  });
+  test("shellWordValue reads quoted pieces and refuses expansions", () => {
+    expect(shellWordValue(`'a'"b\\"c"d`)).toBe('ab"cd');
+    expect(shellWordValue(`'it'"'"'s'`)).toBe("it's");
+    expect(shellWordValue(`'a'"$x"`)).toBeUndefined();
+    expect(shellWordValue("'a'`x`")).toBeUndefined();
+    expect(shellWordValue(`'a'\\b`)).toBeUndefined();
+    expect(shellWordValue(`'unclosed`)).toBeUndefined();
   });
   test("a bare // elsewhere still counts as the root", () => {
     expect(shellPaths("ls //")).toEqual(["//"]);

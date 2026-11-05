@@ -419,7 +419,54 @@ export function withoutInlineScripts(command: string): string {
 function blankSedWord(word: string): string {
   const quoted = /^'[^']*'$/.test(word) || /^"(?:[^"\\]|\\.)*"$/.test(word);
   if (quoted) return `${word[0]}${blankSedText(word.slice(1, -1))}${word[0]}`;
-  return /['"]/.test(word) ? word : blankSedText(word);
+  if (!/['"]/.test(word)) return blankSedText(word);
+  // Quoted pieces run together, as in 's/it'"'"'s//': read the word's value
+  // and blank that, as one single-quoted word. Any expansion in it leaves
+  // the word whole.
+  const value = shellWordValue(word);
+  return value === undefined
+    ? word
+    : `'${blankSedText(value).replaceAll("'", " ")}'`;
+}
+
+/**
+ * The value of a shell word made of single-quoted, double-quoted and bare
+ * pieces, or undefined if any piece could expand (`$`, a backtick, or a
+ * backslash outside quotes).
+ */
+export function shellWordValue(word: string): string | undefined {
+  let value = "";
+  let i = 0;
+  while (i < word.length) {
+    const c = word[i];
+    if (c === "'") {
+      const close = word.indexOf("'", i + 1);
+      if (close === -1) return undefined;
+      value += word.slice(i + 1, close);
+      i = close + 1;
+    } else if (c === '"') {
+      i++;
+      while (i < word.length && word[i] !== '"') {
+        const d = word[i];
+        if (d === "$" || d === "`") return undefined;
+        if (d === "\\" && /["\\$`]/.test(word[i + 1] ?? "")) {
+          value += word[i + 1];
+          i += 2;
+        } else {
+          value += d;
+          i++;
+        }
+      }
+      if (i >= word.length) return undefined;
+      i++;
+    } else if (c === "$" || c === "`" || c === "\\") {
+      return undefined;
+    } else {
+      value += c;
+      i++;
+    }
+  }
+  return value;
 }
 
 /**

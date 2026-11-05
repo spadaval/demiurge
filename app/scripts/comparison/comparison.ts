@@ -243,7 +243,7 @@ function uncommitted(repo: string): string {
  * `bun build --target=bun`) and `story-sketch/` (the skill and craft.md),
  * from the repository's working tree.
  */
-function buildTool(tool: string, repo: string): void {
+export function buildTool(tool: string, repo: string): void {
   const skillDir = join(tool, "story-sketch");
   mkdirSync(skillDir, { recursive: true });
   for (const file of ["SKILL.md", "craft.md"]) {
