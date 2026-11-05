@@ -28,7 +28,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Round 1"
-updated_at: "2026-11-05T08:35:47.674791866+00:00"
+updated_at: "2026-11-05T08:53:14.849700163+00:00"
 ---
 
 ## Goal
@@ -46,3 +46,4 @@ The first judged round on the fixed tool (decision worldcrafter-jeue).
 ## Notes
 
 - 2026-11-05 [note] From review finding worldcrafter-mdk6: timeline problems and mixed year/date positions print raw fractions of a year (contradictions, edit output, show event). If the writer uses dates, fix to the date/unit wording render uses.
+- 2026-11-05 [note] Points (points.json in /home/supadava/projects/demiurge-world/round-1): chosen by the orchestrator: the-witness (19/37, reveal) and one-exact-act (31/37, cost paid); random: coldharbour (4/37, seed 20261105) and punch-or-fire (1/37, seed 20261106), uniform over remaining beats. Both random draws fell early, leaving nothing in beats 20-30; kept as drawn rather than redrawn. From Round 2 on, random points are drawn one from each half of the arc not covered by the chosen points (procedure change by the orchestrator, recorded here before Round 2's draw).
