@@ -24,9 +24,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.206095096+00:00"
+status: "superseded"
 title: "Point out structural problems"
-updated_at: "2026-10-30T22:02:17.694136607+00:00"
+updated_at: "2026-11-05T05:35:47.206095096+00:00"
 ---
 
 ## Goal
@@ -41,3 +42,7 @@ Provisional: delivers `inspection`. A question ledger, a collision map and a sce
 
 - Thresholds (how long is "open too long") and how to keep the checks from being noisy enough to ignore.
 - Whether to also flag scenes whose story-time placement disagrees with the events they depict (`depicts` is descriptive, decision worldcrafter-ddha).
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

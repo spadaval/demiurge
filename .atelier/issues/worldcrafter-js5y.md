@@ -24,9 +24,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.143978603+00:00"
+status: "superseded"
 title: "Shift an event, and see what breaks"
-updated_at: "2026-10-31T03:23:43.497491205+00:00"
+updated_at: "2026-11-05T05:35:47.143978603+00:00"
 ---
 
 ## Goal
@@ -46,3 +47,7 @@ Provisional: delivers the rest of `rework`. A timeline view shows events and sce
 ## Notes
 
 - 2026-10-30 [note] 2026-10-30: written for the app-first plan and stale until it's re-planned from the verdict in worldcrafter-i2uz (decision worldcrafter-2y4g). It may assume drive editing and a focus view exist in the app; they don't yet.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

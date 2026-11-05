@@ -26,9 +26,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.237336073+00:00"
+status: "superseded"
 title: "Attach and draft prose"
-updated_at: "2026-10-30T22:02:17.682991261+00:00"
+updated_at: "2026-11-05T05:35:47.237336073+00:00"
 ---
 
 ## Goal
@@ -43,3 +44,7 @@ Provisional: delivers `anchored-prose`. Drafting a beat assembles context from t
 
 - How the existing generation context (S4: document window, entity cards, pins) combines with structure context.
 - What counts as a change that makes a passage stale (any edit to a beat, or only to its summary, drives and questions).
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

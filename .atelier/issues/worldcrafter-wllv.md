@@ -18,9 +18,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:46.965131619+00:00"
+status: "superseded"
 title: "Manuscript view and arrangement checks"
-updated_at: "2026-10-30T22:08:53.336792074+00:00"
+updated_at: "2026-11-05T05:35:46.965131619+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ The manuscript is a view assembled from the arrangement, and moving scenes shows
 ## Context
 
 `app/src/time/commands.ts` (`timelineProblems`), `app/src/time/chronology.ts` (`compileChronology`), `app/src/outline/outline.ts` (`moveScene`, `readingOrder`). Note R7 on worldcrafter-lhh3 describes outline and constraint contradictions after a reorder.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

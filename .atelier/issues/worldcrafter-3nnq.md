@@ -34,9 +34,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.112822114+00:00"
+status: "superseded"
 title: "See the whole story, and work at any level"
-updated_at: "2026-10-31T03:23:43.508603536+00:00"
+updated_at: "2026-11-05T05:35:47.112822114+00:00"
 ---
 
 ## Goal
@@ -54,3 +55,7 @@ Provisional: delivers `coarse-to-fine`. Ends with the judging panel's keep, chan
 ## Notes
 
 - 2026-10-30 [note] 2026-10-30: written for the app-first plan and stale until it's re-planned from the verdict in worldcrafter-i2uz (decision worldcrafter-2y4g). It may assume drive editing and a focus view exist in the app; they don't yet.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

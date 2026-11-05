@@ -28,9 +28,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.082828340+00:00"
+status: "superseded"
 title: "Sketch and rework on a screen"
-updated_at: "2026-11-04T23:08:00.425024494+00:00"
+updated_at: "2026-11-05T05:35:47.082828340+00:00"
 ---
 
 ## Goal
@@ -51,3 +52,7 @@ Provisional: delivers `on-screen`. Ends with the judging panel's keep, change or
 - 2026-10-31 [note] 2026-10-31: a bet like any other (decision worldcrafter-45an). Drop it if the verdicts show the best stories don't need a screen.
 - 2026-10-31 [note] 2026-10-31: correction to the note above: it comes out if the human decides, from the verdicts, that the best stories don't need a screen. The comparison can't show that by itself.
 - 2026-11-04 [note] 2026-11-04: correction to the notes above (decision worldcrafter-zybl): it comes out if a judging panel of agents decides, from the verdicts, that the best stories don't need a screen; Sumeet reviews after the fact.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

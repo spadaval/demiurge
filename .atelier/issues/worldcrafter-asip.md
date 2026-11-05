@@ -18,9 +18,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.022827298+00:00"
+status: "superseded"
 title: "Outline view: premise down to beats"
-updated_at: "2026-10-30T22:08:53.294259797+00:00"
+updated_at: "2026-11-05T05:35:47.022827298+00:00"
 ---
 
 ## Goal
@@ -41,3 +42,7 @@ Outline storage and commands in `app/src/outline/`, `StoredOutline` in `app/src/
 ## Context
 
 `app/src/outline/outline.ts` (`readingOrder`), `app/src/outline/store.ts` (`loadOutline` currently trusts the stored shape), `app/src/storage/types.ts` (`StoredOutline`).
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

@@ -26,9 +26,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.267711327+00:00"
+status: "superseded"
 title: "Rearrange the telling"
-updated_at: "2026-10-30T22:02:01.493202424+00:00"
+updated_at: "2026-11-05T05:35:47.267711327+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ Provisional: delivers `arrangement`, with a manuscript view and a way to move sc
 ## Unknowns
 
 - Which seam and order checks are worth showing, and how noisy they are.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

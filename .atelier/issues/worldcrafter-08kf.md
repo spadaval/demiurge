@@ -10,13 +10,13 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
-    id: "worldcrafter-z9qs"
+    id: "worldcrafter-3otd"
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Generate 'stays fast' timing tests fail under host load"
-updated_at: "2026-11-05T04:08:57.268939988+00:00"
+updated_at: "2026-11-05T05:35:51.409599508+00:00"
 ---
 
 ## Goal
@@ -30,3 +30,7 @@ updated_at: "2026-11-05T04:08:57.268939988+00:00"
 ## Context
 
 2026-11-04: with another mission's Android emulator holding the host at load 10-20, the full check failed on these tests in about half of runs (11-31 s against a 10 s limit) on branches that don't touch src/generate; run alone they pass at the same load. Evidence worldcrafter-ycr6, txw0, eton, 0x5i, dc3c.
+
+## Notes
+
+- 2026-11-05 [note] 2026-11-05: moved from worldcrafter-z9qs (superseded by decision worldcrafter-03rp) to the rebuild mission, since it is an app test bug.

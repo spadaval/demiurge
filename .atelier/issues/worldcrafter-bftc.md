@@ -21,9 +21,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:46.901725164+00:00"
+status: "superseded"
 title: "Structure editing UI: premise, scenes, beats, drives and questions"
-updated_at: "2026-10-30T22:08:53.315588407+00:00"
+updated_at: "2026-11-05T05:35:46.901725164+00:00"
 ---
 
 ## Goal
@@ -44,3 +45,7 @@ The writer can build and change the structure in the app, without prose: set the
 ## Context
 
 Commands and derivations from worldcrafter-cly1, worldcrafter-y2y2 and worldcrafter-asip. Routes: `app/src/app/router.tsx`.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

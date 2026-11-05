@@ -18,9 +18,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:46.994670436+00:00"
+status: "superseded"
 title: "Weave grid: scenes against questions and drives"
-updated_at: "2026-10-30T22:08:53.304917535+00:00"
+updated_at: "2026-11-05T05:35:46.994670436+00:00"
 ---
 
 ## Goal
@@ -40,3 +41,7 @@ Derivation only, in `app/src/story/`. No UI.
 ## Context
 
 Records and commands from worldcrafter-8tbh, worldcrafter-cly1 and worldcrafter-y2y2. `readingOrder` in `app/src/outline/outline.ts`.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

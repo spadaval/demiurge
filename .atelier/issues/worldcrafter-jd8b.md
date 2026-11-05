@@ -21,9 +21,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:46.932665431+00:00"
+status: "superseded"
 title: "Passages: anchor blocks to beats and reorder passages"
-updated_at: "2026-10-30T22:08:53.347217929+00:00"
+updated_at: "2026-11-05T05:35:46.932665431+00:00"
 ---
 
 ## Goal
@@ -102,3 +103,7 @@ Spike worldcrafter-4vxp; the design and its evidence are in `docs/rebuild/data-m
 - 2026-10-30 [note] Deferred from review of spike worldcrafter-4vxp: snapshot restore isn't built, but when it is, a restored document brings back blocks whose anchors were pruned on open. They are then treated as new and fall back by position, so whoever builds restore must restore or rebuild the passage_anchors record with the content.
 - 2026-10-30 [note] 2026-10-30 from review of the anchor design. For the worker: annotations.load fails with not_found when a scene has no record, and openDocument drops the tab on not_found (workspace.ts), so handle 'no record' inside the session. Deferred: the snapshot restore note still says restored blocks fall back by position; if restore reopens the session they become null instead. Correct it when restore is built; restoring the record with the content still stands. Accepted, no action: deleting a block before any record exists, making the first anchor command, then undoing the delete brings the block back unmapped, so it takes the anchor of the block before it. Order stays valid and the writer can re-anchor.
 - 2026-10-30 [note] 2026-10-30 replan: moved to worldcrafter-j8pr, because abstract rework doesn't need passages. Design stands. The orphaned-record note first left on worldcrafter-cly1 also applies here: delete a document's passage_anchors annotation where the scene or document is deleted.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

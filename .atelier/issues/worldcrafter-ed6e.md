@@ -24,9 +24,10 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:47.174135140+00:00"
+status: "superseded"
 title: "Name threads and trace arcs"
-updated_at: "2026-10-30T22:02:17.705775755+00:00"
+updated_at: "2026-11-05T05:35:47.174135140+00:00"
 ---
 
 ## Goal
@@ -41,3 +42,7 @@ Provisional: delivers `lenses`. Threads appear as weave-grid rows; an arc view t
 
 - Whether arcs need time-indexed drives (strategy, Risks).
 - How proposals are reviewed without talk pages, which are not in this mission.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.

@@ -15,9 +15,10 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "backlog"
+closed_at: "2026-11-05T05:35:46.836326218+00:00"
+status: "superseded"
 title: "Enter a story: characters, scenes, drives, events and their links"
-updated_at: "2026-10-31T02:17:09.203856959+00:00"
+updated_at: "2026-11-05T05:35:46.836326218+00:00"
 ---
 
 ## Goal
@@ -42,3 +43,7 @@ Commands from worldcrafter-cly1. `app/src/world/store.ts` (`attachEntry`), `app/
 ## Notes
 
 - 2026-10-30 [note] 2026-10-30: moved to worldcrafter-frqk after decision worldcrafter-2y4g. Rewrite this when the screen increment is planned.
+
+## Close Reason
+
+Obsolete: decision worldcrafter-03rp ended the typed-model bet after two blind comparisons favoured plain notes (worldcrafter-i2uz change, worldcrafter-iu6l drop). This was written for the typed model; what follows is mission worldcrafter-p3k7 (docs/strategies/notes-first.md). Evidence and history kept.
