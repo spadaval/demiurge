@@ -1,0 +1,40 @@
+[
+  {
+    "sceneId": "the-witness",
+    "title": "The Witness",
+    "position": 19,
+    "beats": 37,
+    "how": "chosen",
+    "reason": "Interesting turn (reveal): the Register names Odile as the Witness, the largest part; chosen by the orchestrator from the outline for being the story's central reveal, early-middle of the arc (beat 19 of 37).",
+    "chosenAt": "2026-11-05T08:52:42.091Z"
+  },
+  {
+    "sceneId": "one-exact-act",
+    "title": "One Exact Act",
+    "position": 31,
+    "beats": 37,
+    "how": "chosen",
+    "reason": "Interesting turn (cost paid): Twelve-Pence sells all nine parts to buy one exact act and is gone; chosen by the orchestrator as the clearest cost in the outline, late in the arc (beat 31 of 37).",
+    "chosenAt": "2026-11-05T08:52:42.142Z"
+  },
+  {
+    "sceneId": "coldharbour",
+    "title": "Coldharbour Ferry",
+    "position": 4,
+    "beats": 37,
+    "how": "random",
+    "reason": "Drawn uniformly from the 35 beats not already chosen, with seed 20261105 (mulberry32).",
+    "seed": 20261105,
+    "chosenAt": "2026-11-05T08:52:42.198Z"
+  },
+  {
+    "sceneId": "punch-or-fire",
+    "title": "Punch or Fire",
+    "position": 1,
+    "beats": 37,
+    "how": "random",
+    "reason": "Drawn uniformly from the 34 beats not already chosen, with seed 20261106 (mulberry32).",
+    "seed": 20261106,
+    "chosenAt": "2026-11-05T08:52:49.168Z"
+  }
+]
