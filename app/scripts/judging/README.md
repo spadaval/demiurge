@@ -57,6 +57,12 @@ Both rubric copies come from
 `git show <commit>:docs/verdicts/comparison-rubric.md`, never the working
 tree.
 
+A session may read its run dir, plus the files Claude Code itself saved its
+large tool results to, in the sandbox's own fresh home under
+`~/.claude/projects/<the run dir's slug>/`, as those tool results name them.
+Text that `cat` writes to a file from a heredoc (`cat > part1.md <<'EOF'`)
+isn't checked as commands or paths; the rest of the command is.
+
 A run fails, in `STATUS`, if claude exits non-zero or times out, the
 transcript check finds anything outside the run dir, any model other than
 the judge's answered (including Claude Code's fallback when a model's
@@ -87,6 +93,13 @@ bun scripts/judging/panel.ts part2 <root> <opus|sonnet|fable|all> --rubric-commi
 
 # Replace one failed run, keeping the failed one beside it.
 bun scripts/judging/panel.ts part1 <root> <judge> --rubric-commit <sha> --replacement
+
+# Re-run the checks on a finished part's saved transcript and files, after a
+# fix to the checks. Keeps the first STATUS as STATUS.original, rewrites STATUS
+# with the result and the commit, and writes recheck.json. Refuses with
+# uncommitted changes to the runner or the checks, and for a part whose
+# runner failed or was interrupted.
+bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2>
 
 # The verdict, from the three Part 2 reports; also writes <root>/judging/verdict.md.
 bun scripts/judging/panel.ts verdict <root>

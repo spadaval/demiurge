@@ -21,6 +21,7 @@ import {
   JUDGE_NAMES,
   JUDGES,
   type Judge,
+  judgeTranscript,
   makeRunDir,
   markRecorded,
   modelProblems,
@@ -28,9 +29,11 @@ import {
   type Part,
   parseVerdict,
   partDir,
+  persistedOutputs,
   postSessionProblems,
   prompt,
   readRecorded,
+  recheck,
   rubricAt,
   rubricFor,
   runDirSources,
@@ -481,7 +484,7 @@ describe("post-session checks", () => {
           read: [runDir],
           write: [runDir],
         }),
-        runDir,
+        filesDir: runDir,
         inputs,
       });
   };
@@ -548,5 +551,169 @@ describe("a runner failure", () => {
     );
     expect(record.problems).toHaveLength(1);
     expect(judgeDirs()).toBe(before);
+  });
+});
+
+/** A transcript line: a tool use, or its result. */
+const use = (id: string, name: string, input: Record<string, unknown>) =>
+  JSON.stringify({
+    type: "assistant",
+    message: {
+      model: "claude-opus-5-5",
+      content: [{ type: "tool_use", id, name, input }],
+    },
+  });
+const result = (id: string, content: unknown) =>
+  JSON.stringify({
+    type: "user",
+    message: {
+      content: [{ type: "tool_result", tool_use_id: id, content }],
+    },
+  });
+
+describe("a session's own saved tool results", () => {
+  const runDir = "/tmp/judge.Dpoxx8";
+  const own =
+    "/home/writer/.claude/projects/-tmp-judge-Dpoxx8/47520b9b/tool-results/b6l1z88u1.txt";
+  const saved = (path: string) =>
+    `<persisted-output>\nOutput too large (42.4KB). Full output saved to: ${path}\n\nPreview (first 2KB):\n...`;
+  const flagged = (lines: string[]) =>
+    judgeTranscript(lines.join("\n"), runDir).outside.map((f) => f.detail);
+
+  test("may be read back, as a string or a list of text parts", () => {
+    const other = own.replace("b6l1z88u1", "bcr6ayvr5");
+    const lines = [
+      use("1", "Bash", { command: `cd ${runDir}/packets; cat a.md` }),
+      result("1", saved(own)),
+      use("2", "Bash", { command: `cd ${runDir}/packets; cat b.md` }),
+      result("2", [{ type: "text", text: saved(other) }]),
+      use("3", "Read", { file_path: own }),
+      use("4", "Read", { file_path: other }),
+    ];
+    expect(persistedOutputs(lines.join("\n"), runDir)).toEqual([own, other]);
+    expect(flagged(lines)).toEqual([]);
+  });
+  test("nothing else in the sandbox's home may", () => {
+    expect(
+      flagged([
+        result("1", saved(own)),
+        use("2", "Read", { file_path: own.replace("b6l1z88u1", "unnamed") }),
+        use("3", "Read", { file_path: "/home/writer/.claude.json" }),
+      ]),
+    ).toEqual([
+      own.replace("b6l1z88u1", "unnamed"),
+      "/home/writer/.claude.json",
+    ]);
+  });
+  test("a path named outside this run dir's project, or by the session itself, doesn't count", () => {
+    const elsewhere = own.replace("-tmp-judge-Dpoxx8", "-tmp-judge-other");
+    const lines = [
+      result("1", saved(elsewhere)),
+      result("2", saved(`${own.replace("b6l1z88u1.txt", "")}../../x`)),
+      // Text the session wrote, not a tool result.
+      use("3", "Bash", { command: `echo '${saved("/home/writer/x")}'` }),
+      result("4", `Full output saved to: ${own}`),
+    ];
+    expect(persistedOutputs(lines.join("\n"), runDir)).toEqual([]);
+  });
+});
+
+describe("recheck", () => {
+  const model = JUDGES.fable;
+  const runDir = "/tmp/judge.8Q20ow";
+  const heredoc = "cat > part1.md <<'EOF'\n(A: Lot Nine / Tavik)\nEOF";
+  const session = (command: string, answeredBy: string = model) =>
+    [
+      JSON.stringify({ type: "system", subtype: "init", model }),
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          model: answeredBy,
+          content: [
+            { type: "tool_use", id: "1", name: "Bash", input: { command } },
+          ],
+        },
+      }),
+    ].join("\n");
+  const jsonl = session(heredoc);
+  /** A part1 flagged by the old check, with its saved run dir copy. */
+  function flaggedPart(): string {
+    const root = material();
+    const dir = partDir(root, "fable", "part1");
+    write(join(dir, "files/rubric.md"), "rubric\n");
+    write(join(dir, "files/part1.md"), "report\n");
+    write(join(dir, "part1.md"), "report\n");
+    write(join(dir, "transcript.jsonl"), jsonl);
+    write(
+      join(dir, "STATUS"),
+      `failed\n- outside the run dir: Bash: ${heredoc}\n`,
+    );
+    write(
+      join(dir, "run.json"),
+      JSON.stringify({
+        judge: "fable",
+        part: "part1",
+        model,
+        runDir,
+        exitCode: 0,
+        inputs: { "rubric.md": sha256Text("rubric\n") },
+      }),
+    );
+    return root;
+  }
+
+  test("passes a false positive, keeping the first STATUS and naming the commit", () => {
+    const root = flaggedPart();
+    const dir = partDir(root, "fable", "part1");
+    const first = readFileSync(join(dir, "STATUS"), "utf8");
+    expect(recheck(root, "fable", "part1", "abc123")).toEqual([]);
+    expect(statusOf(dir)).toBe("ok");
+    expect(readFileSync(join(dir, "STATUS"), "utf8")).toContain(
+      "by `panel.ts recheck` at commit abc123",
+    );
+    expect(readFileSync(join(dir, "STATUS.original"), "utf8")).toBe(first);
+    // A second recheck keeps the first STATUS, not the first recheck's.
+    recheck(root, "fable", "part1", "def456");
+    expect(readFileSync(join(dir, "STATUS.original"), "utf8")).toBe(first);
+    expect(readFileSync(join(dir, "STATUS"), "utf8")).toContain("def456");
+  });
+  test("still fails what the saved files show is wrong", () => {
+    const root = flaggedPart();
+    const dir = partDir(root, "fable", "part1");
+    writeFileSync(join(dir, "files/rubric.md"), "changed\n");
+    writeFileSync(join(dir, "part1.md"), "edited afterwards\n");
+    expect(recheck(root, "fable", "part1", "abc123")).toEqual([
+      "rubric.md changed during the session",
+      "part1.md differs from the one the session left",
+    ]);
+    expect(statusOf(dir)).toBe("failed");
+  });
+  test("still fails a read outside the run dir, and another model", () => {
+    const root = flaggedPart();
+    const dir = partDir(root, "fable", "part1");
+    writeFileSync(
+      join(dir, "transcript.jsonl"),
+      session(`${heredoc}\ncat /etc/passwd`, "claude-opus-4-8"),
+    );
+    const problems = recheck(root, "fable", "part1", "abc123");
+    expect(problems[0]).toBe("answered by claude-opus-4-8");
+    expect(problems[1]).toStartWith(
+      "outside the run dir: Bash: cat > part1.md",
+    );
+  });
+  test("refuses a part that never finished, or whose runner failed", () => {
+    const root = flaggedPart();
+    const dir = partDir(root, "fable", "part1");
+    writeFileSync(join(dir, "STATUS"), "running\n");
+    expect(() => recheck(root, "fable", "part1", "abc123")).toThrow(
+      "no finished STATUS",
+    );
+    writeFileSync(
+      join(dir, "STATUS"),
+      "failed\n- the runner was interrupted by SIGTERM\n",
+    );
+    expect(() => recheck(root, "fable", "part1", "abc123")).toThrow(
+      "replace it instead",
+    );
   });
 });

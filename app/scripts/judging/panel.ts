@@ -10,6 +10,7 @@
  *   bun scripts/judging/panel.ts part1 <root> <judge|all> --rubric-commit <sha> [--replacement]
  *   bun scripts/judging/panel.ts mark-recorded <root> <judge> <evidence-id>
  *   bun scripts/judging/panel.ts part2 <root> <judge|all> --rubric-commit <sha> [--replacement]
+ *   bun scripts/judging/panel.ts recheck <root> <judge> <part1|part2>
  *   bun scripts/judging/panel.ts verdict <root>
  */
 
@@ -34,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSession } from "../comparison/comparison";
 import {
   ensureToken,
+  SANDBOX_HOME,
   sandboxArgs,
   type TokenSource,
   tokenExpiresAt,
@@ -547,14 +549,88 @@ export function readRun(dir: string): RunRecord {
   return JSON.parse(readFileSync(join(dir, "run.json"), "utf8")) as RunRecord;
 }
 
-/** What a finished session's run dir and transcript show went wrong. */
+/**
+ * Files Claude Code itself saved this session's large tool results to,
+ * inside the sandbox's own fresh home, as its tool results name them
+ * ("<persisted-output> ... Full output saved to: <path>"). Only paths under
+ * `~/.claude/projects/<the run dir's slug>/` count.
+ */
+export function persistedOutputs(jsonl: string, runDir: string): string[] {
+  const projects = `${SANDBOX_HOME}/.claude/projects/${runDir.replace(/[^A-Za-z0-9]/g, "-")}/`;
+  const paths = new Set<string>();
+  for (const line of jsonl.split("\n")) {
+    if (!line.includes("<persisted-output>")) continue;
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof event !== "object" || event === null) continue;
+    if (Reflect.get(event, "type") !== "user") continue;
+    const message: unknown = Reflect.get(event, "message");
+    const content: unknown =
+      typeof message === "object" && message !== null
+        ? Reflect.get(message, "content")
+        : undefined;
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (typeof part !== "object" || part === null) continue;
+      if (Reflect.get(part, "type") !== "tool_result") continue;
+      const raw: unknown = Reflect.get(part, "content");
+      const texts = Array.isArray(raw)
+        ? raw.map((x: unknown) =>
+            typeof x === "object" && x !== null ? Reflect.get(x, "text") : x,
+          )
+        : [raw];
+      for (const text of texts) {
+        if (typeof text !== "string" || !text.includes("<persisted-output>")) {
+          continue;
+        }
+        for (const match of text.matchAll(/Full output saved to: (\S+)/g)) {
+          const path = match[1] ?? "";
+          if (path.startsWith(projects) && !path.includes("..")) {
+            paths.add(path);
+          }
+        }
+      }
+    }
+  }
+  return [...paths];
+}
+
+/**
+ * The transcript check for a judge session: it may read its run dir and
+ * the files its own large tool results were saved to; it may write only
+ * its run dir.
+ */
+export function judgeTranscript(
+  jsonl: string,
+  runDir: string,
+): TranscriptSummary {
+  return checkTranscript(jsonl, runDir, {
+    read: [runDir, ...persistedOutputs(jsonl, runDir)],
+    write: [runDir],
+  });
+}
+
+/** A finding's detail, short enough for STATUS; run.json keeps it whole. */
+const brief = (detail: string) =>
+  detail.length > 300
+    ? `${detail.slice(0, 300)}... (cut; whole in run.json)`
+    : detail;
+
+/**
+ * What a finished session shows went wrong. `filesDir` holds the run dir's
+ * files as the session left them: the run dir itself, or its saved copy.
+ */
 export function postSessionProblems({
   part,
   model,
   exitCode,
   jsonl,
   transcript,
-  runDir,
+  filesDir,
   inputs,
 }: {
   part: Part;
@@ -562,7 +638,7 @@ export function postSessionProblems({
   exitCode: number;
   jsonl: string;
   transcript: TranscriptSummary;
-  runDir: string;
+  filesDir: string;
   inputs: Record<string, string>;
 }): string[] {
   const problems: string[] = [];
@@ -578,15 +654,15 @@ export function postSessionProblems({
     );
   }
   for (const f of transcript.outside) {
-    problems.push(`outside the run dir: ${f.tool}: ${f.detail}`);
+    problems.push(`outside the run dir: ${f.tool}: ${brief(f.detail)}`);
   }
   for (const [path, hash] of Object.entries(inputs)) {
-    const now = join(runDir, path);
+    const now = join(filesDir, path);
     if (!existsSync(now) || sha256(now) !== hash) {
       problems.push(`${path} changed during the session`);
     }
   }
-  const output = join(runDir, OUTPUT[part]);
+  const output = join(filesDir, OUTPUT[part]);
   if (!existsSync(output) || readFileSync(output, "utf8").trim() === "") {
     problems.push(`${OUTPUT[part]} is missing or empty`);
   } else if (part === "part2") {
@@ -602,12 +678,10 @@ export function postSessionProblems({
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const writeStatus = (out: string, problems: readonly string[]) =>
+const writeStatus = (out: string, problems: readonly string[], note?: string) =>
   writeFileSync(
     join(out, "STATUS"),
-    problems.length === 0
-      ? "ok\n"
-      : `failed\n${problems.map((p) => `- ${p}`).join("\n")}\n`,
+    `${problems.length === 0 ? "ok" : "failed"}\n${problems.map((p) => `- ${p}\n`).join("")}${note === undefined ? "" : `${note}\n`}`,
   );
 
 /**
@@ -670,17 +744,14 @@ export async function runJudge(
       record.exitCode = exitCode;
       record.durationSeconds = Math.round((performance.now() - started) / 1000);
       const jsonl = readFileSync(join(out, "transcript.jsonl"), "utf8");
-      record.transcript = checkTranscript(jsonl, runDir, {
-        read: [runDir],
-        write: [runDir],
-      });
+      record.transcript = judgeTranscript(jsonl, runDir);
       record.problems = postSessionProblems({
         part,
         model,
         exitCode,
         jsonl,
         transcript: record.transcript,
-        runDir,
+        filesDir: runDir,
         inputs: record.inputs,
       });
       const output = join(runDir, OUTPUT[part]);
@@ -701,6 +772,73 @@ export async function runJudge(
     `[${judge} ${part}] exit ${record.exitCode ?? "none"}, ${record.durationSeconds ?? 0}s, ${record.problems.length === 0 ? "ok" : `FAILED: ${record.problems.join("; ")}`}`,
   );
   return record;
+}
+
+/**
+ * Re-runs the checks a finished part can redo from its saved files: the
+ * transcript check (as it stands now) and model check on the saved
+ * transcript, and the input hashes, report and verdict line on the saved
+ * copy of the run dir. Keeps the first STATUS as STATUS.original, rewrites
+ * STATUS with the result and a line naming the recheck and `commit`, and
+ * writes recheck.json. Refuses a part whose runner failed or was
+ * interrupted: there's nothing complete to recheck.
+ */
+export function recheck(
+  rootArg: string,
+  judge: Judge,
+  part: Part,
+  commit: string,
+): string[] {
+  const dir = partDir(resolve(rootArg), judge, part);
+  if (statusOf(dir) === undefined) {
+    throw new Error(`${dir} has no finished STATUS to recheck.`);
+  }
+  const original = join(
+    dir,
+    existsSync(join(dir, "STATUS.original")) ? "STATUS.original" : "STATUS",
+  );
+  if (readFileSync(original, "utf8").includes("- the runner ")) {
+    throw new Error(
+      `${dir}'s runner failed or was interrupted; replace it instead.`,
+    );
+  }
+  const run = readRun(dir);
+  const model = JUDGES[judge];
+  const jsonl = readFileSync(join(dir, "transcript.jsonl"), "utf8");
+  const transcript = judgeTranscript(jsonl, run.runDir);
+  const filesDir = join(dir, "files");
+  const problems =
+    run.exitCode === undefined
+      ? ["no exit code was recorded"]
+      : postSessionProblems({
+          part,
+          model,
+          exitCode: run.exitCode,
+          jsonl,
+          transcript,
+          filesDir,
+          inputs: run.inputs,
+        });
+  if (run.model !== model) problems.push(`run.json names model ${run.model}`);
+  const report = join(dir, OUTPUT[part]);
+  const left = join(filesDir, OUTPUT[part]);
+  if (
+    existsSync(left) &&
+    (!existsSync(report) || sha256(report) !== sha256(left))
+  ) {
+    problems.push(`${OUTPUT[part]} differs from the one the session left`);
+  }
+  if (!existsSync(join(dir, "STATUS.original"))) {
+    copyFileSync(join(dir, "STATUS"), join(dir, "STATUS.original"));
+  }
+  const at = new Date().toISOString();
+  writeJson(join(dir, "recheck.json"), { at, commit, problems, transcript });
+  writeStatus(
+    dir,
+    problems,
+    `Rechecked ${at} by \`panel.ts recheck\` at commit ${commit}; the first STATUS is kept in STATUS.original, and this recheck's details in recheck.json.`,
+  );
+  return problems;
 }
 
 /** This process's children: each session's `timeout`, while it runs. */
@@ -890,6 +1028,7 @@ const USAGE = `Usage:
   panel.ts part1 <root> <opus|sonnet|fable|all> --rubric-commit <sha> [--replacement]
   panel.ts mark-recorded <root> <judge> <evidence-id>
   panel.ts part2 <root> <opus|sonnet|fable|all> --rubric-commit <sha> [--replacement]
+  panel.ts recheck <root> <judge> <part1|part2>
   panel.ts verdict <root>`;
 
 export async function main(argv: string[]): Promise<void> {
@@ -933,6 +1072,32 @@ export async function main(argv: string[]): Promise<void> {
       }
       if (!isJudge(who)) break;
       markRecorded(resolve(root), who, evidenceId);
+      return;
+    }
+    case "recheck": {
+      const [root, who, which] = positional;
+      if (root === undefined || who === undefined || !isJudge(who)) break;
+      if (which !== "part1" && which !== "part2") break;
+      const dirty = must([
+        "git",
+        "status",
+        "--porcelain",
+        "--",
+        "app/scripts/judging",
+        "app/scripts/comparison",
+      ]).trim();
+      if (dirty !== "") {
+        throw new Error(`Commit these before rechecking:\n${dirty}`);
+      }
+      const commit = must(["git", "rev-parse", "HEAD"]).trim();
+      const problems = recheck(root, who, which, commit);
+      console.log(
+        readFileSync(
+          join(partDir(resolve(root), who, which), "STATUS"),
+          "utf8",
+        ),
+      );
+      if (problems.length > 0) process.exit(1);
       return;
     }
     case "verdict": {
