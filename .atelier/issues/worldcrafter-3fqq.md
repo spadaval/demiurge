@@ -3,6 +3,9 @@ created_at: "2026-11-05T09:13:32.711437369+00:00"
 id: "worldcrafter-3fqq"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-3fqq
 priority: "P1"
 relationships:
   blocks: []
@@ -24,7 +27,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 1 fixes: tool and skill, from the writer's transcript"
-updated_at: "2026-11-05T09:33:51.104350578+00:00"
+updated_at: "2026-11-05T09:35:16.543219841+00:00"
 ---
 
 ## Goal

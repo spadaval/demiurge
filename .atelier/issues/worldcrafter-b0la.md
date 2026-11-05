@@ -14,9 +14,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Cut CLI noise and friction (Round 1 reading 1, 4, 6, 7, 8, 10)"
-updated_at: "2026-11-05T09:13:32.748475981+00:00"
+updated_at: "2026-11-05T09:35:16.543221474+00:00"
 ---
 
 ## Goal
