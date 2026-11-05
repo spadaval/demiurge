@@ -14,7 +14,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "in_progress"
 title: "Render the story, not the links"
-updated_at: "2026-11-05T00:57:39.487801788+00:00"
+updated_at: "2026-11-05T01:05:21.730218757+00:00"
 ---
 
 ## Goal
@@ -33,3 +33,11 @@ The readable form says each thing once, so a sketch's length measures the story 
 ## Notes
 
 - 2026-11-04 [note] From review finding worldcrafter-4i9o: a working question must still show in the render as one line (the question, and that it's being weighed), so the judges can see alternatives were weighed; only its candidates drop out.
+- 2026-11-04 [decision] A gap constraint counts as satisfied by positions when, for two events placed with equal precision, their starts are the stated amount apart (give or take its tolerance, default half a unit); otherwise every gap the positions allow must fit. Order (before/after/during/simultaneous) counts as satisfied only when positions alone, with every constraint and placement removed, entail it
+  Reason: Year positions are half-open spans, so the engine's own gap range for 1203 and 1213 is 9 to 11 and never 'settles' ten years strictly; writers mean year arithmetic. Checking against positions only, not other constraints, keeps two constraints that imply each other from both disappearing
+  Rejected: Hide any constraint the engine reports no inconsistency for: it hides gaps that wide positions don't settle
+  Rejected: Hide constraints implied by the rest of the chronology: mutually implied constraints would both vanish
+- 2026-11-04 [decision] Elsewhere than under its actor, a drive is named by its actor and the first five words of its want, growing to at most eight until it differs from that actor's other wants; a decided question prints as one line, question then chosen answer, without what it concerns
+  Reason: Five words keep a relation (verb + name + want words) within the eight-words-per-link budget while staying readable; eight would make a relation cost up to eleven. The question stays so the answer has meaning
+  Rejected: Always eight words
+  Rejected: Actor name alone when the actor has one drive (the Done when asks for the want's first words)
