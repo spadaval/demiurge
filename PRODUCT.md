@@ -64,7 +64,7 @@ There are no users, testimonials, metrics or sample worlds yet. Don't invent any
 
 1. **The best story wins.** Whatever gets to the best story is what we build, whether that's a screen, a database or an agent. An independent panel of judges decides what's good, and Sumeet can overturn it (decision worldcrafter-zybl).
 2. **Stories stay fluid.** Anything can be reworked at any time, in any order, and unfinished or contradictory is a normal state for a story to be in.
-3. **Change things where they apply.** Work happens at the highest level where a change applies. Prose is the finish, anchored to the structure rather than compiled from it.
+3. **Change things where they apply.** Work happens at the highest level where a change applies, so a change to a motive or an event is made there and followed through, not patched sentence by sentence.
 4. **The AI is an accountable teammate.** It can do the bookkeeping, drive a whole sketch or write the prose, and it signs its work. In the app it stays quiet and doesn't compete for attention.
 5. **The writer stays in control.** Context is visible and editable, AI changes are reversible, and the writer's corrections always win.
 6. **Results decide the form.** What holds the story (notes, a model, an app) is whatever judged runs show works best; the typed model lost to plain notes (decision worldcrafter-03rp). World and story shape each other both ways.
