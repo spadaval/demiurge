@@ -735,9 +735,10 @@ describe("transcript check: sed and perl scripts aren't paths", () => {
       "sed --expression='s/,//' part1.md",
       "sed -i.bak 'y/abc/,,,/' part1.md",
       "sed -E -n '/^, /p' part1.md | head",
+      "sed -n '/a, /,/b, /p' part1.md",
+      "sed 's|a,//|b|; y/abc/,,,/' part1.md",
+      "sed '\\,x,//,d' part1.md",
       "sed -ne 's/a,//p' part1.md",
-      "perl -pi -e 's/a, //g' part1.md",
-      "perl -ne 'print if /, //' part1.md",
     ]) {
       expect([command, outside(command)]).toEqual([command, []]);
     }
@@ -753,6 +754,32 @@ describe("transcript check: sed and perl scripts aren't paths", () => {
     expect(outside("perl -pe 's/a//' /etc/passwd")).toEqual(["Bash"]);
     // A perl script file isn't an inline script.
     expect(outside("perl /etc/x.pl part1.md")).toEqual(["Bash"]);
+  });
+  test("sed commands and flags that read, write or run stay checked (worldcrafter-tdxc)", () => {
+    for (const command of [
+      "sed '1r /etc/shadow' part1.md",
+      "sed 1r /etc/shadow part1.md",
+      "sed -e '1r /etc/shadow' part1.md",
+      "sed --expression='1r /etc/shadow' part1.md",
+      "sed '$R /etc/shadow' part1.md",
+      "sed 's/a/b/w /etc/x' part1.md",
+      "sed 's/a/b/gw /etc/x' part1.md",
+      "sed -n 'w /tmp/out' part1.md",
+      "sed -n '/x/W /tmp/out' part1.md",
+      "sed '1e cat /etc/shadow' part1.md",
+      "sed 's/x/cat \\/etc\\/shadow/e' part1.md",
+      "sed 's/a/b/; 1r /etc/shadow' part1.md",
+      "sed -e 's/a,//' -e '1r /etc/shadow' part1.md",
+      "sed '/a/,/b/{\n r /etc/shadow\n}' part1.md",
+    ]) {
+      expect([command, outside(command)]).toEqual([command, ["Bash"]]);
+    }
+  });
+  test("perl scripts aren't blanked at all", () => {
+    expect(outside(`perl -e 'open F, "/etc/shadow"; print <F>'`)).toEqual([
+      "Bash",
+    ]);
+    expect(outside(`perl -e 'system("cat /etc/shadow")'`)).toEqual(["Bash"]);
   });
   test("a bare // elsewhere still counts as the root", () => {
     expect(shellPaths("ls //")).toEqual(["//"]);

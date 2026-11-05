@@ -352,18 +352,18 @@ function heredocsOpened(line: string): Heredoc[] {
 }
 
 /**
- * The command with each inline sed or perl script blanked (`''`), so its
- * substitutions and addresses (`s/a,//`, `/re/p`, `y/a/b/`) aren't read as
- * paths. Narrow, by each tool's grammar: sed's first operand is the script
- * unless `-e`/`--expression` (or `-f`/`--file`, a script file) gives it;
- * perl's script follows a flag ending in `e` (`-e`, `-pe`, `-ne`). Option
- * arguments such as `-f <file>`, and every operand after the script, the
- * files it reads, stay as they were.
+ * The command with the regex and replacement text of each inline sed script
+ * blanked, so substitutions and addresses (`s/a,//`, `/re/p`, `y/a/b/`)
+ * aren't read as paths. Only that text is blanked: sed's `r`, `R`, `w`,
+ * `W` and `e` commands, the `w` flag's file, a replacement the `e` flag
+ * runs, and the files sed reads all stay checked. Which word is the script
+ * follows sed's grammar: its first operand unless `-e`/`--expression` (or
+ * `-f`/`--file`, a script file, which stays checked) gives it. Perl scripts
+ * aren't blanked: they can open files and run commands anywhere in them.
  */
 export function withoutInlineScripts(command: string): string {
-  const spans: [number, number][] = [];
-  for (const match of command.matchAll(/(^|[\s;&|(`])(sed|perl)(?=[ \t])/g)) {
-    const tool = match[2];
+  const scripts: [number, number][] = [];
+  for (const match of command.matchAll(/(^|[\s;&|(`])sed(?=[ \t])/g)) {
     let i = (match.index ?? 0) + match[0].length;
     let scriptNext = false;
     // The next word is an option's argument, such as `-f <file>`: kept.
@@ -377,41 +377,26 @@ export function withoutInlineScripts(command: string): string {
       i = wordEnd(command, i);
       const word = command.slice(start, i);
       if (scriptNext) {
-        spans.push([start, i]);
+        scripts.push([start, i]);
         scriptNext = false;
         scriptTaken = true;
       } else if (argumentNext) {
         argumentNext = false;
       } else if (word.startsWith("-")) {
-        if (
-          tool === "sed" &&
-          (/^-[A-Za-z]*e$/.test(word) || word === "--expression")
-        ) {
+        if (/^-[A-Za-z]*e$/.test(word) || word === "--expression") {
           scriptNext = explicit = true;
-        } else if (tool === "sed" && word.startsWith("--expression=")) {
-          spans.push([start + "--expression=".length, i]);
+        } else if (word.startsWith("--expression=")) {
+          scripts.push([start + "--expression=".length, i]);
           explicit = true;
-        } else if (
-          tool === "sed" &&
-          (/^-[A-Za-z]*f$/.test(word) || word === "--file")
-        ) {
-          // The script is in a file, which stays checked.
+        } else if (/^-[A-Za-z]*f$/.test(word) || word === "--file") {
           argumentNext = explicit = true;
-        } else if (
-          tool === "sed" &&
-          (word.startsWith("--file=") || /^-[A-Za-z]*f./.test(word))
-        ) {
+        } else if (word.startsWith("--file=") || /^-[A-Za-z]*f./.test(word)) {
           explicit = true;
-        } else if (
-          tool === "sed" &&
-          (word === "-l" || word === "--line-length")
-        ) {
+        } else if (word === "-l" || word === "--line-length") {
           argumentNext = true;
-        } else if (tool === "perl" && /^-[A-Za-z]*[eE]$/.test(word)) {
-          scriptNext = explicit = true;
         }
-      } else if (tool === "sed" && !explicit && !scriptTaken) {
-        spans.push([start, i]);
+      } else if (!explicit && !scriptTaken) {
+        scripts.push([start, i]);
         scriptTaken = true;
       } else {
         // The first operand: the files follow, and stay checked.
@@ -420,10 +405,102 @@ export function withoutInlineScripts(command: string): string {
     }
   }
   let out = command;
-  for (const [start, end] of spans.reverse()) {
-    out = `${out.slice(0, start)}''${out.slice(end)}`;
+  for (const [start, end] of scripts.reverse()) {
+    out = `${out.slice(0, start)}${blankSedWord(out.slice(start, end))}${out.slice(end)}`;
   }
   return out;
+}
+
+/**
+ * A sed script word with its regex and replacement text blanked. A word
+ * that is one quoted string, or has no quotes, is read as a script; any
+ * other is left whole, which errs toward checking it.
+ */
+function blankSedWord(word: string): string {
+  const quoted = /^'[^']*'$/.test(word) || /^"(?:[^"\\]|\\.)*"$/.test(word);
+  if (quoted) return `${word[0]}${blankSedText(word.slice(1, -1))}${word[0]}`;
+  return /['"]/.test(word) ? word : blankSedText(word);
+}
+
+/**
+ * A sed script with the delimiters and text of each `s` and `y` command and
+ * each regex address replaced by `x`. A command that takes the rest of its
+ * line (`r`, `w`, `e`, `a`, a label, ...) ends the blanking for that line,
+ * so its argument, and anything after it on the line, stays as it was.
+ */
+export function blankSedText(script: string): string {
+  const blank: [number, number][] = [];
+  // Backslashes escaping the delimiter in a replacement the e flag runs.
+  const escapes: number[] = [];
+  const n = script.length;
+  /** Past the closing delimiter of a part that opens at `open`. */
+  const past = (open: number): number => {
+    const d = script[open];
+    let j = open + 1;
+    while (j < n && script[j] !== d && script[j] !== "\n") {
+      j += script[j] === "\\" ? 2 : 1;
+    }
+    return Math.min(j + 1, n);
+  };
+  const lineEnd = (from: number): number => {
+    const j = script.indexOf("\n", from);
+    return j === -1 ? n : j;
+  };
+  let i = 0;
+  while (i < n) {
+    const c = script[i] ?? "";
+    if (c === "/") {
+      // A regex address, and its I or M flags.
+      const end = past(i);
+      blank.push([i, end]);
+      i = end;
+    } else if (c === "\\" && i + 1 < n && script[i + 1] !== "\n") {
+      // A regex address with its own delimiter: \cREGEXc.
+      const end = past(i + 1);
+      blank.push([i, end]);
+      i = end;
+    } else if (
+      (c === "s" || c === "y") &&
+      /[^\s\\]/.test(script[i + 1] ?? " ")
+    ) {
+      const middle = past(i + 1) - 1;
+      const end = past(middle);
+      let j = end;
+      let flags = "";
+      if (c === "s") {
+        while (j < n && /[gpiImMe0-9w]/.test(script[j] ?? "")) {
+          flags += script[j];
+          j++;
+          if (flags.endsWith("w")) break;
+        }
+      }
+      // With the e flag, the replacement is run as a command: keep it, and
+      // show the paths its escaped delimiters spell (`\/etc\/shadow`).
+      if (flags.includes("e")) {
+        blank.push([i + 1, middle + 1]);
+        for (let k = middle + 1; k < end - 1; k++) {
+          if (script[k] === "\\" && script[k + 1] === script[i + 1]) {
+            escapes.push(k);
+          }
+        }
+      } else {
+        blank.push([i + 1, end]);
+      }
+      i = flags.includes("w") ? lineEnd(j) : j;
+    } else if (/[aicrRwWeqQlLbtTv:#F]/.test(c)) {
+      i = lineEnd(i + 1);
+    } else {
+      // Line numbers, `,`, `!`, `{`, `}`, `;`, spaces, and one-letter
+      // commands such as p or d.
+      i++;
+    }
+  }
+  const chars = [...script];
+  for (const [from, to] of blank) {
+    for (let k = from; k < to; k++) if (chars[k] !== "\n") chars[k] = "x";
+  }
+  for (const k of escapes) chars[k] = " ";
+  return chars.join("");
 }
 
 /** Where a shell word starting at `start` ends, through any quotes in it. */
