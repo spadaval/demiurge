@@ -10,6 +10,9 @@ relationships:
   attachments: []
   relates:
   - kind: "issue"
+    id: "worldcrafter-7b2r"
+    type: "blocked_by"
+  - kind: "issue"
     id: "worldcrafter-b0pg"
     type: "blocked_by"
   - kind: "issue"

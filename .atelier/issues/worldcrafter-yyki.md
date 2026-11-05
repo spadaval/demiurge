@@ -25,7 +25,8 @@ Remove the last small frictions the reading found.
 
 ## Done when
 
-- Traces leave out records rewritten earlier in the same command line and the old target of a changed knowledge record.
+- Traces leave out the old target of a changed knowledge record (matched against its own text). A record rewritten earlier in the same command line is left out only when its sole evidence is shared words; it stays when its text names the changed record or states its old year, value or a span (keeping review finding worldcrafter-gu8c's repro as a passing test).
+- The --precision free text no longer prints as if it were the position (Round 4 reading item 9; finding worldcrafter-qs5e).
 - span and reader-order give ranges for month-precision ends and year-range events, as single years do.
 - set-scene-pressures, set-scene-actors and set-scene-events accept --add and --remove, as set-scene-links does.
 - Tests; --help; bun run check passes.

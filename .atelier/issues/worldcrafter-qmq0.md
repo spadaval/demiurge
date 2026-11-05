@@ -8,6 +8,8 @@ relationships:
   blocks: []
   children:
   - kind: "issue"
+    id: "worldcrafter-7b2r"
+  - kind: "issue"
     id: "worldcrafter-b0pg"
   - kind: "issue"
     id: "worldcrafter-l55e"
@@ -22,12 +24,12 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 4 fixes: retold events, opening counts, viewpoint marks"
-updated_at: "2026-11-05T16:59:56.040527986+00:00"
+updated_at: "2026-11-05T17:02:28.300558648+00:00"
 ---
 
 ## Goal
 
-Fix what Round 4's reading (docs/rounds/round-4/reading.md, ranked issues 1-6) found, before Round 5, the last round the direction allows. Issues 7-10 need no action. Don't gold-plate.
+Fix what Round 4's reading (docs/rounds/round-4/reading.md, ranked issues 1-6) found, before Round 5, the last round the direction allows. Issues 7, 8 and 10 need no action; item 9 is in worldcrafter-yyki. A killed runner left its sandboxed writer running (finding worldcrafter-gbh1); that is fixed in a runner child. Don't gold-plate.
 
 ## Done when
 

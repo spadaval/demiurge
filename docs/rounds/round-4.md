@@ -144,7 +144,7 @@ on scene 4, the second-to-last beat.
 
 - **Best**, by agreement: scene 1, "They gave my mother a shoe." (fable,
   grok); scene 3, Mother Sluice's last instructions about the loose third
-  step (sonnet, fable, grok).
+  step (opus, fable, grok).
 - **Worst:** as in every round, narration explaining what the scene showed:
   "*Not yet* had come out instead, which was worse, because it was a promise"
   (scene 1, three judges); "*AGAIN*, said Bellwether, very softly, which from
