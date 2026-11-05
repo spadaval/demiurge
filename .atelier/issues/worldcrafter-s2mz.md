@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:02.483395718+00:00"
 id: "worldcrafter-s2mz"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-s2mz
 priority: "P1"
 relationships:
   blocks: []
@@ -17,9 +20,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "First pass at change tracing on content"
-updated_at: "2026-11-05T07:43:06.863448669+00:00"
+updated_at: "2026-11-05T07:58:38.297441159+00:00"
 ---
 
 ## Goal
