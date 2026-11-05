@@ -11,15 +11,12 @@ relationships:
     id: "worldcrafter-8agg"
   children: []
   attachments: []
-  relates:
-  - kind: "issue"
-    id: "worldcrafter-z9qs"
-    type: "related"
+  relates: []
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Recognition: alias matcher, mention annotations, mentions view"
-updated_at: "2026-10-29T21:13:15.098481142+00:00"
+updated_at: "2026-11-05T05:44:18.419756494+00:00"
 ---
 
 ## Goal
@@ -47,3 +44,4 @@ Offset or quote anchoring (data-model-boundaries open question). Whether auto-li
 - 2026-10-17 [note] From the jcj3 re-review (2026-10-17): the context builder's naive mention matcher NFC-normalises per base character plus combining marks, so Hangul conjoining jamo (decomposed Korean, e.g. NFD text pasted from macOS) are never composed and don't match a composed name. Group by grapheme (Intl.Segmenter) in the real alias matcher.
 - 2026-10-17 [note] From the 9get workspace code review (2026-10-17): (R3) app/src/app/main.tsx refreshes the whole world index on every documents change with no guard against overlapping refreshes, so an older refresh can finish last and show stale entries, and every refresh redraws all marks. Replace with incremental indexing and a latest-wins guard when building recognition.
 - 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
+- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.

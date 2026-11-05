@@ -12,15 +12,12 @@ relationships:
     id: "worldcrafter-lhh3"
   children: []
   attachments: []
-  relates:
-  - kind: "issue"
-    id: "worldcrafter-z9qs"
-    type: "related"
+  relates: []
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "AI edit proposals by block ID"
-updated_at: "2026-10-29T21:13:15.196531234+00:00"
+updated_at: "2026-11-05T05:44:18.659451974+00:00"
 ---
 
 ## Goal
@@ -49,3 +46,4 @@ Suggestion rendering in Plate (the suggestion plugin, or a custom one).
 - 2026-10-17 [note] From the efkh third review (2026-10-17): (R2) undoing a cross-boundary delete after a generation finished can leave a duplicated paragraph in the segment; a delete starting before a segment merges segment text into the writer's paragraph without marking it as AI (the same happens with ready segments by design). (R5) if a generating segment is deleted and the delete is undone before the stream ends, the segment returns as ready AI text with no provenance. Visible and editable, but provenance tracking of AI text across merges needs a rule when edit proposals land.
 - 2026-10-18 [note] From the efkh fifth review (2026-10-18): undoing a generation mid-stream records it as cancelled with no provenance, but redo brings the segment back with the text it showed, so AI text sits in the document with no record (regenerate fails with no_provenance); with replace placement the redo also removes the old segment again without archiving it. No content is lost, only metadata; reconcile provenance on redo with the other undo/provenance work.
 - 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
+- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.

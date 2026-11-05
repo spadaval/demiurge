@@ -21,7 +21,7 @@ updated_at: "2026-11-05T05:35:59.096530624+00:00"
 
 ## Outcome
 
-We know, from judged runs, where an agent working in plain markdown notes with the craft advice falls short when it takes a premise to a finished story longer than one session can hold. Then either an aid aimed at the costliest shortfall beats plain notes blind and is kept, or the record says no aid was needed or none worked. The strategy (`docs/strategies/notes-first.md`) owns the intent, the shape and the authority.
+We know, from judged runs, where an agent working in plain markdown notes with the craft advice falls short when it takes a premise to a finished novella across many fresh sessions, each seeing the notes in full but only a fixed share of the draft, smaller than the draft, so the notes have to carry the story. Then either an aid aimed at the costliest shortfall beats plain notes blind and is kept, or the record says no aid was needed or none worked. The strategy (`docs/strategies/notes-first.md`) owns the intent, the shape and the authority.
 
 ## Background
 

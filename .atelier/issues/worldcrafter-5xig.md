@@ -32,7 +32,8 @@ AGENTS.md, PRODUCT.md and `docs/rebuild/story-model.md` still say that the typed
 - AGENTS.md names Notes first (`docs/strategies/notes-first.md`) as the current mission.
 - PRODUCT.md no longer says the story lives in a typed model that the app checks. It states the current approach in a few sentences (plain notes, with aids under blind test) and links decision worldcrafter-03rp. It adds no positioning that results haven't earned yet.
 - `docs/rebuild/story-model.md` opens with a note that it no longer sets the product's direction, linking that decision.
-- `grep -n 'structure-first\|typed model' AGENTS.md PRODUCT.md` finds only references that are plainly historical.
+- `.agents/skills/story-sketch/SKILL.md`, whose description still triggers on sketching or reworking a story and steers agents to the typed CLI, says at the top and in its description that the typed tool is frozen and isn't the current approach, linking decision worldcrafter-03rp. `craft.md` beside it stays as it is, since worldcrafter-efis reuses it.
+- `grep -n 'structure-first\|typed model' AGENTS.md PRODUCT.md .agents/skills/story-sketch/SKILL.md` finds only references that are plainly historical.
 - The change is independently reviewed.
 
 ## Scope

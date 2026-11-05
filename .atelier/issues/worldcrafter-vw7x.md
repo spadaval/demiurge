@@ -12,14 +12,11 @@ relationships:
   - kind: "issue"
     id: "worldcrafter-8agg"
     type: "blocked_by"
-  - kind: "issue"
-    id: "worldcrafter-z9qs"
-    type: "related"
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Subtext layer: speaker attribution, foreshadowing and implications"
-updated_at: "2026-10-29T21:13:15.147358778+00:00"
+updated_at: "2026-11-05T05:44:18.540637003+00:00"
 ---
 
 ## Goal
@@ -42,3 +39,4 @@ Direction: `.impeccable/surfaces/writing-workspace.md` (Night Edition). Sketches
 
 - 2026-10-17 [note] From the 9get workspace code review (2026-10-17): (R2) dismissed gloss notes keep their letter (dismiss b → a, c, d…); pass the dismissed set to assignKeys in app/src/editor/layer-plugin.tsx. Confirm/dismiss are memory-only today (only fixture notes exist); when real inferred marks arrive they must persist as annotations (pins/dismissals), never in the content tree.
 - 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
+- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.

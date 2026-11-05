@@ -10,15 +10,12 @@ relationships:
   blocks: []
   children: []
   attachments: []
-  relates:
-  - kind: "issue"
-    id: "worldcrafter-z9qs"
-    type: "related"
+  relates: []
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Discovery and bookkeeping: suggestions, scene breakdowns, time placement"
-updated_at: "2026-10-29T21:13:15.123025476+00:00"
+updated_at: "2026-11-05T05:44:18.351812211+00:00"
 ---
 
 ## Goal
@@ -55,3 +52,4 @@ backends (probably once per scene when the writer leaves it, cached by content h
 - 2026-10-17 [note] From the 2ony story-time review (2026-10-17): (R8) the timeline commands removeConstraint, removeReveal, followFrame and addFrame take no authority, so an inferred (AI bookkeeping) caller could delete or replace asserted data. Add authority to them before the bookkeeping pass writes timelines. (R7) the AI's time placement must use placeScene; constrain cannot override a default placement.
 - 2026-10-18 [note] From itgc (2026-10-18): building a timeline one command at a time costs ~12 ms per command at 2,000 events (each command parses, compiles twice and rewrites the whole record; 2,000 events ≈ 25 s). Add a batch timeline command before the bookkeeping pass writes timelines.
 - 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
+- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.

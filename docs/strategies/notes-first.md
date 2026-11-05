@@ -1,6 +1,6 @@
 ---
 status: draft
-last_changed: "2026-11-05: created from decision worldcrafter-03rp, which ended the typed-model bet of structure-first (agents' decision under worldcrafter-zybl)"
+last_changed: "2026-11-05: Outcome says what a long run means in practice (fresh sessions with a read budget smaller than the draft); the Verdicts procedure now lives here (planning review findings gqvm, 55mt on decision worldcrafter-03rp)"
 ---
 
 # Why
@@ -24,7 +24,13 @@ the way to one.
 
 We know, from runs judged by an independent panel, where an agent working in
 plain notes with the craft advice falls short when it takes a premise to a
-finished story longer than one session can hold. One of two things then
+finished story that no session re-reads whole. In practice that means a
+novella drafted across many fresh sessions. Each session sees the notes in
+full but may read only a fixed share of the draft, smaller than the draft, and
+the harness measures what it reads. The budget stands in for a novel too long
+to re-read every session, at a novella's cost, so the notes have to carry the
+story and "notes are enough" can't come out true by construction. One of two
+things then
 follows. An aid aimed at the costliest shortfall beats plain notes in a blind
 comparison and is kept. Or the record says that no aid is needed, or none
 worked, and that the product for now is the craft advice plus notes.
@@ -39,8 +45,8 @@ Worth having on its own: the ranked list of shortfalls, even if no aid follows.
 - **Aids are bets over the notes.** An aid can be a script, a check, a skill
   or a change to the craft advice. It reads the notes and reports, and it never
   rewrites them or requires them to change shape. Each is tested on its own,
-  blind, against the same agent with plain notes, with a judging panel as in
-  structure-first's Verdicts section, and is kept only on a keep verdict.
+  blind, against the same agent with plain notes, with a judging panel (see
+  Verdicts), and is kept only on a keep verdict.
 - **Find the headroom first.** An aid is built only for a shortfall that judged
   runs have shown costs the story. The comparisons showed that an aid aimed at
   slips the judges don't weigh can't be measured.
@@ -52,6 +58,37 @@ Worth having on its own: the ranked list of shortfalls, even if no aid follows.
   is neither used nor retired here.
 - **When qualities conflict:** the quality of the story as the panel judges it,
   then the cost of finding out, then speed.
+
+# Verdicts
+
+Carried over from structure-first, where it was decided (decision
+worldcrafter-zybl). Sumeet isn't the gate; he can read the reports afterwards
+and overturn a verdict.
+
+- **Panel.** Exactly three judges, on Opus, Sonnet and Fable. They are fresh
+  agent sessions that didn't build the work, and they judge independently.
+- **Isolated.** Each judge can reach only the material under judgment and the
+  rubric, pinned at a named commit. Its transcript is checked for reads beyond
+  that. A judge whose run fails, or which reached beyond its material, is
+  replaced by a fresh judge on the same model, and the replacement is
+  recorded. A flag from the check starts a diagnosis; it doesn't replace a run
+  by itself.
+- **A rubric fixed before anyone reads.** It is written, reviewed and
+  committed before the judges see the material, and it doesn't change once
+  judging starts.
+- **Recorded and checked.** Each report goes into Atelier as evidence. A
+  fresh reviewer checks only that the procedure held before the next step
+  starts.
+- **Comparing arms** (an aid against plain notes) adds blindness and a call.
+  Each judge first files a blind Part 1, whose wording doesn't hint at which
+  arm is which, and it is recorded before anything more is seen. Part 2 is a
+  fresh session of the same model, given its Part 1, the material and the key.
+  Each judge calls keep, change or drop with reasons. The verdict is the call
+  at least two of the three make, or change if all three differ.
+- **Reading one arm** (as in a run that looks for shortfalls) has no key and
+  no keep, change or drop. Each judge files one report against the rubric. The
+  result is what at least two of the three name, and the rubric says how they
+  are ranked.
 
 # Scope
 

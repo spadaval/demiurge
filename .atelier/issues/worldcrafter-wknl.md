@@ -8,15 +8,12 @@ relationships:
   blocks: []
   children: []
   attachments: []
-  relates:
-  - kind: "issue"
-    id: "worldcrafter-z9qs"
-    type: "related"
+  relates: []
 schema: "atelier.issue"
 schema_version: 2
 status: "backlog"
 title: "Writer notes: decide their representation and keep them out of model context"
-updated_at: "2026-10-29T21:13:15.247151297+00:00"
+updated_at: "2026-11-05T05:44:18.599436972+00:00"
 ---
 
 ## Goal
@@ -34,3 +31,4 @@ Found while wiring generation (worldcrafter-2tz9, 2026-10-18). See .impeccable/s
 ## Notes
 
 - 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
+- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.
