@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:02.454321564+00:00"
 id: "worldcrafter-j6z1"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-j6z1
 priority: "P1"
 relationships:
   blocks: []
@@ -17,9 +20,9 @@ relationships:
     type: "advances"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Fill the remaining model gaps: objects, participants, drive life, finer time"
-updated_at: "2026-11-05T06:49:45.811735067+00:00"
+updated_at: "2026-11-05T07:43:06.925288099+00:00"
 ---
 
 ## Goal
