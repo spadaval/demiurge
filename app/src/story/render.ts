@@ -23,7 +23,7 @@ import type { Constraint, Position, Timeline } from "../time/timeline";
 import { describeWhen, describeYears } from "./calendar";
 import { storyContradictions } from "./contradictions";
 import { belowThreshold, countSeries, seriesTexts, stepText } from "./counts";
-import { eventsInStoryOrder } from "./order";
+import { eventsInStoryOrder, membershipsInStoryOrder } from "./order";
 import {
   type DriveTurn,
   type OpenQuestion,
@@ -369,11 +369,41 @@ function participantText(story: Story, event: string): string {
   return who.length === 0 ? "" : ` With ${who.join(", ")}.`;
 }
 
+/** ` (from Signs on until The wreck)`, or nothing for always. */
+function spanText(story: Story, since?: string, until?: string): string {
+  const parts = [
+    since === undefined ? undefined : `from ${eventLabel(story, since)}`,
+    until === undefined ? undefined : `until ${eventLabel(story, until)}`,
+  ].filter((part) => part !== undefined);
+  return parts.length === 0 ? "" : ` (${parts.join(" ")})`;
+}
+
+/** `Member of The crew (from Signs on).` and `Members: Ivo; Mara.`, or nothing. */
+function membershipText(story: Story, actor: string): string[] {
+  const of = membershipsInStoryOrder(story)
+    .filter((m) => m.member === actor)
+    .map(
+      (m) =>
+        `${named(actorName(story, m.group))}${spanText(story, m.since, m.until)}`,
+    );
+  const members = membershipsInStoryOrder(story)
+    .filter((m) => m.group === actor)
+    .map(
+      (m) =>
+        `${named(actorName(story, m.member))}${spanText(story, m.since, m.until)}`,
+    );
+  return [
+    ...(of.length === 0 ? [] : [`Member of ${of.join("; ")}.`]),
+    ...(members.length === 0 ? [] : [`Members: ${members.join("; ")}.`]),
+  ];
+}
+
 function actorLines(story: Story): string[] {
   return story.actors.flatMap((actor) => [
     `- ${joined([
       `**${named(actor.name)}**${actor.kind === "organization" ? " (a group)" : ""}.`,
       actor.notes.trim() === "" ? undefined : sentence(actor.notes),
+      ...membershipText(story, actor.id),
     ])}`,
     ...story.drives
       .filter((drive) => drive.actorId === actor.id)
@@ -619,6 +649,9 @@ const SCENE_LINK_HEADS = {
 function sceneLines(story: Story): string[] {
   return story.scenes.flatMap((scene, i) => {
     const details = [
+      scene.viewpoint === undefined
+        ? undefined
+        : `Through the eyes of ${named(actorName(story, scene.viewpoint))}.`,
       scene.actors.length === 0
         ? undefined
         : `With ${scene.actors.map((a) => named(actorName(story, a))).join(", ")}.`,
@@ -771,6 +804,14 @@ function contradictionLines(story: Story): string[] {
         ? []
         : [
             `- ${refName(story, c.ref)} ends with ${eventLabel(story, k.until)}, which happens before ${eventLabel(story, k.since)}, when it starts.`,
+          ];
+    }
+    if (c.source === "membership") {
+      const m = story.memberships.find((x) => x.id === c.id);
+      return m?.since === undefined || m.until === undefined
+        ? []
+        : [
+            `- ${named(actorName(story, m.member))}'s membership of ${named(actorName(story, m.group))} ends with ${eventLabel(story, m.until)}, which happens before ${eventLabel(story, m.since)}, when it starts.`,
           ];
     }
     if (c.source === "cause") {

@@ -58,8 +58,33 @@ export type StoryCommand =
       kind?: ActorKind;
       notes?: string;
     }
-  /** The actor's drives are kept, with `actorId` set to null. */
+  /**
+   * The actor's drives are kept, with `actorId` set to null; their
+   * memberships, either way round, go, and scenes through their eyes lose
+   * their viewpoint.
+   */
   | { type: "removeActor"; id: string }
+  /**
+   * `member` belongs to the group actor `group` from event `since` until
+   * event `until`; either absent means always. An actor can't belong to
+   * itself.
+   */
+  | {
+      type: "addMembership";
+      id: string;
+      member: string;
+      group: string;
+      since?: EventId;
+      until?: EventId;
+    }
+  /** `since` or `until` null clears it. */
+  | {
+      type: "updateMembership";
+      id: string;
+      since?: EventId | null;
+      until?: EventId | null;
+    }
+  | { type: "removeMembership"; id: string }
   | {
       type: "addDrive";
       id: string;
@@ -108,6 +133,8 @@ export type StoryCommand =
   /** Moves the scene to `index` in the telling order. */
   | { type: "moveScene"; id: string; index: number }
   | { type: "setSceneActors"; id: string; actors: string[] }
+  /** The actor whose eyes the scene is told through; `null` clears it. */
+  | { type: "setSceneViewpoint"; id: string; actor: string | null }
   | { type: "setSceneEvents"; id: string; depicts: EventId[] }
   /** The drives the scene puts under pressure. */
   | { type: "setScenePressures"; id: string; pressures: string[] }
@@ -445,6 +472,70 @@ export function applyStoryCommand(
             (ref) => ref.kind === "actor" && ref.id === id,
           ),
         ),
+      );
+    }
+
+    case "addMembership": {
+      const { id, member, group, since, until } = command;
+      return fresh("membership", story.memberships, id)
+        .andThen(() => resolve("actor", [member, group], isActor))
+        .andThen(() =>
+          member === group
+            ? refuse("self_relation", `actor ${member} can't belong to itself`)
+            : resolve(
+                "event",
+                [since, until].filter((e) => e !== undefined),
+                isEvent,
+              ),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            memberships: [
+              ...story.memberships,
+              {
+                id,
+                member,
+                group,
+                ...(since === undefined ? {} : { since }),
+                ...(until === undefined ? {} : { until }),
+              },
+            ],
+          }),
+        );
+    }
+
+    case "updateMembership": {
+      const { id, since, until } = command;
+      return existing("membership", story.memberships, id)
+        .andThen((m) =>
+          resolve(
+            "event",
+            [since, until].filter((e) => typeof e === "string"),
+            isEvent,
+          ).map(() => m),
+        )
+        .andThen(({ since: oldSince, until: oldUntil, ...m }) => {
+          const from = since === undefined ? oldSince : (since ?? undefined);
+          const to = until === undefined ? oldUntil : (until ?? undefined);
+          return kept({
+            ...story,
+            memberships: replace(story.memberships, id, () => ({
+              ...m,
+              ...(from === undefined ? {} : { since: from }),
+              ...(to === undefined ? {} : { until: to }),
+            })),
+          });
+        });
+    }
+
+    case "removeMembership": {
+      const { id } = command;
+      return existing("membership", story.memberships, id).andThen(() =>
+        kept({
+          ...story,
+          memberships: story.memberships.filter((m) => m.id !== id),
+        }),
       );
     }
 
@@ -791,6 +882,21 @@ export function applyStoryCommand(
             })),
           }),
         );
+
+    case "setSceneViewpoint": {
+      const { id, actor } = command;
+      return existing("scene", story.scenes, id)
+        .andThen(() => resolve("actor", actor === null ? [] : [actor], isActor))
+        .andThen(() =>
+          kept({
+            ...story,
+            scenes: replace(story.scenes, id, ({ viewpoint: _, ...scene }) => ({
+              ...scene,
+              ...(actor === null ? {} : { viewpoint: actor }),
+            })),
+          }),
+        );
+    }
 
     case "setSceneEvents":
       return existing("scene", story.scenes, command.id)
@@ -1626,8 +1732,11 @@ function withoutRefs(story: Story, removed: (ref: Ref) => boolean): Story {
       ({ ref }) => ref === null || !gone(ref),
     ),
     facts: story.facts.map((fact) => ({ ...fact, about: kept(fact.about) })),
-    scenes: story.scenes.map((scene) => ({
+    scenes: story.scenes.map(({ viewpoint, ...scene }) => ({
       ...scene,
+      ...(viewpoint === undefined || gone({ kind: "actor", id: viewpoint })
+        ? {}
+        : { viewpoint }),
       reveals: kept(scene.reveals),
       implies: kept(scene.implies),
       withholds: kept(scene.withholds),
@@ -1674,6 +1783,22 @@ function withoutRefs(story: Story, removed: (ref: Ref) => boolean): Story {
         const to = event(until);
         return {
           ...k,
+          ...(from === undefined ? {} : { since: from }),
+          ...(to === undefined ? {} : { until: to }),
+        };
+      }),
+    // A membership goes with its member or group, and loses a removed event.
+    memberships: story.memberships
+      .filter(
+        (m) =>
+          !gone({ kind: "actor", id: m.member }) &&
+          !gone({ kind: "actor", id: m.group }),
+      )
+      .map(({ since, until, ...m }) => {
+        const from = event(since);
+        const to = event(until);
+        return {
+          ...m,
           ...(from === undefined ? {} : { since: from }),
           ...(to === undefined ? {} : { until: to }),
         };

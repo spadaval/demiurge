@@ -5,7 +5,7 @@
 
 import { compareEvents, compileChronology } from "../time/chronology";
 import type { TimeEvent } from "../time/timeline";
-import type { Story } from "./story";
+import type { Membership, Story } from "./story";
 
 /** As render names a blank label, so blank labels sort the same. */
 const named = (label: string) => (label.trim() === "" ? "(unnamed)" : label);
@@ -37,6 +37,17 @@ export function eventsInStoryOrder(story: Story): TimeEvent[] {
       depth(a.id) - depth(b.id) ||
       named(a.label).localeCompare(named(b.label)),
   );
+}
+
+/**
+ * The story's memberships by when they start in story order, those held
+ * from the start first.
+ */
+export function membershipsInStoryOrder(story: Story): Membership[] {
+  const order = new Map(eventsInStoryOrder(story).map((e, i) => [e.id, i]));
+  const place = (id: string | undefined) =>
+    id === undefined ? -1 : (order.get(id) ?? Number.POSITIVE_INFINITY);
+  return [...story.memberships].sort((a, b) => place(a.since) - place(b.since));
 }
 
 /**

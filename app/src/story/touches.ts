@@ -173,6 +173,15 @@ function directLinks(story: Story, ref: Ref): Link[] {
           add(`what it ${k.how}`, { kind: "knowledge", id: k.id });
         }
       }
+      for (const scene of story.scenes) {
+        if (scene.viewpoint === id) {
+          add("a scene told through its eyes", sceneRef(scene));
+        }
+      }
+      for (const m of story.memberships) {
+        if (m.member === id) add("a group it belongs to", actorRef(m.group));
+        if (m.group === id) add("a member", actorRef(m.member));
+      }
       break;
     case "drive": {
       const drive = story.drives.find((d) => d.id === id);
@@ -222,6 +231,11 @@ function directLinks(story: Story, ref: Ref): Link[] {
         if (k.since === id) add("knowledge held from then", kRef);
         if (k.until === id) add("knowledge held until then", kRef);
       }
+      for (const m of story.memberships) {
+        const group = refLabel(story, actorRef(m.group));
+        if (m.since === id) add(`joins ${group} then`, actorRef(m.member));
+        if (m.until === id) add(`leaves ${group} then`, actorRef(m.member));
+      }
       for (const c of story.timeline.constraints) {
         const other = c.a === id ? c.b : c.b === id ? c.a : undefined;
         if (other !== undefined && other !== id) {
@@ -236,6 +250,9 @@ function directLinks(story: Story, ref: Ref): Link[] {
       const scene = story.scenes.find((s) => s.id === id);
       for (const actor of scene?.actors ?? []) {
         add("an actor in it", actorRef(actor));
+      }
+      if (scene?.viewpoint !== undefined) {
+        add("whose eyes it is told through", actorRef(scene.viewpoint));
       }
       for (const event of scene?.depicts ?? []) {
         add("an event it depicts", eventRef(event));

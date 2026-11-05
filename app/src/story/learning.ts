@@ -181,3 +181,65 @@ export function toldBefore(
     withheld: withheld.filter((ref) => !seen(told, ref)),
   };
 }
+
+/**
+ * How the viewpoint actor stands to a record the reader has been told: they
+ * don't hold it now but will (`later`), held it once (`ended`), or never
+ * do; `believes` are the versions of it, for an event, they hold instead.
+ */
+export type ViewpointGap = {
+  later: boolean;
+  ended: boolean;
+  believes: Ref[];
+};
+
+/**
+ * Whether `actor` doesn't know `ref` at event `at`, by the knowledge records:
+ * a record counts only when the story says who knows it (someone holds
+ * knowledge of it or, for an event, of one of its versions), so a story
+ * that tracks no knowledge of a thing marks nothing. Knowing and believing
+ * both count as holding it. Knowledge holds from after its `since` event
+ * until its `until` event, in story order; with `at` undefined (a scene
+ * that shows no placed event) time is left out and any knowledge of it
+ * counts. Undefined when the actor holds it, or it isn't tracked.
+ */
+export function viewpointGap(
+  story: Story,
+  actor: string,
+  ref: Ref,
+  at: string | undefined,
+): ViewpointGap | undefined {
+  if (ref.kind === "knowledge") {
+    const own = story.knowledge.find((k) => k.id === ref.id);
+    if (own?.actor === actor) return undefined;
+  }
+  const versions =
+    ref.kind === "event"
+      ? story.versions
+          .filter((v) => v.event === ref.id)
+          .map((v): Ref => ({ kind: "version", id: v.id }))
+      : [];
+  const tracked = story.knowledge.some(
+    (k) =>
+      sameRef(k.what, ref) ||
+      versions.some((version) => sameRef(k.what, version)),
+  );
+  if (!tracked) return undefined;
+  const index = new Map(eventsInStoryOrder(story).map((e, i) => [e.id, i]));
+  const place = (id: string) => index.get(id) ?? Number.POSITIVE_INFINITY;
+  const starts = (k: Knowledge) =>
+    at === undefined || k.since === undefined || place(k.since) < place(at);
+  const lasts = (k: Knowledge) =>
+    at === undefined || k.until === undefined || place(k.until) > place(at);
+  const holds = (k: Knowledge) => starts(k) && lasts(k);
+  const theirs = story.knowledge.filter((k) => k.actor === actor);
+  const of = theirs.filter((k) => sameRef(k.what, ref));
+  if (of.some(holds)) return undefined;
+  return {
+    later: of.some((k) => !starts(k)),
+    ended: of.some((k) => starts(k) && !lasts(k)),
+    believes: versions.filter((version) =>
+      theirs.some((k) => sameRef(k.what, version) && holds(k)),
+    ),
+  };
+}

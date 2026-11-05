@@ -1,9 +1,9 @@
 /**
- * The scenes that touch a record, in telling order: the scenes it is in,
- * that depict it or put it under pressure, that open or answer it, and that
- * reveal, imply or withhold it, or a version of an event or what an actor
- * knows or believes. A scene's prose isn't read: only what its
- * record declares counts.
+ * The scenes that touch a record, in telling order: the scenes it is in or
+ * told through the eyes of, that depict it or put it under pressure, that
+ * open or answer it, and that reveal, imply or withhold it, or a version of
+ * an event or what an actor knows or believes. A scene's prose isn't read:
+ * only what its record declares counts.
  */
 
 import { err, ok, type Result } from "neverthrow";
@@ -50,6 +50,9 @@ function sceneHow(story: Story, scene: Scene, ref: Ref): string[] {
   const how: string[] = [];
   const { id } = ref;
   if (ref.kind === "actor" && scene.actors.includes(id)) how.push("is in it");
+  if (ref.kind === "actor" && scene.viewpoint === id) {
+    how.push("is told through their eyes");
+  }
   if (ref.kind === "event" && scene.depicts.includes(id)) {
     how.push("depicts it");
   }

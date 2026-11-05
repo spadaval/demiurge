@@ -1069,6 +1069,80 @@ describe("story CLI", () => {
     );
   });
 
+  test("a scene's viewpoint marks what the reader knows and they don't; memberships list from both sides", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-actor", "mara", "Mara");
+    ok("add-actor", "ivo", "Ivo");
+    ok("add-actor", "crew", "The crew", "--kind", "organization");
+    ok("add-event", "signs-on", "Ivo signs on");
+    ok("set-position", "signs-on", "1950");
+    ok("add-event", "wreck", "The wreck");
+    ok("set-position", "wreck", "1954-10-12");
+    ok("add-event", "letter", "The letter");
+    ok("set-position", "letter", "1954-10-20");
+    ok("add-version", "fog", "wreck", "The fog took her", "--by", "ivo");
+    ok("add-knowledge", "ivo-wreck", "ivo", "knows", "event:wreck");
+    ok("add-knowledge", "mara-fog", "mara", "believes", "version:fog");
+    ok("add-fact", "cold", "The sea is cold");
+    ok("add-scene", "night", "The night");
+    ok("set-scene-events", "night", "wreck");
+    ok("set-scene-links", "night", "reveals", "fact:cold");
+    ok("add-scene", "post", "The post");
+    ok("set-scene-events", "post", "letter");
+    // A clean edit prints nothing.
+    expect(ok("set-scene-viewpoint", "post", "mara")).toBe("");
+    expect(ok("show", "scene:post")).toContain(
+      'viewpoint: actor:mara ("Mara")',
+    );
+    expect(ok("reader-order", "--before", "post")).toBe(
+      [
+        'Before 2. scene:post ("The post"), through the eyes of Mara, at event:letter ("The letter") at 20 October 1954 (the latest event it shows), the reader has been told:',
+        '- event:wreck ("The wreck") at 12 October 1954, 7 days before: shown in 1; Mara doesn\'t know, believes version:fog ("The fog took her")',
+        '- fact:cold ("The sea is cold"): revealed in 1',
+        "",
+      ].join("\n"),
+    );
+    expect(ok("set-scene-viewpoint", "post", "ivo")).toBe("");
+    expect(ok("reader-order", "--before", "post")).not.toContain("know");
+    expect(cli(file, "set-scene-viewpoint", "post", "nobody").stderr).toContain(
+      "actor nobody does not exist",
+    );
+
+    expect(
+      ok(
+        "add-membership",
+        "ivo-crew",
+        "ivo",
+        "crew",
+        "--since",
+        "signs-on",
+        "--until",
+        "wreck",
+      ),
+    ).toBe("");
+    ok("add-membership", "mara-crew", "mara", "crew");
+    expect(ok("show", "actor:ivo")).toContain(
+      'member of: actor:crew ("The crew") since event:signs-on ("Ivo signs on") until event:wreck ("The wreck") (membership ivo-crew)',
+    );
+    const group = ok("show", "actor:crew");
+    expect(group).toContain(
+      'member: actor:mara ("Mara") (membership mara-crew)\nmember: actor:ivo ("Ivo") since event:signs-on ("Ivo signs on") until event:wreck ("The wreck") (membership ivo-crew)',
+    );
+    expect(ok("show", "event:wreck")).toContain(
+      'membership ivo-crew: actor:ivo ("Ivo") leaves actor:crew ("The crew")',
+    );
+    expect(ok("update-membership", "ivo-crew", "--since", "letter")).toBe(
+      'Membership problem (kept; see contradictions): "Ivo" belongs to "The crew" until "The wreck", which happens before "The letter", when it starts.\n',
+    );
+    expect(ok("update-membership", "ivo-crew", "--since", "signs-on")).toBe("");
+    expect(ok("remove-membership", "mara-crew")).toBe("");
+    expect(ok("remove-actor", "ivo")).toContain(
+      "the membership ivo-crew of actor:ivo in actor:crew",
+    );
+    expect(ok("show", "actor:crew")).not.toContain("member");
+    expect(saved().scenes[1]).not.toHaveProperty("viewpoint");
+  });
+
   test("span gives the time between two events, and reader-order --before what the reader has been told", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-event", "bakehouse", "The bakehouse");
@@ -1264,6 +1338,8 @@ describe("story CLI", () => {
     // still find what they refer to.
     ok(...READS.init.example);
     ok("add-actor", "ivo", "Ivo");
+    ok("add-actor", "crew", "The crew", "--kind", "organization");
+    ok("add-event", "signs-on", "Ivo signs on");
     ok("add-drive", "keep-quiet", "Keep the wreck quiet");
     ok("add-event", "letter", "The letter arrives");
     ok("set-position", "letter", "18");

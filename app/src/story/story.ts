@@ -166,6 +166,11 @@ export type Scene = {
   /** The author's note on the scene, not its prose. */
   summary: string;
   actors: string[];
+  /**
+   * The actor whose eyes the scene is told through, if the writer says.
+   * Absent from the file when unset, so older files read the same.
+   */
+  viewpoint?: string;
   depicts: EventId[];
   pressures: string[];
 } & Record<SceneLinkKind, Ref[]>;
@@ -295,6 +300,19 @@ export type Knowledge = {
   until?: EventId;
 };
 
+/**
+ * An actor's membership of a group actor in story time: `since` and `until`
+ * are the events it holds from and to, absent when it always has or never
+ * stops, as with `Knowledge`. Someone who leaves and rejoins has two.
+ */
+export type Membership = {
+  id: string;
+  member: string;
+  group: string;
+  since?: EventId;
+  until?: EventId;
+};
+
 /** The kinds of gap `storyGaps` reports (`./gaps.ts`). */
 export const GAP_KINDS = [
   "drive_without_actor",
@@ -400,6 +418,8 @@ export type Story = {
   participants: Participant[];
   /** Left out of the file when empty, as `causes` is. */
   counts: Count[];
+  /** Left out of the file when empty, as `causes` is. */
+  memberships: Membership[];
   timeline: Timeline;
 };
 
@@ -467,6 +487,7 @@ export function newStory(premise: string): Story {
     knowledge: [],
     objects: [],
     participants: [],
+    memberships: [],
     counts: [],
     timeline: emptyTimeline,
   };
@@ -809,6 +830,7 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     "actors",
     "depicts",
     "pressures",
+    "viewpoint",
     ...SCENE_LINK_KINDS,
   ]);
   if (known.isErr()) return err(known.error);
@@ -824,6 +846,7 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     checkSceneLinks(v.withholds, `${at}.withholds`),
     checkSceneLinks(v.plants, `${at}.plants`),
     checkSceneLinks(v.paysOff, `${at}.paysOff`),
+    checkOptionalString(v.viewpoint, `${at}.viewpoint`),
   ]).map(
     ([
       id,
@@ -837,11 +860,13 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
       withholds,
       plants,
       paysOff,
+      viewpoint,
     ]) => ({
       id,
       title,
       summary,
       actors,
+      ...(viewpoint === undefined ? {} : { viewpoint }),
       depicts,
       pressures,
       reveals,
@@ -889,6 +914,24 @@ function checkKnowledge(v: JsonRecord, at: string): Check<Knowledge> {
     actor,
     how,
     what,
+    ...(since === undefined ? {} : { since }),
+    ...(until === undefined ? {} : { until }),
+  }));
+}
+
+function checkMembership(v: JsonRecord, at: string): Check<Membership> {
+  const known = checkKeys(v, at, ["id", "member", "group", "since", "until"]);
+  if (known.isErr()) return err(known.error);
+  return Result.combine([
+    checkString(v.id, `${at}.id`),
+    checkString(v.member, `${at}.member`),
+    checkString(v.group, `${at}.group`),
+    checkOptionalString(v.since, `${at}.since`),
+    checkOptionalString(v.until, `${at}.until`),
+  ]).map(([id, member, group, since, until]) => ({
+    id,
+    member,
+    group,
     ...(since === undefined ? {} : { since }),
     ...(until === undefined ? {} : { until }),
   }));
@@ -1152,6 +1195,7 @@ function checkStory(value: JsonValue): Check<Story> {
     "objects",
     "participants",
     "counts",
+    "memberships",
     "timeline",
   ]);
   if (known.isErr()) return err(known.error);
@@ -1187,6 +1231,9 @@ function checkStory(value: JsonValue): Check<Story> {
     value.counts === undefined
       ? ok([])
       : checkIdentified(value.counts, "counts", checkCount),
+    value.memberships === undefined
+      ? ok([])
+      : checkIdentified(value.memberships, "memberships", checkMembership),
     parseTimeline(value.timeline ?? null)
       .mapErr((message) => `timeline: ${message}`)
       .andThen(checkTimelineKeys),
@@ -1206,6 +1253,7 @@ function checkStory(value: JsonValue): Check<Story> {
       objects,
       participants,
       counts,
+      memberships,
       timeline,
     ]): Story => ({
       version: STORY_VERSION,
@@ -1223,6 +1271,7 @@ function checkStory(value: JsonValue): Check<Story> {
       objects,
       participants,
       counts,
+      memberships,
       timeline,
     }),
   );
@@ -1319,6 +1368,7 @@ function normalized(story: Story): Story {
         values: sortedBy(count.values, ({ at }) => [at]),
       })),
     ),
+    memberships: byId(story.memberships),
     timeline: {
       ...timeline,
       events: byId(timeline.events),
@@ -1363,6 +1413,7 @@ const KEY_ORDER = [
   "objects",
   "participants",
   "counts",
+  "memberships",
   "timeline",
   "id",
   "kind",
@@ -1400,6 +1451,8 @@ const KEY_ORDER = [
   "actor",
   "how",
   "what",
+  "member",
+  "group",
 ];
 
 const keyRank = (key: string) => {
@@ -1428,6 +1481,7 @@ export function serializeStory(story: Story): string {
     objects,
     participants,
     counts,
+    memberships,
     scenes,
     drives,
     ...rest
@@ -1455,6 +1509,7 @@ export function serializeStory(story: Story): string {
     ...(objects.length === 0 ? {} : { objects }),
     ...(participants.length === 0 ? {} : { participants }),
     ...(counts.length === 0 ? {} : { counts }),
+    ...(memberships.length === 0 ? {} : { memberships }),
   };
   return `${JSON.stringify(withOrderedKeys(written), null, 2)}\n`;
 }

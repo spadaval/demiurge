@@ -55,8 +55,10 @@ import {
   tellingWords,
   toldBefore,
   trueOrder,
+  viewpointGap,
 } from "../src/story/learning";
 import { type Mention, storyTexts, whatMentions } from "../src/story/mentions";
+import { membershipsInStoryOrder } from "../src/story/order";
 import {
   eventTime,
   RENDER_SECTION_NAMES,
@@ -73,6 +75,7 @@ import {
   type GapKind,
   KNOWLEDGE_HOWS,
   type Knowledge,
+  type Membership,
   newStory,
   type OpenQuestion,
   PARTICIPANT_KEY,
@@ -530,9 +533,66 @@ export const EDITS: EditSpecs = {
     group: "Actors: people and groups",
     args: ["id"],
     summary:
-      "Remove an actor. Their drives stay, held by nobody; what they know or believe goes, so do their parts in events, and they stop telling any version. Any knowledge of the actor goes too, with links to that; the edit lists what went.",
+      "Remove an actor. Their drives stay, held by nobody; what they know or believe goes, so do their parts in events and their memberships either way round, and they stop telling any version or being a scene's viewpoint. Any knowledge of the actor goes too, with links to that; the edit lists what went.",
     example: ["remove-actor", "mara"],
     build: (a) => ({ type: "removeActor", id: a.arg("id") }),
+  },
+  addMembership: {
+    group: "Actors: people and groups",
+    args: ["id", "member-id", "group-id"],
+    flags: {
+      since: { value: "<event-id>", help: "joins then, in story time" },
+      until: { value: "<event-id>", help: "leaves then" },
+    },
+    summary:
+      "Say an actor belongs to a group actor. Without --since they always have; without --until they never leave. Someone who leaves and rejoins has two memberships. show actor: lists them for the member and the group.",
+    example: [
+      "add-membership",
+      "ivo-crew",
+      "ivo",
+      "crew",
+      "--since",
+      "signs-on",
+    ],
+    build: (a) => {
+      const since = a.text("since");
+      const until = a.text("until");
+      return {
+        type: "addMembership",
+        id: a.arg("id"),
+        member: a.arg("member-id"),
+        group: a.arg("group-id"),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+      };
+    },
+  },
+  updateMembership: {
+    group: "Actors: people and groups",
+    args: ["id"],
+    flags: {
+      since: { value: "<event-id>", help: "none clears it" },
+      until: { value: "<event-id>", help: "none clears it" },
+    },
+    summary: "Change when a membership starts or ends.",
+    example: ["update-membership", "ivo-crew", "--until", "letter"],
+    build: (a) => {
+      const since = a.eventOrNone("since");
+      const until = a.eventOrNone("until");
+      return {
+        type: "updateMembership",
+        id: a.arg("id"),
+        ...(since === undefined ? {} : { since }),
+        ...(until === undefined ? {} : { until }),
+      };
+    },
+  },
+  removeMembership: {
+    group: "Actors: people and groups",
+    args: ["id"],
+    summary: "Remove a membership.",
+    example: ["remove-membership", "ivo-crew"],
+    build: (a) => ({ type: "removeMembership", id: a.arg("id") }),
   },
 
   addEvent: {
@@ -581,7 +641,7 @@ export const EDITS: EditSpecs = {
     group: "Events: what happens in story time",
     args: ["id"],
     summary:
-      "Remove an event, its position and constraints, and links to it. Its versions and participants go, and any knowledge of it or of them, with links to those; knowledge held from or until it, and drive turns at it, lose that time. The edit lists what went.",
+      "Remove an event, its position and constraints, and links to it. Its versions and participants go, and any knowledge of it or of them, with links to those; knowledge and memberships held from or until it, and drive turns at it, lose that time. The edit lists what went.",
     example: ["remove-event", "wreck"],
     build: (a) => ({ type: "removeEvent", id: a.arg("id") }),
   },
@@ -950,6 +1010,17 @@ export const EDITS: EditSpecs = {
       id: a.arg("id"),
       actors: a.rest(),
     }),
+  },
+  setSceneViewpoint: {
+    group: "Scenes: the telling",
+    args: ["id", "actor-id"],
+    summary:
+      "Say whose eyes the scene is told through (none clears it). reader-order --before then marks what the reader has been told that they don't know.",
+    example: ["set-scene-viewpoint", "storm", "mara"],
+    build: (a) => {
+      const actor = orNone(a.arg("actor-id"));
+      return { type: "setSceneViewpoint", id: a.arg("id"), actor };
+    },
   },
   setSceneEvents: {
     group: "Scenes: the telling",
@@ -1687,7 +1758,7 @@ export const READS: Record<ReadName, Spec> = {
     flags: {
       before: {
         value: "<scene-id>",
-        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, then each count's value as of the scene",
+        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens and, if the scene has a viewpoint, whether that actor doesn't know it, then each count's value as of the scene",
       },
     },
     summary:
@@ -1823,7 +1894,12 @@ export function helpText(): string {
     "flipped, and where. A count (add-count, set-count) is a number that",
     "changes at events, shown as a running series against its total.",
     "reader-order --before <scene> lists, briefly, what the reader has been",
-    "told before a scene and how long before it each thing happened.",
+    "told before a scene and how long before it each thing happened. A scene",
+    "told through someone's eyes (set-scene-viewpoint) marks what the reader",
+    "has been told that they don't know, by the knowledge records: a told",
+    "record is marked only when someone's knowledge of it is recorded. Who",
+    "belongs to a group, and from and until when, is a membership",
+    "(add-membership); show actor: lists it for the member and the group.",
     "",
     "After an edit that changes a record, the CLI prints the top three",
     "suspects that may still state its old version, records and lines of",
@@ -1903,6 +1979,7 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           story.drives.filter((d) => d.actorId === actor.id).map((d) => d.id),
         ),
         ...participations(story, ref),
+        ...membershipLines(story, actor.id),
         ...ids(
           "knows or believes",
           "knowledge",
@@ -2017,6 +2094,15 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
           "knowledge",
           story.knowledge.filter((k) => k.until === event.id).map((k) => k.id),
         ),
+        ...story.memberships.flatMap((m) =>
+          [
+            ...(m.since === event.id ? ["joins"] : []),
+            ...(m.until === event.id ? ["leaves"] : []),
+          ].map(
+            (how) =>
+              `membership ${m.id}: ${describe(story, { kind: "actor", id: m.member })} ${how} ${describe(story, { kind: "actor", id: m.group })}`,
+          ),
+        ),
       ];
     }
     case "scene": {
@@ -2028,6 +2114,11 @@ function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
         `title: ${scene.title}`,
         `telling order: ${index + 1} of ${story.scenes.length}`,
         ...field("summary", scene.summary),
+        ...ids(
+          "viewpoint",
+          "actor",
+          scene.viewpoint === undefined ? [] : [scene.viewpoint],
+        ),
         ...ids("actors", "actor", scene.actors),
         ...ids("depicts", "event", scene.depicts),
         ...ids("pressures", "drive", scene.pressures),
@@ -2208,6 +2299,25 @@ function countsAt(story: Story, event: string): string[] {
           `count: ${describe(story, { kind: "count", id: count.id })} = ${stepText(count, step)}${step.note.trim() === "" ? "" : ` (${step.note})`}`,
       ),
   );
+}
+
+/**
+ * `member of: actor:crew ("The crew") since event:signs-on ("Signs on")
+ * (membership ivo-crew)` for each group the actor belongs to, and `member:`
+ * for each member of the actor as a group, each in story order.
+ */
+function membershipLines(story: Story, actor: string): string[] {
+  const line = (name: string, m: Membership, who: string) =>
+    `${name}: ${describe(story, { kind: "actor", id: who })}${m.since === undefined ? "" : ` since ${describe(story, { kind: "event", id: m.since })}`}${m.until === undefined ? "" : ` until ${describe(story, { kind: "event", id: m.until })}`} (membership ${m.id})`;
+  const sorted = membershipsInStoryOrder(story);
+  return [
+    ...sorted
+      .filter((m) => m.member === actor)
+      .map((m) => line("member of", m, m.group)),
+    ...sorted
+      .filter((m) => m.group === actor)
+      .map((m) => line("member", m, m.member)),
+  ];
 }
 
 function participations(story: Story, ref: Ref): string[] {
@@ -2482,10 +2592,36 @@ function toldBeforeLines(story: Story, index: number): string[] {
         : then === now
           ? ", at the same time"
           : `, ${describeBetween(then, now)} ${then < now ? "before" : "after"}`;
-    return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${TOLD_WORDS[how]} in ${at + 1}`;
+    return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${TOLD_WORDS[how]} in ${at + 1}${unawareText(ref)}`;
+  };
+  const viewpoint =
+    scene.viewpoint === undefined
+      ? undefined
+      : story.actors.find((actor) => actor.id === scene.viewpoint);
+  const name =
+    viewpoint === undefined
+      ? ""
+      : viewpoint.name.trim() === ""
+        ? viewpoint.id
+        : viewpoint.name;
+  /** `; Mara doesn't know yet`, from the knowledge records, or nothing. */
+  const unawareText = (ref: Ref) => {
+    if (viewpoint === undefined) return "";
+    const gap = viewpointGap(story, viewpoint.id, ref, anchor);
+    if (gap === undefined) return "";
+    const how = gap.later
+      ? "doesn't know yet"
+      : gap.ended
+        ? "no longer knows"
+        : "doesn't know";
+    const believes =
+      gap.believes.length === 0
+        ? ""
+        : `, believes ${gap.believes.map((r) => shortDescribe(story, r)).join(" and ")}`;
+    return `; ${name} ${how}${believes}`;
   };
   return [
-    `Before ${index + 1}. ${shortDescribe(story, { kind: "scene", id: scene.id })}${anchor === undefined ? "" : `, at ${placedEvent(story, anchor)} (the latest event it shows)`}, the reader has been told:`,
+    `Before ${index + 1}. ${shortDescribe(story, { kind: "scene", id: scene.id })}${viewpoint === undefined ? "" : `, through the eyes of ${name}`}${anchor === undefined ? "" : `, at ${placedEvent(story, anchor)} (the latest event it shows)`}, the reader has been told:`,
     ...(told.length === 0 ? ["(nothing yet)"] : told.map(line)),
     ...(withheld.length === 0
       ? []
@@ -3042,7 +3178,7 @@ function runRead(
           ? ["No contradictions."]
           : found.map(
               (c) =>
-                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" || c.source === "count" ? ` [${formatRef(c.ref)}]` : ""}`,
+                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" || c.source === "count" ? ` [${formatRef(c.ref)}]` : c.source === "membership" ? ` [membership ${c.id}]` : ""}`,
             ),
       );
     }
@@ -3127,7 +3263,7 @@ function runEdit(
               ),
               ...addedProblems(story, next).map(
                 ({ source, message }) =>
-                  `${source === "cause" ? "Cause" : "Count"} problem (kept; see contradictions): ${message}`,
+                  `${ADDED_HEADS[source]} problem (kept; see contradictions): ${message}`,
               ),
               ...alsoRemovedLines(story, next, command),
               ...(a.bool("remove") === true
@@ -3193,10 +3329,21 @@ function alsoRemovedLines(
                     `the value of ${formatRef({ kind: "count", id: c.id })} at ${formatRef({ kind: "event", id: v.at })}`,
                 );
         });
+  // A membership removed on its own isn't news either.
+  const memberships =
+    command.type === "removeMembership"
+      ? []
+      : before.memberships
+          .filter((m) => !after.memberships.some((n) => n.id === m.id))
+          .map(
+            (m) =>
+              `the membership ${m.id} of ${formatRef({ kind: "actor", id: m.member })} in ${formatRef({ kind: "actor", id: m.group })}`,
+          );
   const removed = [
     ...gone("version", before.versions, after.versions),
     ...gone("knowledge", before.knowledge, after.knowledge),
     ...participants.map((p) => `the part of ${p}`),
+    ...memberships,
     ...values,
   ];
   return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
@@ -3248,12 +3395,24 @@ function crossedLinkLines(before: Story, after: Story): string[] {
     .map((line) => `Note: ${line}; one of the two is probably meant.`);
 }
 
-/** Cause and count contradictions in `after` that weren't in `before`. */
+type AddedSource = "cause" | "count" | "knowledge" | "membership";
+
+const ADDED_HEADS: Record<AddedSource, string> = {
+  cause: "Cause",
+  count: "Count",
+  knowledge: "Knowledge",
+  membership: "Membership",
+};
+
+/**
+ * Cause, count, knowledge and membership contradictions in `after` that
+ * weren't in `before`.
+ */
 function addedProblems(
   before: Story,
   after: Story,
-): { source: "cause" | "count"; message: string }[] {
-  type Found = { source: "cause" | "count"; key: string; message: string };
+): { source: AddedSource; message: string }[] {
+  type Found = { source: AddedSource; key: string; message: string };
   const found = (story: Story) =>
     storyContradictions(story).flatMap((c): Found[] =>
       c.source === "cause"
@@ -3267,7 +3426,9 @@ function addedProblems(
               message: c.message,
             },
           ]
-        : c.source === "count"
+        : c.source === "count" ||
+            c.source === "knowledge" ||
+            c.source === "membership"
           ? [{ source: c.source, key: c.message, message: c.message }]
           : [],
     );

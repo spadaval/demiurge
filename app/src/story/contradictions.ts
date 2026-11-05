@@ -39,6 +39,8 @@ export type Contradiction =
    * events not ordered against each other aren't listed.
    */
   | { source: "knowledge"; ref: Ref; message: string }
+  /** A membership that ends before it starts, as knowledge can. */
+  | { source: "membership"; id: string; message: string }
   /** A count above its total or moving against its direction (`./counts.ts`). */
   | { source: "count"; ref: Ref; at: EventId; message: string };
 
@@ -74,9 +76,9 @@ export function timelineProblemMessage(
 }
 
 /**
- * The timeline's problems, then the causes', then knowledge that ends before
- * it starts, then counts above their totals or moving against their
- * direction, then the open conflicts.
+ * The timeline's problems, then the causes', then knowledge and memberships
+ * that end before they start, then counts above their totals or moving
+ * against their direction, then the open conflicts.
  */
 export function storyContradictions(story: Story): Contradiction[] {
   // Story scenes aren't in the timeline, as in `applyStoryCommand`.
@@ -115,10 +117,26 @@ export function storyContradictions(story: Story): Contradiction[] {
         message: `"${refLabel(story, { kind: "knowledge", id: k.id })}" is held until ${label(k.until ?? "")}, which happens before ${label(k.since ?? "")}, when it starts.`,
       }),
     );
+  const actor = (id: string) => `"${refLabel(story, { kind: "actor", id })}"`;
+  const memberships = story.memberships
+    .filter(
+      ({ since, until }) =>
+        since !== undefined &&
+        until !== undefined &&
+        compareEvents(chronology, until, since) === "before",
+    )
+    .map(
+      (m): Contradiction => ({
+        source: "membership",
+        id: m.id,
+        message: `${actor(m.member)} belongs to ${actor(m.group)} until ${label(m.until ?? "")}, which happens before ${label(m.since ?? "")}, when it starts.`,
+      }),
+    );
   return [
     ...timeline,
     ...causeContradictions(story, chronology),
     ...knowledge,
+    ...memberships,
     ...countProblems(story).map(
       ({ count, at, message }): Contradiction => ({
         source: "count",

@@ -63,6 +63,8 @@ Say what each scene does with the bible:
   a skill. A character's first and later appearances are reveals and scene
   actors, not plants, and a record a scene already reveals needs no plant
   as well unless its return is the point.
+- `set-scene-viewpoint storm mara` says the scene is told through Mara's
+  eyes (`none` clears it).
 - `set-scene-events storm wreck` says the scene depicts the event as it
   really happened. A flashback through a false memory or a lie reveals that
   version instead (`reveals version:fog`) and doesn't depict the event.
@@ -80,7 +82,13 @@ Ask the bible what the reader knows by then, rather than trusting memory:
 
 - `reader-order --before <scene>` lists, in short labels, everything the
   scenes before it have told the reader, with when it happened and how long
-  before the scene, and what they have held back.
+  before the scene, and what they have held back. For a scene with a
+  viewpoint, it marks what the reader has been told that the viewpoint
+  character doesn't know (`Mara doesn't know yet, believes version:fog`):
+  the dramatic irony the scene can play on. The marks come from knowledge
+  records. A record is marked only when someone's knowledge of it is
+  recorded and the viewpoint character holds none at the scene's latest
+  event, so record who knows a secret with `add-knowledge`.
 - `show` each event the scene depicts, and `span <event> <event>` for any
   time the prose states ("three days since").
 - `show count:<id>` for any number the prose states.
@@ -145,15 +153,21 @@ edit prints (see `trace` below).
 - **Causes.** `add-cause wreck letter` says the wreck caused the letter.
   Positions and constraints only say what comes first; a cause says why.
 - **Contradictions are kept.** An edit that puts events out of order, an
-  effect before its cause, knowledge ending before it starts, or a count
-  above its total is saved and the problem printed; `contradictions` lists
-  them all. A clash that isn't about time can be an open question with
-  `--conflict`.
+  effect before its cause, knowledge or a membership ending before it
+  starts, or a count above its total is saved and the problem printed;
+  `contradictions` lists them all. A clash that isn't about time can be an
+  open question with `--conflict`.
 - **Who takes part in an event.** `set-participant wreck actor:ivo --role
   "at the helm"` records who did it, who saw it, or which object was used
-  (`object:knife --role "the weapon"`). There is no membership record, so
-  when someone joins or leaves a group, add an event for it with them as a
-  participant (`--role "leaves the crew"`), and `show actor:` lists it.
+  (`object:knife --role "the weapon"`).
+- **Who belongs to a group, and when.** A group is an actor (`add-actor crew
+  "The crew" --kind organization`), and belonging to it is a membership:
+  `add-membership ivo-crew ivo crew --since signs-on --until wreck`.
+  Without `--since` they always have, and without `--until` they never
+  leave; someone who leaves and rejoins has a second membership. Set the
+  leaving later with `update-membership ivo-crew --until wreck`. `show
+  actor:ivo` lists the groups he belongs to, and `show actor:crew` its
+  members, each with when.
 - **A drive's life.** A want can end or change: `add-drive-turn find-sender
   satisfied --at letter`, `renounced`, `replaced --into <drive>` (a new want
   takes its place) or `flipped --into <drive>` (it turns into its opposite).
