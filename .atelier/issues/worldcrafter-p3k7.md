@@ -14,9 +14,9 @@ relationships:
   relates: []
 schema: "atelier.issue"
 schema_version: 2
-status: "draft"
+status: "todo"
 title: "Notes first: find where an agent with plain notes falls short, and aim aids there"
-updated_at: "2026-11-05T05:35:59.096530624+00:00"
+updated_at: "2026-11-05T05:45:54.670333463+00:00"
 ---
 
 ## Outcome
