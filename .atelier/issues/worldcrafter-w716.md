@@ -14,9 +14,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Four-judge panel runner, with Grok"
-updated_at: "2026-11-05T07:06:41.086981196+00:00"
+updated_at: "2026-11-05T07:08:29.062561339+00:00"
 ---
 
 ## Goal
