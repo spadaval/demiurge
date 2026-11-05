@@ -92,10 +92,11 @@ These are what the tools reason about.
 - **Actors**: characters and organisations.
 - **Drives**: an actor's want or intention, what's at stake, and what it will do about it. Drives oppose, ally or compete. They are the engine: *why* things happen. A drive links to the events that created it, so reworking those events reaches it.
 - **Questions**: what the reader is waiting for. A question opens at a scene, makes progress, and is answered (Sanderson's promise, progress and payoff). Every MICE thread reduces to one: will she get out, who did it, will he become whole, will order be restored. Questions are about reader knowledge, so they belong to the telling layer and use the "revealed" model in `story-time.md`.
-- **Open questions**: what the story's makers haven't decided, such as "why did he leave?". An open question holds candidate answers and what each would connect to, and it can also record a conflict someone has noticed. These aren't the questions above, which are what the reader is waiting for.
-- **Events**: what happens, with a summary, placed in story time.
+- **Open questions**: what the story's makers haven't decided, such as "why did he leave?". An open question holds candidate answers and what each would connect to, and it can also record a conflict someone has noticed. When its chosen answer is replaced or withdrawn, the old answer stays on the question as superseded, with what replaced it, so a rework keeps its history; the readable form leaves that history out. These aren't the questions above, which are what the reader is waiting for.
+- **Events**: what happens, with a summary, placed in story time. An event can be recorded as the cause of another; an effect placed before its cause, or a circle of causes, is reported as a contradiction and kept.
 - **Scenes**: units of the telling, where drives collide and questions move. A scene records which actors are in it.
 - **World facts**: as in `story-time.md`, changing at events.
+- **Deliberate gaps**: a gap the team has judged fine, such as a drive that comes from temperament and no event, marked on its record with a reason, so the gap report stops listing it.
 
 ## Lenses
 
