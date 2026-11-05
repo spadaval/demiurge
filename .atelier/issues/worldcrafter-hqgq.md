@@ -12,6 +12,8 @@ relationships:
   blocks: []
   children:
   - kind: "issue"
+    id: "worldcrafter-1wrn"
+  - kind: "issue"
     id: "worldcrafter-ac45"
   - kind: "issue"
     id: "worldcrafter-fax9"
@@ -35,7 +37,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Change the tool from the verdict, then compare again on a fresh premise"
-updated_at: "2026-11-05T00:57:39.487799674+00:00"
+updated_at: "2026-11-05T03:50:11.683495226+00:00"
 ---
 
 ## Goal

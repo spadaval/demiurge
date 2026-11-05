@@ -17,9 +17,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Panel runner fixes before the second panel"
-updated_at: "2026-11-05T00:56:08.734976854+00:00"
+updated_at: "2026-11-05T03:50:11.761278191+00:00"
 ---
 
 ## Goal
@@ -39,3 +39,5 @@ The panel runner is ready for the second comparison's panel (worldcrafter-iu6l),
 - 2026-11-04 [note] Also from review finding worldcrafter-aaj0: skip a quoted cat heredoc body only when the cat line is top-level (not inside bash <<X or a multi-line string), with the two probes as tests.
 - 2026-11-04 [note] Also from review finding worldcrafter-jf70 (see review record).
 - 2026-11-04 [note] Also from review finding worldcrafter-g0qj (see review record).
+- 2026-11-04 [decision] Made a child of worldcrafter-hqgq
+  Reason: It changes app/scripts/comparison/transcript.ts and app/scripts/judging/panel.ts, which hqgq's branch also changed (fax9, ac45); sharing the branch avoids a conflicting second branch, and the panel for iu6l runs after hqgq merges.
