@@ -1,6 +1,6 @@
 # Story Model
 
-> **No longer sets the product's direction.** This describes the typed story model of the Structure first mission, which ended when two blind comparisons preferred plain notes (decision worldcrafter-03rp). The model, CLI and skill remain in the repository, frozen. The current mission is Notes first (`docs/strategies/notes-first.md`).
+> **No longer sets the product's direction.** This describes the typed story model of the Structure first mission, which ended when two blind comparisons preferred plain notes (decision worldcrafter-03rp). The model, CLI and skill are back in use as the author's bible, separate from the prose, under decision worldcrafter-jeue. The current mission is World first (`docs/strategies/world-demo.md`).
 
 Status: accepted (2026-10-29, decision worldcrafter-ok5a). Strategy: `docs/strategies/structure-first.md`.
 

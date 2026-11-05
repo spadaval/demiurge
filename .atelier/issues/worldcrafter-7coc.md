@@ -3,6 +3,9 @@ created_at: "2026-11-05T06:28:02.276346704+00:00"
 id: "worldcrafter-7coc"
 issue_type: "feature"
 labels: []
+workflow_branch:
+  branch_base: master
+  work_branch: feature/worldcrafter-7coc
 priority: "P1"
 relationships:
   blocks: []
@@ -30,7 +33,7 @@ schema: "atelier.issue"
 schema_version: 2
 status: "todo"
 title: "Round 0: fix the tool before any run"
-updated_at: "2026-11-05T06:28:02.484059554+00:00"
+updated_at: "2026-11-05T06:32:15.787501502+00:00"
 ---
 
 ## Goal

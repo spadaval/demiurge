@@ -1,9 +1,7 @@
 ---
 name: story-sketch
-description: Frozen, not the current approach (decision worldcrafter-03rp). Mechanics for the typed story-file CLI used in the Structure first comparisons. Use only when explicitly asked to work in a typed story file with that CLI; for sketching or reworking a story otherwise, work in plain notes with craft.md.
+description: Mechanics for building a story's world and outline in a typed story file with the Demiurge story CLI, the author's bible, kept apart from the prose. Use when asked to sketch, outline or rework a story in a story file, or to write scenes from one.
 ---
-
-> **Frozen and not the current approach.** Two blind comparisons preferred plain notes to this typed tool, and its bet ended (decision worldcrafter-03rp). The current mission works in plain notes (`docs/strategies/notes-first.md`); `craft.md` beside this file is still used.
 
 # Sketching a story
 
