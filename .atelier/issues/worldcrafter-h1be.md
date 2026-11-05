@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Events can cause events"
-updated_at: "2026-11-05T00:50:24.465371383+00:00"
+updated_at: "2026-11-05T01:12:52.583955705+00:00"
 ---
 
 ## Goal

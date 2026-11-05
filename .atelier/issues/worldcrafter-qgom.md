@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Reach what free text mentions"
-updated_at: "2026-11-05T00:50:24.486855565+00:00"
+updated_at: "2026-11-05T01:12:55.934842488+00:00"
 ---
 
 ## Goal

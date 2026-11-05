@@ -15,9 +15,9 @@ relationships:
     type: "blocked_by"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Keep answers' history, and let a gap be deliberate"
-updated_at: "2026-11-05T00:50:24.508703985+00:00"
+updated_at: "2026-11-05T01:12:58.491959268+00:00"
 ---
 
 ## Goal
