@@ -17,9 +17,9 @@ relationships:
     type: "discovered_from"
 schema: "atelier.issue"
 schema_version: 2
-status: "todo"
+status: "in_progress"
 title: "Counts over time, and what the reader knows before a scene (Round 1 reading 2, 3)"
-updated_at: "2026-11-05T09:13:32.783897695+00:00"
+updated_at: "2026-11-05T09:54:22.742529032+00:00"
 ---
 
 ## Goal
