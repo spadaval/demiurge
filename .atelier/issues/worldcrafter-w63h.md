@@ -43,7 +43,7 @@ atelier-nn67 in spadaval/atelier (the rollout), ADR 0028 there, and its starter 
 demiurge's policy has the starter's shape with `merge_commit`, and AGENTS.md describes the new lifecycle in Atelier's words; no record needed moving, and `atelier check` and `atelier doctor` pass on the branch.
 
 - Policy: `diff` of `.atelier/workflow.yaml` against a fresh `atelier init` policy with `base_branch: master` and `merge_strategy: merge_commit` is empty.
-- Statuses: no record, on `master` or here, is in `blocked` or `review`, and the repository has no validation items; `atelier check` passes under the new policy.
+- Statuses: no record, on `master` or here, is in `blocked` or `review`, and its four validations are all `done` or `superseded`; `atelier check` passes under the new policy.
 - AGENTS.md: read against Atelier's AGENTS.md (spadaval/atelier master).
 - `atelier check` passes, noting the older disposition form; `atelier doctor` passes.
 
