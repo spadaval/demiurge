@@ -25,8 +25,8 @@ Move this repository onto Atelier's new lifecycle (atelier-mmpv in spadaval/atel
 
 ## Done when
 
-- [x] `.atelier/workflow.yaml` has the shape `atelier init` writes, with `merge_strategy: merge_commit`: no `blocked` or `review` status, no `close` transition for work, and `loose_end` and `validation` on the `on_base` workflow. `base_branch: master` and the issue types stay.
-- [x] No record sat in a status the new policy lacks (`blocked`, `review`, or a backlog validation), so none moves, and `atelier check` finds every record valid under the new policy.
+- [x] `.atelier/workflow.yaml` has the starter's shape, as Atelier's own policy has it on atelier-nn67, with `merge_strategy: merge_commit`: no `blocked` or `review` status, no `close` transition for work, and `loose_end` and `validation` on the `on_base` workflow, which keeps `backlog` with `plan` and `defer`. `base_branch: master` and the issue types stay.
+- [x] No record sat in a status the new policy lacks (`blocked` or `review`), so none moves, and `atelier check` finds every record valid under the new policy.
 - [x] AGENTS.md describes the lifecycle in the same words as Atelier's AGENTS.md and keeps the repository's own notes (`atelier work ready`, the app and mission notes, naming).
 - [x] `atelier check` and `atelier doctor` pass on the branch.
 
@@ -40,9 +40,9 @@ atelier-nn67 in spadaval/atelier (the rollout), ADR 0028 there, and its starter 
 
 ## Report
 
-demiurge's policy has the starter's shape with `merge_commit`, and AGENTS.md describes the new lifecycle in Atelier's words; no record needed moving, and `atelier check` and `atelier doctor` pass on the branch.
+demiurge's policy has the starter's shape with `merge_commit`, its `on_base` workflow keeping `backlog`, and AGENTS.md describes the new lifecycle in Atelier's words; no record needed moving, and `atelier check` and `atelier doctor` pass on the branch.
 
-- Policy: `diff` of `.atelier/workflow.yaml` against a fresh `atelier init` policy with `base_branch: master` and `merge_strategy: merge_commit` is empty.
+- Policy: `diff` of `.atelier/workflow.yaml` against a fresh `atelier init` policy with `base_branch: master` and `merge_strategy: merge_commit` shows only `on_base`'s `plan`, `defer` and `supersede` from `backlog`, identical to the `on_base` section of Atelier's policy in the atelier-nn67 worktree.
 - Statuses: no record, on `master` or here, is in `blocked` or `review`, and its four validations are all `done` or `superseded`; `atelier check` passes under the new policy.
 - AGENTS.md: read against Atelier's AGENTS.md (spadaval/atelier master).
 - `atelier check` passes, noting the older disposition form; `atelier doctor` passes.
@@ -54,3 +54,4 @@ demiurge's policy has the starter's shape with `merge_commit`, and AGENTS.md des
 ### Decisions
 
 - With no merge policy section here, the "One issue" bullet ends at `atelier merge <id>`, and the base-branch rule ("Unreviewed non-trivial code never reaches `master`…") replaces the old line about what may be committed to `master`.
+- `on_base` keeps `backlog` with `plan` and `defer`, the coordinator's design change, matching Atelier's starter on atelier-nn67. It changes the policy after approval worldcrafter-xgwl, so that approval is stale.
