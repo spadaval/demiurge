@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-gq2k
 title: Garden demiurge, 2026-11-11
-status: in_review
+status: changes_requested
 mission: null
 labels:
 - garden
