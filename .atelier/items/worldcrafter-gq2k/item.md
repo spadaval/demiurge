@@ -3,13 +3,14 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-gq2k
 title: Garden demiurge, 2026-11-11
-status: ready
+status: building
 mission: null
 labels:
 - garden
 priority: medium
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A1e4a355d-d905-4146-a4d8-89e6984f49f1%3Adelegate-task%3Ab29105d4-8c56-489f-a6cd-28e7c5b20d49
 ready:
   by: sumeet, through mission atelier-295u
   at: 2026-11-11T18:21:43.422627572Z
