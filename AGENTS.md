@@ -39,7 +39,7 @@ The product is Demiurge (decision `worldcrafter-cogw`), and `worldcrafter` stays
 Use bun for all commands.
 - **Build**: `bun run build` | **Start**: `bun run start`
 - **Format**: `bun run format` | - **Lint**: `bun run lint --fix` (run after all changes)
-- The lines above are the old app's, at the root. The rebuild in `app/` has its own, run from `app/` after a `bun install` there: `bun run check` runs the type check, lint and tests, `bun test` runs the tests alone, and `bun run build` builds it.
+- The lines above are the old app's, at the root. The rebuild in `app/` has its own, run from `app/` after a `bun install` there: `bun run check` runs the type check, lint and tests, `bun test` runs the tests alone, and `bun run build` builds it. It has no launch script: the web app is static, so `bun run build` writes `dist/` for any static server, and the story CLI runs with `bun scripts/story.ts --help`.
 
 ## Architecture
 - **State**: `@legendapp/state` for persistent/shared state, `useState` only for ephemeral UI state (reference `docs/legend-state.md`)
