@@ -1,9 +1,3 @@
-schema = "atelier.project_config"
-schema_version = 1
-project_slug = "worldcrafter"
-
-[paths]
-state_root = ".atelier"
-
-[prune]
-canonical_retention_days = 7
+schema_version = 3
+slug = "worldcrafter"
+base_branch = "master"

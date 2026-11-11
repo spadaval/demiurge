@@ -3,13 +3,31 @@
 ## ⚠️ CRITICAL WARNING
 **DO NOT RUN THE DEV SERVER!** `bun dev` is a watch command that never terminates. The dev server is always running - starting it will duplicate the server _and_ cause you to wait indefinitely.
 
-## Work tracking
-This repository uses [Atelier](https://github.com/spadaval/atelier) for missions, issues, evidence and review (records live in `.atelier/`, base branch `master`).
-- Start a session with `atelier status`; before handoff commit the records and run `atelier land`. Active work may remain open, with unfinished code handed off honestly. Find work with `atelier work ready`.
-- One issue, in order: `atelier start <id>` (an item with a recorded branch switches to it; otherwise on `master` it creates a branch named `<id>`, and on another branch it takes that branch), implement, tick every Done when line and write the `## Report`, `atelier review request <id>`, fix and re-review, approve, then `atelier merge <id>`, which marks the work done. Work has no close step. Only a code change makes an approval stale, though a rewritten Done when line still gets a fresh one. Work that changes no code and can only happen after a merge or release is a loose end, unless it is an independent validation; a change with no issue takes the light path. Agent Factory's Atelier reference has the detail and defines check, review, land, done and close.
-- Unreviewed non-trivial code never reaches `master`. Tracker records and mission strategies may be committed there directly; non-trivial planning is reviewed before the work it defines starts.
-- The rebuilt app lives in `app/` (its own package: run `bun install` and `bun run check` there). The root `src/` is the old app, kept for reference until it is retired.
-- Mission strategies live in `docs/strategies/`. The current mission is World first (`docs/strategies/world-demo.md`, mission worldcrafter-gwx3): a demonstration of the Demiurge-assisted process, in which a writer agent uses the story CLI (`app/scripts/story.ts`) and its skill (`.agents/skills/story-sketch/`) to build a rich world and outline, then writes scenes that a judging panel scores as prose. The model is the author's bible and is never shown to readers. Sumeet's decision worldcrafter-jeue opened it, dropped head-to-head comparisons and superseded Notes first (`docs/strategies/notes-first.md`). Before that, Structure first (`docs/strategies/structure-first.md`) ended after two blind comparisons preferred plain notes (decision worldcrafter-03rp); jeue puts its model, CLI and skill back in use. Design proposals for the app rebuild (`docs/strategies/rebuild.md`) are in `docs/rebuild/`; `docs/rebuild/story-model.md` describes the Structure first design and no longer sets direction. Where the rebuild docs conflict with the rest of this file, they describe the app's target and this file describes the old code.
+## Work Tracking
+
+Work is tracked with Atelier, in `.atelier/`: missions in
+`missions/<id>/mission.md`, items in `items/<id>/item.md` with their
+reviews beside them, and the rules in `config.toml`.
+
+- Run `atelier status` first; Claude Code and Codex run it at session start
+  through `.claude/settings.json` and `.codex/hooks.json`. It says what you
+  hold and the next command, and `atelier <command> --help` says what each
+  does. Agent Factory, loaded as `/agent-factory`, says how to decide.
+- An item, in order: `atelier start <id>`, implement, tick every Done when
+  line and write the `## Report`, `atelier submit`. A reviewer, in a thread
+  that did not write the change, runs `atelier review <id>` and `atelier
+  verdict`. Once approved, the implementer runs `atelier merge`, which
+  marks the item done on `master`.
+- Planning happens on `master` with `atelier new`, `set` and `ready`;
+  `ready`, `drop`, `close` and `lead` make their own commit. A mission is
+  read with `atelier show <mission>`.
+- This repository's config names no forge, so nothing pushes for you.
+  After `atelier merge`, or after planning on `master`, push it with
+  `git push origin master`. The pre-push hook checks every commit the push
+  brings to `master`: code arrives only through an Atelier merge. A rule
+  can be passed on purpose with `ATELIER_SKIP="<reason>"` on the command;
+  use it only when you mean to.
+- `atelier setup` installs the Git hooks in a new clone.
 
 ## Naming
 The product is Demiurge (decision `worldcrafter-cogw`), and `worldcrafter` stays in some places on purpose. Don't rename these as cleanup:
