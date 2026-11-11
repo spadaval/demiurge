@@ -58,7 +58,7 @@ Worth having on its own: the ranked list of shortfalls, even if no aid follows.
   the panel runner (`app/scripts/judging/`), `craft.md` and the Verdicts
   procedure carry over. The typed-model CLI and skill are not built on.
 - **Form follows results** (decision worldcrafter-45an). Nothing on a screen
-  until a verdict asks for it. The rebuilt app (`docs/strategies/rebuild.md`)
+  until a verdict asks for it. The rebuilt app (`.atelier/missions/worldcrafter-3otd/mission.md`)
   is neither used nor retired here.
 - **When qualities conflict:** the quality of the story as the panel judges it,
   then the cost of finding out, then speed.
