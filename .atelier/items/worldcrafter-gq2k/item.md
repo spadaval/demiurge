@@ -59,7 +59,7 @@ Window: 2026-11-11T15:20:16Z to 2026-11-11T18:21:49Z UTC, 1 item merged. Working
 
 What means nothing yet: every log number is one item, worldcrafter-s9lp, a four-line docs change, so no median or worst says anything. Its 15 minutes in review are 14 minutes before any reviewer started, because its implementer ended its first turn without starting one; the review took about a minute. The two ready items wait on Sumeet's decisions. The carried rows are the baseline itself.
 
-Checklist: 0 met, 9 not met (1: no `CLAUDE.md` imports `AGENTS.md`; 2, 4, 5, 6: `AGENTS.md` named no command for `app/`, where 756 of 1,068 recent file changes landed, and the root lint failed on master; 3: `AGENTS.md` named the missing `src/docs/editor`; 7: no merge check and no CI; 8: no verify skill; 9: 2 of 2 bugs lack a cause), 0 could not test. Lines 2, 3 and 5 are fixed on this branch; `app/`'s build, type check, lint and 1,154 tests all pass.
+Checklist: 0 met, 9 not met (1: no `CLAUDE.md` imports `AGENTS.md`; 2, 4, 5, 6: `AGENTS.md` named no command for `app/`, where 756 of 1,068 recent file changes landed, and the root lint failed on master; 3: `AGENTS.md` named the missing `src/docs/editor`; 7: no merge check and no CI; 8: no verify skill; 9: 2 of 2 bugs lack a cause), 0 could not test. On this branch lines 2 and 3 are fixed, and 4, 5 and 6 in part: `AGENTS.md` now names `app/`'s commands, whose build, type check, lint and 1,154 tests all pass, and the root lint passes, but the root app still has no documented install, type check or test command.
 
 ### Worst Spots
 - Navigate: the sample is one thread, s9lp's, which made 4 calls and read only its item record before its first edit, so it shows nothing about the code. `AGENTS.md`'s Architecture and File Structure sections still describe the old root app under `src/`; worldcrafter-2x5z owns their rewrite and is a draft.
@@ -77,9 +77,12 @@ Moves: defects found after merge, which counts neither today. Change: trace worl
 
 ### Fixed and Settled
 - 6fb6436: upkeep. Biome's own formatting of the five files that failed root `bun run lint` on master.
-- 23dca4b: sign. `AGENTS.md` names `app/`'s install, check, test and build commands, and points at `docs/editor` instead of the missing `src/docs/editor`.
+- 23dca4b and 62493cc: sign. `AGENTS.md` names `app/`'s install, check, test, build and launch commands, and points at `docs/editor` instead of the missing `src/docs/editor`.
 - `atelier list --deferred` showed no finding to settle. No item waits for the merge to get labels and a cause.
 
 ### Responses
+
+- 1-6qfl.1: rebutted: in a fresh clone of this branch with `bun install --frozen-lockfile` at the root, root `bun run lint` (Biome 2.4.4) exits 0 with 2 warnings and 1 info, with or without `app/`'s dependencies and with `.git` moved away, and prints no nested-configuration error. The page and checklist now call line 5 fixed only in part, since the root app has no type check command.
+- 1-6qfl.2: fixed in 62493cc
 
 ### Session
