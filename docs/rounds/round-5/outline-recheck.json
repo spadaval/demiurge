@@ -3,9 +3,7 @@
   "commit": "183931e189fee137bbd274fc21f38403eb805dd5",
   "transcript": {
     "initModel": "claude-opus-5-5",
-    "models": [
-      "claude-opus-5-5"
-    ],
+    "models": ["claude-opus-5-5"],
     "skills": [],
     "mcpServers": [],
     "plugins": [

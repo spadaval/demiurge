@@ -755,14 +755,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         {
                           id: "server",
                           title: "Local Server",
-                          description:
-                            "Connect to a local server or host.",
+                          description: "Connect to a local server or host.",
                         },
                         {
                           id: "openrouter",
                           title: "OpenRouter",
-                          description:
-                            "Cloud access to 100+ AI models.",
+                          description: "Cloud access to 100+ AI models.",
                         },
                       ] as const
                     ).map((option) => {
@@ -817,9 +815,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               browserTestStatus.loading ? "animate-spin" : ""
                             }
                           />
-                          {browserTestStatus.loading
-                            ? "Testing..."
-                            : "Test"}
+                          {browserTestStatus.loading ? "Testing..." : "Test"}
                         </Button>
                       </div>
 

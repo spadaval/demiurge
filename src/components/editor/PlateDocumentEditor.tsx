@@ -838,14 +838,9 @@ export function PlateDocumentEditor({ document$ }: PlateDocumentEditorProps) {
             >
               <span className="relative z-10 inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 group-hover:text-zinc-200 transition-colors">
                 {isRunningEntityDetection ? (
-                  <Loader2
-                    size={12}
-                    className="animate-spin"
-                  />
+                  <Loader2 size={12} className="animate-spin" />
                 ) : (
-                  <WandSparkles
-                    size={12}
-                  />
+                  <WandSparkles size={12} />
                 )}
                 Scan Entities
               </span>

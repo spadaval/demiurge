@@ -290,9 +290,7 @@ function DeleteAllButton({
             : "text-zinc-700 hover:text-rose-400/60 border-transparent"
         }`}
         title={
-          confirmation
-            ? "Confirm delete all sessions"
-            : "Delete all history"
+          confirmation ? "Confirm delete all sessions" : "Delete all history"
         }
       >
         {confirmation ? "Confirm Delete" : "Clear History"}
