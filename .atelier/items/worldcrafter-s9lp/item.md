@@ -3,12 +3,13 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-s9lp
 title: Point the files that still name the mission's moved strategy at its new place
-status: ready
+status: building
 mission: null
 labels: []
 priority: medium
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A2074a88e-920b-49f9-bd17-caf5903cc60f%3Adelegate-task%3A484ff27f-40b9-413e-b59f-ae79d6a20f57
 ready:
   by: sumeet
   at: 2026-11-11T15:43:39.460143747Z
