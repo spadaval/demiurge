@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-s9lp
 title: Point the files that still name the mission's moved strategy at its new place
-status: in_review
+status: approved
 mission: null
 labels: []
 priority: medium
