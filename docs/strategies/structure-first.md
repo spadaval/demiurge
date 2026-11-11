@@ -19,7 +19,7 @@ high-dimensional, and a page is linear: writing it down too early flattens it,
 and after that it stops evolving. That is why most stories never leave the
 head.
 
-The rebuild (`docs/strategies/rebuild.md`) gave Demiurge a sound
+The rebuild (`.atelier/missions/worldcrafter-3otd/mission.md`) gave Demiurge a sound
 foundation for prose: stable block IDs, AI projections, generation with
 visible context, a storage adapter and story time. But it was planned as a
 manuscript tool. Decision worldcrafter-ok5a makes it structure-first: the
@@ -160,7 +160,7 @@ of this plan should change.
   much a candidate touches is a signal, not a score: the most connected answer
   isn't always the most satisfying, and that call is judgment.
 - **Builds on the rebuild.** Platform, storage, the LLM client, model
-  control, stable IDs and story time are as in `docs/strategies/rebuild.md`.
+  control, stable IDs and story time are as in `.atelier/missions/worldcrafter-3otd/mission.md`.
 - **Structure is a graph, not a document.** Outlines, lists and grids are
   views. Change things at the highest level where they apply.
 - **Primitives and lenses** (`docs/rebuild/story-model.md`). Tools reason

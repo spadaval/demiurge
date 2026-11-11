@@ -121,7 +121,7 @@ These are what the writer thinks in. They are named, writer-owned groupings over
 
 ## Effect on the plan
 
-Adopted on 2026-10-29 (worldcrafter-uicb). The rebuild mission (`docs/strategies/rebuild.md`) was narrowed to the foundation it had mostly built, and the story model continues as its own mission in `docs/strategies/structure-first.md`. Recognition, discovery and bookkeeping, AI edit proposals and talk pages moved to the backlog, to be re-planned under this model. Story time, AI segments, provenance and stable IDs keep their place.
+Adopted on 2026-10-29 (worldcrafter-uicb). The rebuild mission (`.atelier/missions/worldcrafter-3otd/mission.md`) was narrowed to the foundation it had mostly built, and the story model continues as its own mission in `docs/strategies/structure-first.md`. Recognition, discovery and bookkeeping, AI edit proposals and talk pages moved to the backlog, to be re-planned under this model. Story time, AI segments, provenance and stable IDs keep their place.
 
 The first version is headless: a CLI and a skill over one readable file per story, tested by a comparison against the same agent with plain notes (decision worldcrafter-2y4g). A screen comes after a verdict supports it, since how jumping around feels is the part of fluidity a conversation can't test. If a judging panel decides the best stories don't need one, it doesn't get built (decisions worldcrafter-45an and worldcrafter-zybl).
 
