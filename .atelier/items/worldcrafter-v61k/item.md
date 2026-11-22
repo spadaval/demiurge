@@ -3,9 +3,10 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-v61k
 title: Move the hosted app to demiurge.ink and rename the Worker
-status: draft
+status: open
 mission: null
-labels: []
+labels:
+- needs-human
 priority: low
 blocked_by: []
 implementers: []

@@ -4,7 +4,7 @@ schema_version: 3
 id: worldcrafter-my9t
 title: Snapshot retention policy
 status: open
-mission: null
+mission: worldcrafter-3z9j
 labels: []
 priority: medium
 blocked_by: []
