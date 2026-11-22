@@ -3,15 +3,16 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-lhh3
 title: Talk pages and world inbox
-status: draft
-mission: null
+status: open
+mission: worldcrafter-mtkn
 labels:
 - ai
 - talk
 - feature
 priority: medium
 blocked_by:
-- worldcrafter-yx9v
+- worldcrafter-if6h
+- worldcrafter-667u
 implementers: []
 ready: null
 trivial: null
@@ -21,20 +22,20 @@ created_at: 2026-10-17T07:07:33.752391106Z
 
 ## Goal
 
-Every document has a talk page, and so does the world. Threads have status. Model messages record the model
-and the request ID. Messages can carry proposals (edit, fact, relation, record decision) that apply only
-when accepted. Open threads started by the AI form the world inbox. This replaces the old global chat.
+Build scoped talk pages and the World Inbox inside the Night Edition `Topics` view (`DESIGN.md`, `docs/rebuild/talk-pages.md`) backed by the app-owned Story Agent Runner (`worldcrafter-667u`) and persisted through `StorageAdapter`.
+
+Every topic is scoped to the world, a scene, a passage, or a bible record, has status (`open` / `resolved` / `archived`), and records author attribution (human or model + profile + stored request ID + tool calls). Open AI-raised topics and unresolved story problems/contradictions aggregate in the World Inbox. This replaces the old global chat without depending on block-ID prose edit proposals (`worldcrafter-yx9v`, which remains out of scope for `worldcrafter-mtkn`).
+
+*(Supersedes the 2026-10-29 and 2026-11-05 backlog notes, which predate `worldcrafter-jeue` and Sumeet's 2026-11-22 typed-store + app-owned agent direction.)*
 
 ## Done when
 
-- [ ] Provisional: scenario tests for both scopes, attribution, and proposals applying only when accepted. Delivers S6.
+- [ ] `StorageAdapter` persists `Topic` and `TalkMessage` records (world, scene, passage, or bible-record scope; `open` / `resolved` / `archived` status; human or attributed model author with stored request ID and tool-call trace reference).
+- [ ] The Night Edition `Topics` view lists topics by scope, displays the World Inbox (open AI-started topics and surfaced story contradictions), and runs live multi-turn conversations through the Story Agent Runner (`worldcrafter-667u`).
+- [ ] Component and scenario tests (against a stub LLM server) verify creating a topic, running a multi-turn agent turn with tool calls, attributing model messages, resolving/archiving topics, and listing the World Inbox.
+- [ ] Matches the `Topics` specification in the amended `DESIGN.md` (`worldcrafter-if6h`); `cd app && bun run check` passes.
 
-## Design
+## Scope
 
-`docs/rebuild/talk-pages.md`.
-
-## Notes
-
-- 2026-10-17 [note] From the 2ony story-time review (2026-10-17): (R6) when a scene leaves the outline, fact changes anchored to its event and reveals it made only show up as unknown_event reasons per query; load() does not report them. Surface them (and reveals whose fact or change no longer exists) as problems in the world inbox. (R7) reordering the outline can create contradictions with explicit scene constraints that are only reported on load; surface those too.
-- 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
-- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.
+In: Talk-page persistence in `StorageAdapter`, Night Edition `Topics` and World Inbox UI, and Story Agent Runner integration.
+Out: Anchored launch triggers from inspector/scene views (`worldcrafter-rxvy`), prompt/tool-trace editing UI (`worldcrafter-w4mr`), and block-ID prose edit proposals (`worldcrafter-yx9v`).
