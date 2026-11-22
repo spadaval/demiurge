@@ -9,7 +9,10 @@ labels:
 - context
 - editor
 priority: high
-blocked_by: []
+blocked_by:
+- worldcrafter-lgz8
+- worldcrafter-667u
+- worldcrafter-w4mr
 implementers: []
 ready: null
 trivial: null
@@ -19,16 +22,16 @@ created_at: 2026-11-22T22:39:04.439988908Z
 
 ## Goal
 
-Wire the unified story bible directly into the scene prose Context Viewer and generation pipeline (`app/src/context/`, `app/src/generate/`, `app/src/app/generation.ts`) so hands-on prose drafting with local `llama.cpp` or hosted finetunes automatically receives `reader-order --before`, opening counts, viewpoint dramatic-irony marks, active drives, and planted objects—all visible and editable before sending.
+Feed `worldcrafter-667u`'s deterministic scene context-packet builder directly into the scene prose generation pipeline (`app/src/context/builder.ts`, `app/src/generate/`, `app/src/app/generation.ts`) and display/edit it in the shared Context Viewer (`app/src/generate/context-viewer.tsx`, extended by `worldcrafter-w4mr`)—without creating a second context builder or a second viewer component.
 
 ## Done when
 
-- [ ] `app/src/context/builder.ts` assembles scene generation requests from the unified story bible (scene summary, viewpoint, dramatic-irony marks, opening counts, active drives/objects, and nearby prose) with a clear breakdown in the Context Viewer.
-- [ ] The writer can inspect, edit, pin, or exclude bible sections in the request slip before sending to any configured model/sampler profile.
-- [ ] Scenario tests against a stub OpenAI-compatible server verify assembled context, edited request passthrough, and vermilion AI segment provenance.
-- [ ] `bun run check` passes in `app/`.
+- [ ] `app/src/context/builder.ts` consumes `worldcrafter-667u`'s scene context-packet builder (scene summary, viewpoint, dramatic-irony marks, opening counts, active drives/objects, and nearby prose) rather than duplicating context assembly.
+- [ ] Prose generation renders and edits the assembled request through the shared `app/src/generate/context-viewer.tsx` (`worldcrafter-w4mr`), supporting pinning/excluding bible sections before sending to any configured model/sampler profile.
+- [ ] Scenario tests against a stub OpenAI-compatible server verify assembled bible context, edited request passthrough, and vermilion AI segment provenance.
+- [ ] `cd app && bun run check` passes.
 
 ## Scope
 
-In: `app/src/context/`, `app/src/generate/`, and `app/src/app/generation.ts`.
-Out: Generation shortcuts/profile retargeting (`worldcrafter-xodp`) and writer-notes representation (`worldcrafter-wknl`).
+In: Wiring `worldcrafter-667u`'s context-packet builder into `app/src/context/builder.ts`, `app/src/generate/`, and `app/src/app/generation.ts` using the shared `context-viewer.tsx`.
+Out: Keyboard shortcuts, stale-pin clearing, and profile retarget fixes (`worldcrafter-xodp`), and writer-notes representation (`worldcrafter-wknl`).

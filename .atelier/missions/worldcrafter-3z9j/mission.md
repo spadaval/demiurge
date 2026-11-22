@@ -16,33 +16,34 @@ created_at: 2026-11-22T22:38:26.476173643Z
 
 ## Why
 
-Started from Sumeet's direction on 2026-11-22: once the unified story store, app-owned agent runtime (`worldcrafter-r7vd`), and Night Edition inspector + scoped conversation UI (`worldcrafter-mtkn`) are working, Demiurge can slide along the Codex → VS Code axis where direct human control earns its keep—connecting the bible to hands-on prose finishing with custom samplers, adding direct-manipulation controls for high-frequency bible edits, and shipping multi-device sync and `demiurge.ink`.
+Started from Sumeet's direction on 2026-11-22: once the unified story store, app-owned agent runtime (`worldcrafter-r7vd`), and Night Edition inspector + scoped conversation UI (`worldcrafter-mtkn`) are working, Demiurge can slide along the Codex → VS Code axis where direct human control earns its keep—connecting the bible to hands-on prose finishing with custom samplers, adding direct-manipulation controls for high-frequency bible edits, and shipping multi-device sync and an optional inference proxy.
 
 ## Outcome
 
-Hands-on prose finishing powered by live story-bible context and ergonomic sampler controls, selective direct-manipulation controls for the bible edits that are faster to click than prompt, sync-ready storage with a Cloudflare Worker sync/proxy backend for laptop-and-phone access, and the hosted app live on `demiurge.ink`.
+Hands-on prose finishing powered by live story-bible context (reusing `worldcrafter-667u`'s context-packet builder and `worldcrafter-w4mr`'s shared Context Viewer) and ergonomic sampler controls, selective direct-manipulation controls for the bible edits that are faster to click than prompt, device-local snapshot retention, sync-ready storage with tombstones, and a Cloudflare Worker sync backend plus optional inference proxy for laptop-and-phone access.
 
 ## Success criteria
 
-- Scene prose generation's editable Context Viewer pulls directly from the unified story bible (`reader-order --before`, active drives, opening counts, viewpoint marks, writer notes excluded) with ergonomic shortcuts, pins, and profile retargeting (`worldcrafter-aq1r`, `worldcrafter-xodp`, `worldcrafter-wknl`).
-- High-frequency bible actions (answering/rejecting open-question candidates, reordering scenes, changing viewpoints, updating counts, marking deliberate gaps) work with one-click UI controls calling the same `commands.ts` mutations as the agent (`worldcrafter-o7to`).
-- Storage has sync-ready tombstones (`worldcrafter-4t98`), bounded snapshot retention (`worldcrafter-my9t`), and a Cloudflare Worker sync backend + optional inference proxy so one writer can switch between laptop and phone (`worldcrafter-ji5d`).
-- Once Sumeet acquires `demiurge.ink`, the hosted app moves to it and retires the old `worldcrafter` Worker name (`worldcrafter-v61k`).
+- Scene prose generation reuses `worldcrafter-667u`'s scene context-packet builder and `worldcrafter-w4mr`'s shared `app/src/generate/context-viewer.tsx` (no second context builder), with writer notes excluded (`worldcrafter-wknl`) and generation shortcuts, stale-pin clearing, and retarget fixes landed (`worldcrafter-aq1r`, `worldcrafter-xodp`).
+- High-frequency bible actions (answering/rejecting open-question candidates, reordering scenes, changing viewpoints, updating counts, marking deliberate gaps) work with one-click UI controls calling the same `app/src/story/commands.ts` mutations as the agent (`worldcrafter-o7to`, after `worldcrafter-lgz8`, `worldcrafter-7r87`, `worldcrafter-wqh0`, `worldcrafter-hqca`).
+- Storage has sync-ready tombstones across all synced collections including the story bible (`worldcrafter-4t98`, after `worldcrafter-lgz8`), a device-local snapshot retention policy approved by Sumeet (`worldcrafter-my9t`), a Cloudflare Worker sync backend with last-write-wins + tombstone conflict tests (`worldcrafter-ji5d`), and an optional Cloudflare Worker inference proxy (`worldcrafter-gs9g`).
+- `cd app && bun run check` passes.
 
 ## Scope
 
 In:
-- Connecting the unified story bible to the Plate prose Context Viewer and fixing generation ergonomics & writer-notes exclusion (`worldcrafter-aq1r`, `worldcrafter-xodp`, `worldcrafter-wknl`).
+- Connecting the unified story bible to the shared prose Context Viewer and fixing generation ergonomics & writer-notes exclusion (`worldcrafter-aq1r`, `worldcrafter-xodp`, `worldcrafter-wknl`).
 - Selective direct-manipulation bible controls (`worldcrafter-o7to`).
-- Sync-ready tombstones, snapshot retention, Cloudflare Worker sync + inference proxy, and `demiurge.ink` cutover (`worldcrafter-4t98`, `worldcrafter-my9t`, `worldcrafter-ji5d`, `worldcrafter-v61k`).
+- Sync-ready tombstones (`worldcrafter-4t98`), device-local snapshot retention (`worldcrafter-my9t`), Cloudflare Worker sync backend (`worldcrafter-ji5d`), and optional Cloudflare Worker inference proxy (`worldcrafter-gs9g`).
 
 Out:
+- Buying `demiurge.ink` and renaming the hosted Worker (`worldcrafter-v61k`, labelled `needs-human` outside this mission so it doesn't block closing).
 - Multi-user real-time collaboration.
 - Full CRUD form builders for rarely hand-edited record types (keep agent-driven unless dogfooding proves otherwise).
 - Automated heuristic/LLM entity discovery (`worldcrafter-8agg`) and block-ID prose suggestion diffs (`worldcrafter-yx9v`), which remain separate backlog items.
 
 ## Authority
 
-Agents may choose UI ergonomics, sync wire format, and Worker implementation details within this scope. Buying `demiurge.ink`, deploying the Worker, pushing to remotes, or spending money waits for Sumeet.
+Agents may choose UI ergonomics, sync wire format, and Worker implementation details within this scope. Destructive snapshot thinning rules (`worldcrafter-my9t`), deploying the Worker, buying `demiurge.ink` (`worldcrafter-v61k`), pushing to remotes, or spending money waits for Sumeet.
 
 ## Result

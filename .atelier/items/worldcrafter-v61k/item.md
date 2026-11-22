@@ -4,8 +4,9 @@ schema_version: 3
 id: worldcrafter-v61k
 title: Move the hosted app to demiurge.ink and rename the Worker
 status: open
-mission: worldcrafter-3z9j
-labels: []
+mission: null
+labels:
+- needs-human
 priority: low
 blocked_by: []
 implementers: []

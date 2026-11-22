@@ -29,5 +29,4 @@ Found while wiring generation (worldcrafter-2tz9, 2026-10-18). See .impeccable/s
 
 ## Notes
 
-- 2026-10-29 [note] Moved out of the rebuild mission (worldcrafter-3otd) on 2026-10-29: it was planned for a manuscript-first app. Re-plan it under the story model (decision worldcrafter-ok5a, docs/rebuild/story-model.md) before scheduling it.
-- 2026-11-05 [note] 2026-11-05: correction to the 2026-10-29 note: decision worldcrafter-03rp ended the typed story model (decision worldcrafter-ok5a is superseded) and the Structure first mission (worldcrafter-z9qs). Don't re-plan this under docs/rebuild/story-model.md. It stays in the loose backlog, unlinked from that mission, and is re-planned only if the notes-first mission (worldcrafter-p3k7) shows the product needs an app.
+- 2026-11-22 [note] Supersedes the 2026-10-29 and 2026-11-05 backlog notes (which predate `worldcrafter-jeue` and Sumeet's 2026-11-22 typed-store + app-owned agent direction); scheduled in `worldcrafter-3z9j` alongside prose finishing.
