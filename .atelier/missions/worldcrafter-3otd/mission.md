@@ -3,11 +3,11 @@ schema: atelier.mission
 schema_version: 3
 id: worldcrafter-3otd
 title: Rebuild WorldCrafter around clear data boundaries
-status: draft
+status: dropped
 labels:
 - rebuild
 lead: null
-ready: null
+planners: []
 created_at: 2026-10-17T07:07:33.753013235Z
 ---
 
@@ -125,3 +125,7 @@ These must come back to the human:
 - adding node types beyond the schema list
 - dropping a keep-list item
 - adding a backend service
+
+## Result
+
+Dropped: Superseded by the 2026-11-22 unified typed-store and app-owned agent roadmap (missions k7uh, r7vd, mtkn, 3z9j); all 6 remaining open items freed for re-homing.
