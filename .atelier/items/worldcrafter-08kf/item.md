@@ -4,7 +4,7 @@ schema_version: 3
 id: worldcrafter-08kf
 title: Generate 'stays fast' timing tests fail under host load
 status: open
-mission: null
+mission: worldcrafter-k7uh
 labels:
 - bug
 priority: low
@@ -26,7 +26,7 @@ created_at: 2026-11-05T04:08:57.268939988Z
 
 ## Context
 
-2026-11-04: with another mission's Android emulator holding the host at load 10-20, the full check failed on these tests in about half of runs (11-31 s against a 10 s limit) on branches that don't touch src/generate; run alone they pass at the same load. Evidence worldcrafter-ycr6, txw0, eton, 0x5i, dc3c.
+2026-11-04: with another mission's Android emulator holding the host at load 10-20, the full check failed on these tests in about half of runs (11-31 s against a 10 s limit) on branches that don't touch `app/src/generate`; run alone they pass at the same load. Evidence worldcrafter-ycr6, txw0, eton, 0x5i, dc3c.
 
 ## Notes
 
