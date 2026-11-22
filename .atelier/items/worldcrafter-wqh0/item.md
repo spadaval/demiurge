@@ -9,7 +9,10 @@ labels:
 - ui
 - night-edition
 priority: high
-blocked_by: []
+blocked_by:
+- worldcrafter-if6h
+- worldcrafter-lgz8
+- worldcrafter-7r87
 implementers: []
 ready: null
 trivial: null
@@ -23,10 +26,10 @@ Build the Night Edition rail and inspector views over the unified story bible so
 
 ## Done when
 
-- [ ] Night Edition rail exposes dedicated inspector views for Cast/Drives, Open Questions, Timeline/Counts, Reader-Order, and Contradictions backed by the unified story store.
+- [ ] Night Edition `World` view exposes dedicated inspector views for Cast/Drives, Open Questions, Timeline/Counts, Reader-Order, and Contradictions backed by the unified story store (`worldcrafter-lgz8`, `worldcrafter-7r87`).
 - [ ] Clicking any record opens its detail view with incoming/outgoing `touches` links and lets the writer jump across connected scenes, events, actors, and questions.
-- [ ] Follows `DESIGN.md` typography, tonal steps, hairlines, and responsive drawer rules.
-- [ ] Component tests cover rendering and cross-navigation on a fixture story (e.g., an imported Round 5 bible); `bun run check` passes.
+- [ ] Follows the amended `DESIGN.md` (`worldcrafter-if6h`) typography, tonal steps, hairlines, and responsive drawer rules.
+- [ ] Component tests cover rendering and cross-navigation on a committed fixture story; `cd app && bun run check` passes.
 
 ## Scope
 

@@ -10,7 +10,11 @@ labels:
 - night-edition
 - layers
 priority: high
-blocked_by: []
+blocked_by:
+- worldcrafter-lgz8
+- worldcrafter-7r87
+- worldcrafter-yxfp
+- worldcrafter-0pt4
 implementers: []
 ready: null
 trivial: null
@@ -24,10 +28,11 @@ Wire the Night Edition scene view's paint-only apparatus layers and lettered glo
 
 ## Done when
 
-- [ ] Opening a scene displays its live story-time stamp, opening count values, viewpoint dramatic-irony marks, planted/paid-off objects, and time spans in the Night Edition apparatus and gloss column.
-- [ ] Toggling layers preserves the Paint-Only Rule (0 px prose reflow, verified by layer tests / measurement script).
+- [ ] Opening a scene displays its live story-time stamp, opening count values, viewpoint dramatic-irony marks (fixed by `worldcrafter-0pt4`), planted/paid-off objects, versions vs. truth (distinguishing an event's true summary from told versions), and time spans (fixed by `worldcrafter-yxfp`) in the Night Edition apparatus and gloss column.
+- [ ] Defines and tests how bible records attach to scene apparatus (anchored to matching spans via `TextAnchor` where a passage match exists, or rendered as scene-level gloss entries when unanchored).
+- [ ] Toggling layers preserves the Paint-Only Rule: 0 px prose reflow verified by `app/scripts/measure-layers.ts` and `app/src/app/layers.test.tsx`.
 - [ ] Updates reactively when the agent (or a command) mutates the story bible.
-- [ ] Component and layer tests pass; `bun run check` passes in `app/`.
+- [ ] Component and layer tests pass; `cd app && bun run check` passes.
 
 ## Scope
 

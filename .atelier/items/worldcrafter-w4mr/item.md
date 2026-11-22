@@ -9,7 +9,9 @@ labels:
 - ui
 - agent
 priority: high
-blocked_by: []
+blocked_by:
+- worldcrafter-if6h
+- worldcrafter-667u
 implementers: []
 ready: null
 trivial: null
@@ -19,14 +21,18 @@ created_at: 2026-11-22T22:39:02.185113934Z
 
 ## Goal
 
-Build the prompt, context, tool-trace, and impact inspector for app-owned Story Agent Runner sessions so the writer can view and edit the system prompt and assembled context packet before/between turns, inspect every typed tool call and its result/contradictions, and review `trace` impact suspects after structural changes.
+Extend the existing Context Viewer component (`app/src/generate/context-viewer.tsx` and gloss-column slip) to serve as the shared prompt, context, tool-trace, and impact inspector for app-owned Story Agent Runner sessions (`worldcrafter-667u`)—so `worldcrafter-aq1r` in `worldcrafter-3z9j` reuses the same viewer component rather than building a second one.
+
+**Edit-scope rules:**
+- **System prompt / model profile edits**: explicitly scoped to either *this session only* (persisted on the session record) or *save as profile default*.
+- **Assembled context packet edits**: apply to *the next turn only*, stored as an immutable request revision on that turn for exact provenance and replay.
 
 ## Done when
 
-- [ ] Before or during any agent session, the writer can inspect and edit the system prompt, active model/sampler profile, and deterministic context packet without leaving the workspace.
+- [ ] Extends `app/src/generate/context-viewer.tsx` (as the single shared viewer for both agent sessions and prose generation) to inspect and edit the system prompt (session-only vs. save-as-default), active model/sampler profile, and next-turn assembled context packet (stored as an immutable request revision for replay).
 - [ ] Every agent turn displays its typed tool calls, arguments, structured results, kept contradictions, and any `trace` suspects with clickable links to affected records or scenes.
-- [ ] Matches `DESIGN.md` apparatus rules (hairlines, Source Sans 3 apparatus, vermilion reserved strictly for AI prose segments).
-- [ ] Component tests cover editing a prompt, inspecting a multi-tool turn, and clicking a `trace` suspect; `bun run check` passes.
+- [ ] Matches the amended `DESIGN.md` (`worldcrafter-if6h`) apparatus rules (hairlines, Source Sans 3 apparatus, vermilion reserved strictly for AI prose segments).
+- [ ] Component tests cover session-vs-default prompt edits, next-turn context-revision persistence, inspecting a multi-tool turn, and clicking a `trace` suspect; `cd app && bun run check` passes.
 
 ## Scope
 
