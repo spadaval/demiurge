@@ -20,13 +20,23 @@ created_at: 2026-11-22T22:39:04.598196939Z
 
 ## Goal
 
-Build the Cloudflare Worker sync backend (behind Cloudflare Access, per `worldcrafter-gcox`) over `worldcrafter-4t98`'s sync-ready tombstones and change timestamps so one writer can switch between laptop and phone. Uses **last-write-wins (LWW)** per record ordered by Worker-stamped server receipt time (`syncedAt`, eliminating client clock-skew bias) with a deterministic client `deviceId` tie-breaker (a random UUID minted once per browser profile in `localStorage`, outside synced world records). Before a pulled remote `Document` overwrites a locally modified Plate prose document, the client writes a device-local pre-overwrite snapshot so an offline writing session is never lost. Updates `app/wrangler.jsonc` from static-assets-only to Worker + static assets.
+Build the Cloudflare Worker sync backend (behind Cloudflare Access, per `worldcrafter-gcox`) over `worldcrafter-4t98`'s sync-ready tombstones and change timestamps so one writer can switch between laptop and phone without losing offline edits.
+
+**Sync & conflict protocol:**
+- Each browser profile mints a persistent `deviceId` (random UUID in `localStorage`) and keeps device-local sync metadata (last pulled cursor and per-record `{ serverRev, dirty }` state, outside synced world records).
+- The Worker assigns a monotonic per-record `serverRev` (and `syncedAt` receipt timestamp) on every accepted write or tombstone.
+- Sync runs **pull-then-push**; every pushed record or tombstone carries its `baseRev` (the last `serverRev` this client pulled, or `0` for new records).
+- **Optimistic concurrency:** if `baseRev` matches the Worker's current `serverRev`, the Worker accepts the push and increments `serverRev`. If `baseRev` is stale (another device pushed a newer edit or tombstone first), the Worker rejects that item with `conflict` + the server's current record/tombstone rather than letting a stale offline device overwrite newer work.
+- **Conflict resolution on the client:**
+  - For **Plate `Document` records**, the client snapshots its losing local draft into device-local snapshots (reusing `document-session`'s snapshot mechanism) before adopting the server's newer revision—so neither device's prose is ever silently lost.
+  - For **non-document records** (bible records, annotations, requests), the server's newer revision wins cleanly (and a stale edit against a newer tombstone does **not** resurrect the deleted record; an explicit new save after pulling the tombstone recreates it with the tombstone's `serverRev` as `baseRev`).
+- Updates `app/wrangler.jsonc` from static-assets-only to Worker + static assets.
 
 ## Done when
 
-- [ ] Worker sync endpoints push and pull changed records and tombstones across all synced `StorageAdapter` collections (excluding device-local snapshots) behind Cloudflare Access auth headers, minting a persistent `deviceId` in browser `localStorage`.
-- [ ] Conflict resolution uses Worker-stamped receipt order with deterministic `deviceId` tie-breaking, and before a pulled `Document` overwrites a locally modified Plate document, the client records a device-local snapshot preserving the overwritten prose.
-- [ ] Automated tests cover: (a) concurrent edit of the same record on two devices, (b) edit vs. delete tombstone, (c) recreate after tombstone, (d) offline reconnect catch-up, (e) a skewed client clock (ahead/behind) not winning unfairly, and (f) whole-document prose conflict creating a recoverable local snapshot.
+- [ ] Worker sync endpoints implement pull-then-push with monotonic per-record `serverRev`, Worker-stamped `syncedAt`, and optimistic `baseRev` conflict checks across all synced `StorageAdapter` collections (excluding device-local snapshots) behind Cloudflare Access auth headers, with `deviceId` and per-record sync state stored locally per browser profile.
+- [ ] On a `Document` conflict (stale `baseRev` rejected by Worker, or pulled revision overwriting a locally dirty document), the client records a device-local snapshot of the losing local prose before adopting the server revision.
+- [ ] Automated tests cover: (a) concurrent edit of the same record on two devices, (b) stale offline reconnect (phone offline with small edit, laptop writes & syncs long passage, phone reconnects and pushes → phone's stale push is rejected, laptop's passage survives, phone's edit is preserved in a local snapshot), (c) stale edit vs. newer delete tombstone (does not resurrect), (d) explicit recreate after pulling a tombstone, (e) offline reconnect catch-up, and (f) skewed client clock (ahead/behind) not winning unfairly.
 - [ ] `app/wrangler.jsonc` is updated to serve both the Worker sync routes and `./dist` static assets (keeping the Worker name `worldcrafter` until `worldcrafter-v61k`).
 - [ ] Contract and integration tests pass locally; `cd app && bun run check` passes.
 

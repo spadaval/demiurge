@@ -26,7 +26,7 @@ Hands-on prose finishing powered by live story-bible context (reusing `worldcraf
 
 - Scene prose generation reuses `worldcrafter-667u`'s scene context-packet builder and `worldcrafter-w4mr`'s shared `app/src/generate/context-viewer.tsx` (no second context builder), with writer notes excluded (`worldcrafter-wknl`) and generation shortcuts, stale-pin clearing, and retarget fixes landed (`worldcrafter-aq1r`, `worldcrafter-xodp`).
 - High-frequency bible actions (answering/rejecting open-question candidates, reordering scenes, changing viewpoints, updating counts, marking deliberate gaps) work with one-click UI controls calling the same `app/src/story/commands.ts` mutations as the agent (`worldcrafter-o7to`, after `worldcrafter-lgz8`, `worldcrafter-7r87`, `worldcrafter-wqh0`, `worldcrafter-hqca`).
-- Storage has sync-ready tombstones across all synced collections including the story bible (`worldcrafter-4t98`, after `worldcrafter-lgz8`), a device-local snapshot retention policy approved by Sumeet (`worldcrafter-my9t`), a Cloudflare Worker sync backend with last-write-wins + tombstone conflict tests (`worldcrafter-ji5d`), and an optional Cloudflare Worker inference proxy (`worldcrafter-gs9g`).
+- Storage has sync-ready tombstones across all synced collections including the story bible (`worldcrafter-4t98`, after `worldcrafter-lgz8`), a device-local snapshot retention policy approved by Sumeet (`worldcrafter-my9t`), a Cloudflare Worker sync backend with optimistic `serverRev` concurrency, pre-overwrite prose snapshots, and stale-reconnect conflict tests (`worldcrafter-ji5d`), and an optional Cloudflare Worker inference proxy (`worldcrafter-gs9g`).
 - `cd app && bun run check` passes.
 
 ## Scope
