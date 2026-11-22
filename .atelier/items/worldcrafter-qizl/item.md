@@ -3,12 +3,13 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-qizl
 title: World export and import as JSON, and projection coverage for every node type (revised S1)
-status: draft
-mission: worldcrafter-3otd
+status: open
+mission: worldcrafter-r7vd
 labels:
 - rebuild
 priority: medium
-blocked_by: []
+blocked_by:
+- worldcrafter-lgz8
 implementers: []
 ready: null
 trivial: null
