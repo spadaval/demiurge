@@ -3,15 +3,14 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-lhh3
 title: Talk pages and world inbox
-status: draft
-mission: null
+status: open
+mission: worldcrafter-mtkn
 labels:
 - ai
 - talk
 - feature
 priority: medium
-blocked_by:
-- worldcrafter-yx9v
+blocked_by: []
 implementers: []
 ready: null
 trivial: null
