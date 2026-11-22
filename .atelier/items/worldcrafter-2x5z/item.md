@@ -19,17 +19,24 @@ created_at: 2026-10-17T07:07:33.752717474Z
 
 ## Goal
 
-Retire the legacy v1 root app (`src/`), its legacy root config files (`vite.config.ts`, `tailwind.config.mjs`, `components.json`, `openapi-ts.config.ts`, `tsconfig.json`, `public/`, `test-document.md`, and root `package.json` legacy app dependencies), and rewrite `AGENTS.md` so it describes `app/` only. Port keep-list `src/lib/entity-suppression.ts` (and its test) into `app/src/world/` before deleting `src/` so no keep-list module is lost.
+Retire the legacy v1 root app and all of its root configs, dependencies, and v1-only docs so `app/` is the sole application in the repository, and rewrite `AGENTS.md` to describe `app/` only. Port keep-list `src/lib/entity-suppression.ts` (and its test) into `app/src/world/` before deleting `src/` so no keep-list module is lost.
+
+**Remove:**
+- Legacy root app & configs: `src/`, `public/`, `package.json`, `bun.lock`, `vite.config.ts`, `tailwind.config.mjs`, `components.json`, `openapi-ts.config.ts`, `tsconfig.json`, `biome.json`, `test-document.md`, `.prettierignore` (since `app/` is self-contained with its own `package.json`, `bun.lock`, `tsconfig.json`, `biome.json`, and `vite.config.ts`).
+- Legacy v1 docs: `AI.md`, `BACKLOG.md`, `ENTITY_RECOGNITION_IMPROVEMENTS.md`, `docs/legend-state.md`, `docs/neverthrow.md`, `docs/DOCUMENT_OVERHAUL.md`, `docs/NER_OVERHAUL.md`, `docs/EDITOR_INTERNALS.md`, `docs/llama_openapi.json`, `docs/llama_server.md`, and `docs/editor/`.
+
+**Explicitly keep (with reasons):**
+- `app/` (the active application), `.atelier/` (work tracking), `.impeccable/` (design system metadata), agent/editor tool configs (`opencode.json`, `skills-lock.json`, `.agents/`, `.agent/`, `.claude/`, `.codex/`, `.gemini/`, `.qwen/`, `.vscode/`), top-level active docs (`AGENTS.md`, `PRODUCT.md`, `README.md`, `DESIGN.md`), and keep-list/active `docs/` (`docs/philosophy.md`, `docs/rebuild/`, `docs/rounds/`, `docs/strategies/`, `docs/verdicts/`).
 
 ## Done when
 
-- [ ] `src/lib/entity-suppression.ts` and `src/lib/entity-suppression.test.ts` are ported into `app/src/world/` and pass under `cd app && bun test`.
-- [ ] Root `src/`, `public/`, `vite.config.ts`, `tailwind.config.mjs`, `components.json`, `openapi-ts.config.ts`, `test-document.md`, and legacy v1 dependencies (`@huggingface/transformers`, `@tiptap/*`, `@legendapp/state`, `@openrouter/sdk`, `daisyui`, `shadcn`, `@tanstack/react-start`) are removed.
-- [ ] `rg "@huggingface/transformers|@tiptap|@legendapp/state|distilbert" package.json app/package.json app/src` returns no matches.
+- [ ] `src/lib/entity-suppression.ts` and `src/lib/entity-suppression.test.ts` are ported into `app/src/world/` (adapting `EntityType` to `app/src/world/kinds.ts`) and pass under `cd app && bun test`.
+- [ ] Every file and directory listed under **Remove** above is deleted (`src/`, `public/`, root `package.json`, `bun.lock`, `vite.config.ts`, `tailwind.config.mjs`, `components.json`, `openapi-ts.config.ts`, `tsconfig.json`, `biome.json`, `test-document.md`, `.prettierignore`, `AI.md`, `BACKLOG.md`, `ENTITY_RECOGNITION_IMPROVEMENTS.md`, and the listed legacy v1 `docs/` files), and every file listed under **Explicitly keep** remains intact.
+- [ ] Any links in `docs/rebuild/` or `AGENTS.md` that pointed to removed legacy v1 docs are updated or marked as historical so no broken local links remain.
 - [ ] `AGENTS.md` Architecture, Commands, and File Structure sections describe `app/` only (no `src/`, Legend State, TanStack Start, or tRPC). Note: merge approved garden branch `worldcrafter-gq2k` first (or reconcile its `AGENTS.md` edit cleanly).
-- [ ] `cd app && bun run check && bun run build` pass cleanly.
+- [ ] `cd app && bun run check && bun run build` pass cleanly with no root `node_modules` or root `package.json` present.
 
 ## Scope
 
-In: Removing legacy root app code/configs/deps, porting `entity-suppression.ts`, and rewriting `AGENTS.md`.
+In: Removing legacy root app code/configs/deps/v1-docs, porting `entity-suppression.ts`, fixing any resulting broken links in `docs/rebuild/`, and rewriting `AGENTS.md`.
 Out: Updating `PRODUCT.md` and `README.md` (owned by `worldcrafter-j8gz`), and unrelated `app/` internal refactors (`Provenance`/`JsonValue` deduplication, `smoke.test.ts`).
