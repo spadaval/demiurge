@@ -7,7 +7,8 @@ status: draft
 labels:
 - rebuild
 lead: null
-ready: null
+planners:
+- ace64553-eec2-406a-84c3-c6360b8f5131
 created_at: 2026-10-17T07:07:33.753013235Z
 ---
 
