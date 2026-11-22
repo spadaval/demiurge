@@ -3,8 +3,8 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-08kf
 title: Generate 'stays fast' timing tests fail under host load
-status: draft
-mission: worldcrafter-3otd
+status: open
+mission: null
 labels:
 - bug
 priority: low
