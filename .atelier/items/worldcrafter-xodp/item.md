@@ -3,8 +3,8 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-xodp
 title: 'Generation ergonomics: shortcuts, pins, stable profile IDs'
-status: draft
-mission: worldcrafter-3otd
+status: open
+mission: worldcrafter-3z9j
 labels: []
 priority: medium
 blocked_by: []

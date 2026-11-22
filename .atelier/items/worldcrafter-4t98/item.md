@@ -3,8 +3,8 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-4t98
 title: 'Sync-ready storage: tombstones for deletes'
-status: draft
-mission: worldcrafter-3otd
+status: open
+mission: worldcrafter-3z9j
 labels:
 - storage
 priority: high
