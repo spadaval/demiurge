@@ -3,8 +3,8 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-2x5z
 title: Retire the old app and its dependencies
-status: draft
-mission: worldcrafter-3otd
+status: open
+mission: worldcrafter-k7uh
 labels:
 - rebuild
 - feature
