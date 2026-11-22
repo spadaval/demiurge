@@ -20,16 +20,16 @@ created_at: 2026-11-22T22:39:00.293484786Z
 
 ## Goal
 
-Expose `app/src/story/commands.ts` mutations and queries (`reader-order`, `span`, `show`, `touches`, `trace`, `contradictions`, `gaps`, and all `add-`/`update-`/`set-`/`remove-` commands) as a native typed LLM tool registry so an app-owned agent calls them directly against the store instead of invoking a CLI through Bash.
+Extract the story read/query functions (`show`, `reader-order --before`, `span`, `touches`, `trace`, `contradictions`, `gaps`) out of the `node:fs`-coupled CLI `app/scripts/story.ts` into pure store-backed functions in `app/src/story/` (with `trace` reading scene prose via `StorageAdapter` + `prose` projection rather than `scenes/*.md` on disk), and expose all story mutations (`app/src/story/commands.ts`) and queries as a native typed LLM tool registry.
 
 ## Done when
 
-- [ ] Every story command has a typed JSON Schema definition and executor bound to the unified `StorageAdapter` store (no shell, no filesystem dependency).
+- [ ] Read/query logic (`show`, `reader-order --before`, `span`, `touches`, `trace`, `contradictions`, `gaps`) lives in DOM-free, `node:fs`-free modules under `app/src/story/` backed by the unified store (and `app/scripts/story.ts` delegates to them without regressions in `app/scripts/story.test.ts`).
+- [ ] Every story mutation and query has a typed JSON Schema definition and executor bound to `StorageAdapter`.
 - [ ] Tool executions return structured results plus any kept contradictions, dropped links, and `trace` suspects so warnings are never truncated or silenced.
-- [ ] Batch / transactional execution and unit tests cover valid calls, typed refusals, kept contradictions, and `trace` output.
-- [ ] `bun run check` passes in `app/`.
+- [ ] Unit tests cover valid calls, typed refusals, kept contradictions, and store-backed `trace` across linked scene documents; `cd app && bun run check` passes.
 
 ## Scope
 
-In: Typed tool definitions, schema validation, and store-backed command dispatch in `app/src/story/` (or `app/src/agent/`).
+In: Extracting pure query logic from `app/scripts/story.ts` into `app/src/story/`, typed tool schemas, validation, and store-backed dispatch.
 Out: LLM transport (`worldcrafter-erje`) and multi-turn runner orchestration (`worldcrafter-667u`).

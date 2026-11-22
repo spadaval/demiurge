@@ -19,17 +19,19 @@ created_at: 2026-10-19T15:20:30.115899083Z
 
 ## Goal
 
-Prove the revised S1 (worldcrafter-7hjn): a world round-trips exactly through export and import as JSON, and every allowed node type has defined `prose`, `addressable` and `plain+map` projections.
+Implement lossless whole-world JSON export and import over the unified `StorageAdapter` (including the story bible added in `worldcrafter-lgz8`, scene Plate documents, annotations, stored requests, and active legacy collections), and ensure every allowed content node type has tested `prose`, `addressable`, and `plain+map` projections (`worldcrafter-7hjn`).
 
 ## Done when
 
-- [ ] - Round-trip tests over fixture worlds show that export then import into an empty store gives identical records, and that save then load gives identical documents. - Projection tests cover every node type in the schema. - S1 has passing evidence against the revised wording.
+- [ ] Whole-world JSON export and import (with explicit schema version) round-trip a fixture world containing documents, annotations, stored requests, and all story-bible collections into an empty store with identical records.
+- [ ] `prose`, `addressable`, and `plain+map` projections are implemented and tested for every allowed node type in `app/src/content/schema.ts`.
+- [ ] `app/src/content/markdown.ts` provides a clean one-way readable markdown export without breaking any existing prose import path.
+- [ ] `cd app && bun run check` passes.
 
 ## Scope
 
-- A whole-world JSON export and import through the storage adapter: documents, world entries, annotations, outlines, timelines, snapshots and requests.
-- Tests that each allowed node type has all three projections.
-- Decide what `app/src/content/markdown.ts` becomes: the readable one-way export (no block IDs, parser removed), or left as is until there's a use for it.
+In: Versioned whole-world JSON export/import adapter over `StorageAdapter`, `addressable` + `prose` + `plain+map` projection coverage tests, and clarifying `app/src/content/markdown.ts` as one-way readable export.
+Out: Persisting story-bible collections (`worldcrafter-lgz8`), sync tombstones (`worldcrafter-4t98`), and UI export dialogs.
 
 ## Links
 
