@@ -17,11 +17,15 @@ created_at: 2026-11-05T19:02:18.248813588Z
 
 ## Goal
 
-Round 5's reading (ranked items 2-4): the presence rule's exception cancels it for secondary viewpoints; group members in a scene's actors don't count as present; a revealed knowledge record doesn't reveal what it knows; marks are taken at the scene's latest event, not as it opens; a scene whose depicted events are unplaced loses its anchor.
+Round 5's reading (ranked items 2–4): the presence rule's `!theirs(s)` exception cancels it for secondary viewpoints; group members in a scene's actors don't count as present; a revealed knowledge record doesn't reveal what it knows; marks are taken at the scene's latest event, not as it opens; a scene whose depicted events are unplaced loses its anchor.
+
+This does **not** pre-empt `worldcrafter-lfyv` (private reveals, `does-not-know`, shared senses): as Round 5's reading (section 3) showed, a bystander's own `add-knowledge` record already protects whispered secrets without `!theirs(s)`, and any primitive `worldcrafter-lfyv` adds later will layer on top.
 
 ## Done when
 
-- [ ] - Each fixed with a test; Round 5's marks re-run show the false ones the reading lists cleared without hiding true ones (finding mnm0's case still holds); bun run check passes.
+- [ ] Each of the five defects above is fixed with unit tests in `app/src/story/`.
+- [ ] Re-running viewpoint marks on Round 5's fixture/scenarios clears the false marks listed in `docs/rounds/round-5/reading.md` without hiding true ones (including finding `mnm0`'s whispered-secret case when the bystander has their own knowledge record).
+- [ ] `cd app && bun run check` passes.
 
 ## Links
 

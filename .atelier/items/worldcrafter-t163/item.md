@@ -24,7 +24,7 @@ Configure `bun run check` in `app/` as an Atelier merge check in `.atelier/confi
 
 ## Done when
 
-- [ ] `.atelier/config.toml` runs `bun run check` in `app/` as a merge check.
+- [ ] `.atelier/config.toml` runs `bun run check` in `app/` as a merge check, and handles/verifies where `app/node_modules` is present in the merge worktree.
 - [ ] `atelier check` passes and a test merge/check confirms `app/` typecheck, lint, and tests run automatically.
 - [ ] Review whether the redundant Claude Code Stop hook `atelier check` can be removed, and record the outcome in the Report.
 
