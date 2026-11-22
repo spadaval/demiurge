@@ -20,12 +20,13 @@ created_at: 2026-11-22T22:39:04.598196939Z
 
 ## Goal
 
-Build the Cloudflare Worker sync backend (behind Cloudflare Access, per `worldcrafter-gcox`) over `worldcrafter-4t98`'s sync-ready tombstones and change timestamps so one writer can switch between laptop and phone. Uses **last-write-wins (LWW)** per record by `updatedAt` / `deletedAt` timestamp with a deterministic device-ID tie-breaker, and updates `app/wrangler.jsonc` from static-assets-only to Worker + static assets.
+Build the Cloudflare Worker sync backend (behind Cloudflare Access, per `worldcrafter-gcox`) over `worldcrafter-4t98`'s sync-ready tombstones and change timestamps so one writer can switch between laptop and phone. Uses **last-write-wins (LWW)** per record ordered by Worker-stamped server receipt time (`syncedAt`, eliminating client clock-skew bias) with a deterministic client `deviceId` tie-breaker (a random UUID minted once per browser profile in `localStorage`, outside synced world records). Before a pulled remote `Document` overwrites a locally modified Plate prose document, the client writes a device-local pre-overwrite snapshot so an offline writing session is never lost. Updates `app/wrangler.jsonc` from static-assets-only to Worker + static assets.
 
 ## Done when
 
-- [ ] Worker sync endpoints push and pull changed records and tombstones across all synced `StorageAdapter` collections (excluding device-local snapshots) behind Cloudflare Access auth headers.
-- [ ] Conflict resolution implements LWW by `updatedAt` / `deletedAt` with deterministic device-ID tie-breaking, and automated tests cover: (a) concurrent edit of the same record on two devices, (b) edit vs. delete tombstone, (c) recreate after tombstone, and (d) offline reconnect catch-up.
+- [ ] Worker sync endpoints push and pull changed records and tombstones across all synced `StorageAdapter` collections (excluding device-local snapshots) behind Cloudflare Access auth headers, minting a persistent `deviceId` in browser `localStorage`.
+- [ ] Conflict resolution uses Worker-stamped receipt order with deterministic `deviceId` tie-breaking, and before a pulled `Document` overwrites a locally modified Plate document, the client records a device-local snapshot preserving the overwritten prose.
+- [ ] Automated tests cover: (a) concurrent edit of the same record on two devices, (b) edit vs. delete tombstone, (c) recreate after tombstone, (d) offline reconnect catch-up, (e) a skewed client clock (ahead/behind) not winning unfairly, and (f) whole-document prose conflict creating a recoverable local snapshot.
 - [ ] `app/wrangler.jsonc` is updated to serve both the Worker sync routes and `./dist` static assets (keeping the Worker name `worldcrafter` until `worldcrafter-v61k`).
 - [ ] Contract and integration tests pass locally; `cd app && bun run check` passes.
 

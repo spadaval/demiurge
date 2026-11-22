@@ -17,11 +17,19 @@ created_at: 2026-10-18T05:27:28.178059781Z
 
 ## Goal
 
-The workspace renders the writer's `[[ notes ]]` as apparatus, but they are literal text in the prose, so the context builder sends them to the model inside the story window. Earlier design discussion proposed Fountain-style layers (inline notes, synopses, cut text, forced speaker) as annotations or fields outside the content schema, not as prose text. Decide the representation (literal `[[ ]]` text with a projection rule, or an annotation anchored to the block), and make sure notes never reach the model as story text.
+The Night Edition workspace renders inline `[[ ... ]]` writer notes in scene Plate documents as apparatus, but today they are literal prose text and leak into LLM requests through `projectProse` (`app/src/content/projections.ts`). Decide their representation (literal `[[ ... ]]` stripped by `projectProse`, or a dedicated annotation/node) and strip them inside `projectProse` so **every** downstream context builder—both `worldcrafter-667u`'s scene context packet and `worldcrafter-aq1r`'s prose Context Viewer—excludes writer notes automatically while the workspace still renders them as apparatus.
 
 ## Done when
 
-- [ ] A recorded decision; the prose projection (or the context builder) excludes writer notes, with a test; the workspace still renders them as apparatus.
+- [ ] Representation choice is recorded (in this item's Report and `docs/rebuild/data-model-boundaries.md` if the schema changes).
+- [ ] `projectProse` (`app/src/content/projections.ts`) excludes `[[ ... ]]` writer notes from scene Plate documents, verified by unit tests (including multi-word notes, multiple notes per paragraph, and unclosed brackets).
+- [ ] The Night Edition workspace still renders `[[ ... ]]` notes as apparatus without breaking `DESIGN.md`'s Two Voices / Paint-Only rules.
+- [ ] `cd app && bun run check` passes.
+
+## Scope
+
+In: Writer-note representation decision, `projectProse` exclusion in `app/src/content/projections.ts`, and workspace rendering test.
+Out: Wiring story-bible context into prose generation (`worldcrafter-aq1r`, blocked on this item).
 
 ## Context
 

@@ -13,6 +13,7 @@ blocked_by:
 - worldcrafter-lgz8
 - worldcrafter-667u
 - worldcrafter-w4mr
+- worldcrafter-wknl
 implementers: []
 ready: null
 trivial: null
@@ -27,8 +28,8 @@ Feed `worldcrafter-667u`'s deterministic scene context-packet builder directly i
 ## Done when
 
 - [ ] `app/src/context/builder.ts` consumes `worldcrafter-667u`'s scene context-packet builder (scene summary, viewpoint, dramatic-irony marks, opening counts, active drives/objects, and nearby prose) rather than duplicating context assembly.
-- [ ] Prose generation renders and edits the assembled request through the shared `app/src/generate/context-viewer.tsx` (`worldcrafter-w4mr`), supporting pinning/excluding bible sections before sending to any configured model/sampler profile.
-- [ ] Scenario tests against a stub OpenAI-compatible server verify assembled bible context, edited request passthrough, and vermilion AI segment provenance.
+- [ ] Prose generation renders and edits the assembled request through the shared `app/src/generate/context-viewer.tsx` (`worldcrafter-w4mr`), supporting pinning/excluding bible sections (and preserving/porting `worldcrafter-xodp`'s stale-pin clearing test) before sending to any configured model/sampler profile.
+- [ ] Scenario tests against a stub OpenAI-compatible server verify that the stored request holds the exact bible sections as sent, edited requests pass through, and no `[[ ... ]]` writer notes (`worldcrafter-wknl`) reach the request.
 - [ ] `cd app && bun run check` passes.
 
 ## Scope
