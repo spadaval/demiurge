@@ -19,11 +19,11 @@ created_at: 2026-10-19T15:20:30.115899083Z
 
 ## Goal
 
-Implement lossless whole-world JSON export and import over the unified `StorageAdapter` (including the story bible added in `worldcrafter-lgz8`, scene Plate documents, annotations, stored requests, and active legacy collections), and ensure every allowed content node type has tested `prose`, `addressable`, and `plain+map` projections (`worldcrafter-7hjn`).
+Implement lossless whole-world JSON export and import over the unified `StorageAdapter` covering every collection (`documents`, `worldEntries`, `annotations`, `requests`, `snapshots`, `outlines`, `timelines`, plus all story-bible collections added in `worldcrafter-lgz8`), and ensure every allowed content node type has tested `prose`, `addressable`, and `plain+map` projections (`worldcrafter-7hjn`).
 
 ## Done when
 
-- [ ] Whole-world JSON export and import (with explicit schema version) round-trip a fixture world containing documents, annotations, stored requests, and all story-bible collections into an empty store with identical records.
+- [ ] Whole-world JSON export and import (with explicit schema version) round-trip a fixture world that populates **every** `StorageAdapter` collection (`documents`, `worldEntries`, `annotations`, `requests`, `snapshots`, `outlines`, `timelines`, and all story-bible collections from `worldcrafter-lgz8`) into an empty store with identical records.
 - [ ] `prose`, `addressable`, and `plain+map` projections are implemented and tested for every allowed node type in `app/src/content/schema.ts`.
 - [ ] `app/src/content/markdown.ts` provides a clean one-way readable markdown export without breaking any existing prose import path.
 - [ ] `cd app && bun run check` passes.

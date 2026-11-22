@@ -20,9 +20,9 @@ Started from Sumeet's direction on 2026-11-22 (superseding `worldcrafter-2y4g`'s
 
 Right now `app/src/` holds two disconnected models (`app/src/story/` from Rounds 1–5 vs. `app/src/world/` + `app/src/time/` + `app/src/outline/` from the Oct rebuild), read queries (`show`, `reader-order --before`, `span`, `trace`) live inside the `node:fs`-coupled CLI `app/scripts/story.ts`, and `app/src/llm/` supports single-turn streaming without multi-turn tool calling.
 
-**Unification rule (2026-11-22):**
-- `app/src/story/` is the canonical story-bible schema persisted in `StorageAdapter` (premise, actors, drives + turns + relations, events + causes + participants, facts, objects, counts, memberships, versions, knowledge, open questions + candidates, reader questions, scenes, deliberate gaps).
-- Each `Scene` record links by `documentId` to a Plate `Document` prose tree (preserving block IDs and AI segments) and carries optional `book`/`chapter` grouping; existing `app/src/world/`, `app/src/outline/`, and `app/src/time/` modules remain intact during this mission (not deleted here) so existing `app/src/app/`, `context/`, and `time/` code keeps working until UI consumers migrate in `worldcrafter-mtkn` and `worldcrafter-3z9j`.
+**Unification rule (approved by Sumeet on 2026-11-22, superseding `worldcrafter-ddha`'s entry-document split and `worldcrafter-2y4g`'s single-file trial format):**
+- `app/src/story/` is the canonical story-bible schema persisted in `StorageAdapter` (premise, actors, drives + turns + relations, events + causes + participants, timeline positions/constraints/frames, facts, objects, counts, memberships, versions, knowledge, open questions + candidates, reader questions, scenes, deliberate gaps).
+- Each `Scene` record links by `documentId` to a Plate `Document` prose tree (preserving block IDs and AI segments) and carries optional `book`/`chapter` grouping; `worldcrafter-lgz8` also updates `docs/rebuild/story-model.md` (Records) to match. Existing `app/src/world/`, `app/src/outline/`, and `app/src/time/` modules remain intact during this mission (not deleted here) so existing `app/src/app/`, `context/`, and `time/` code keeps working until UI consumers migrate in `worldcrafter-mtkn` and `worldcrafter-3z9j`.
 - Non-actor world kinds (`place`, `culture`, `magic_system`, `technology`, `natural_law`, `species`) stay representable via world facts (`--about`) and existing `worldEntries` documents until the UI migration settles whether a dedicated entry-document link is needed.
 
 ## Outcome
