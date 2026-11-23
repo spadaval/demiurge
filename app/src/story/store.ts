@@ -411,9 +411,13 @@ export function saveStory(
   return serialised(storage, () => saveNow(storage, story, now), onThrow);
 }
 
+/** A command's change, with the bible as it was before it. */
+export type StoryExecuted = StoryChange & { before: Story };
+
 /**
  * Applies `command` to the stored bible and saves the result, as one step
- * against other commands on this adapter.
+ * against other commands on this adapter. The result holds the bible from
+ * before, so what the command did can be reported (`./edit-report.ts`).
  */
 export function executeStoryCommand(
   storage: StorageAdapter,
@@ -438,9 +442,11 @@ function saveAfter(
 ) {
   const change = applyStoryCommand(story, command);
   if (change.isErr()) {
-    return errAsync<StoryChange, StoryStoreError>(change.error);
+    return errAsync<StoryExecuted, StoryStoreError>(change.error);
   }
-  return saveNow(storage, change.value.story, now).map(() => change.value);
+  return saveNow(storage, change.value.story, now).map(
+    (): StoryExecuted => ({ ...change.value, before: story }),
+  );
 }
 
 /** Where one scene's prose stands. */

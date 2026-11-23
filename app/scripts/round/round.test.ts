@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { KIND_NAMES } from "../../src/story/refs";
 import { newStory, REF_KINDS, type Story } from "../../src/story/story";
 import {
   credentialsPath,
@@ -17,7 +18,6 @@ import {
   TOOL_MOUNT,
 } from "../comparison/sandbox";
 import { checkTranscript } from "../comparison/transcript";
-import { KIND_NAMES } from "../story";
 import {
   beatsOf,
   beatsText,
