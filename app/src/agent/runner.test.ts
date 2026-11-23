@@ -12,8 +12,11 @@ import { createMemoryStorage } from "../storage/memory";
 import type { StorageAdapter } from "../storage/types";
 import { loadStory, saveStory } from "../story/store";
 import { parseStory, type Story } from "../story/story";
+import { buildContextPacket, packetText } from "./context";
+import { sessionTurns, turnTrace } from "./inspect";
 import type { ProfileBindings } from "./profiles";
 import { loadSessionLog } from "./records";
+import { replayModel, replayOptions } from "./replay";
 import {
   type AgentEvent,
   type AgentRunner,
@@ -451,5 +454,158 @@ describe("tools", () => {
     expect(events.map((e) => e.kind)).toEqual(["step", "call", "step"]);
     const call = events[1];
     expect(call?.kind === "call" && call.call.changes[0]?.id).toBe("actor/e");
+  });
+});
+
+describe("editing a session", () => {
+  test("configure changes the prompt and sampler the next calls send", async () => {
+    const r = runner({ plan: { profile, sampler: { temperature: 0.2 } } });
+    await value(
+      r.start({
+        id: "s",
+        role: "plan",
+        scope: world,
+        systemPrompt: "One.",
+        sampler: { top_p: 0.5 },
+      }),
+    );
+    stub.script(reply("A."), reply("B."), reply("C."));
+    await value(r.send("s", "First."));
+    expect(stub.received[0]).toMatchObject({ temperature: 0.2, top_p: 0.5 });
+
+    const changed = await value(
+      r.configure("s", {
+        systemPrompt: "Two.",
+        sampler: { temperature: 0.9 },
+      }),
+    );
+    expect(changed).toMatchObject({
+      systemPrompt: "Two.",
+      sampler: { temperature: 0.9 },
+    });
+    // A fresh runner reads the change from the record.
+    const fresh = runner({ plan: { profile, sampler: { temperature: 0.2 } } });
+    await value(fresh.send("s", "Second."));
+    expect(messages(stub.received[1])[0]).toEqual({
+      role: "system",
+      content: "Two.",
+    });
+    expect(stub.received[1]?.temperature).toBe(0.9);
+    expect(stub.received[1]?.top_p).toBeUndefined();
+
+    // Dropping the session's sampler goes back to the binding's.
+    await value(fresh.configure("s", { sampler: null }));
+    await value(fresh.send("s", "Third."));
+    expect(stub.received[2]?.temperature).toBe(0.2);
+
+    // The first step keeps the prompt it sent.
+    const { steps } = await value(loadSessionLog(storage, "s"));
+    expect(messages(steps[0]?.request.body)[0]?.content).toBe("One.");
+    expect(stub.received.every(wellFormed)).toBe(true);
+  });
+
+  test("configure is refused while the session runs", async () => {
+    const r = await started({ id: "s", role: "plan", scope: world });
+    stub.script(reply("One."));
+    const running = r.send("s", "One");
+    expect(
+      (await r.configure("s", { systemPrompt: "x" }))._unsafeUnwrapErr(),
+    ).toEqual({ kind: "busy", id: "s" });
+    await running;
+  });
+
+  test("an edited context is sent, and kept on the run beside the packet it came from", async () => {
+    const r = await started({ id: "s", role: "plan", scope: world });
+    const packet = await value(buildContextPacket(storage, world));
+    stub.script(reply("A."), reply("B."));
+    const edited = `${packetText(packet)}\n\nThe writer's note: the lamp is out.`;
+    const first = await value(
+      r.send("s", "Look.", { context: { packet, text: edited } }),
+    );
+    expect(first.session.runs[0]).toMatchObject({
+      context: packet,
+      editedContext: edited,
+    });
+    expect(messages(stub.received[0])[1]?.content).toBe(
+      `${edited}\n\n# The writer says\n\nLook.`,
+    );
+
+    // The packet as shown, unedited, is sent and records no edit.
+    const second = await value(
+      r.send("s", "Again.", {
+        context: { packet, text: packetText(packet) },
+      }),
+    );
+    expect(second.session.runs[1]?.editedContext).toBeUndefined();
+    expect(messages(stub.received[1])[3]?.content).toContain(
+      packetText(packet),
+    );
+  });
+
+  test("a context for another scope is refused", async () => {
+    const r = await started({ id: "s", role: "plan", scope: world });
+    const packet = await value(
+      buildContextPacket(storage, { kind: "scene", scene: "arrival" }),
+    );
+    expect(
+      (
+        await r.send("s", "Look.", { context: { packet, text: "x" } })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ kind: "not_ready" });
+    expect(stub.received).toHaveLength(0);
+  });
+
+  test("a replay sends an edited context as it was sent", async () => {
+    const r = await started({ id: "s", role: "plan", scope: world });
+    const packet = await value(buildContextPacket(storage, world));
+    stub.script(reply("A."));
+    await value(
+      r.send("s", "Look.", { context: { packet, text: "Only this." } }),
+    );
+    const recorded = await value(loadSessionLog(storage, "s"));
+    const copy = createMemoryStorage();
+    await value(saveStory(copy, fixture, 1000));
+    const replayed = createAgentRunner({
+      storage: copy,
+      bindings: { plan: { profile }, prose: { profile } },
+      now,
+      complete: replayModel(recorded.steps),
+    });
+    await value(replayed.start({ id: "s", role: "plan", scope: world }));
+    const [run] = recorded.session.runs;
+    if (run === undefined) throw new Error("no run");
+    const outcome = await value(
+      replayed.send("s", run.message, replayOptions(run)),
+    );
+    expect(outcome.status).toBe("done");
+    expect(outcome.session.runs[0]?.editedContext).toBe("Only this.");
+  });
+});
+
+describe("timing", () => {
+  test("a call's duration is its own, though the writer paused before the next", async () => {
+    const r = await started({ id: "s", role: "plan", scope: world });
+    stub.script(toolCalls(show, show), reply("Done."));
+    let pause = false;
+    await value(
+      r.send("s", "Look twice.", {
+        shouldPause: () => pause,
+        onEvent: (event) => {
+          if (event.kind === "call") pause = true;
+        },
+      }),
+    );
+    const [paused] = sessionTurns(await value(loadSessionLog(storage, "s")));
+    if (paused === undefined) throw new Error("no turn");
+    const before = turnTrace(paused);
+    const ms = (trace: typeof before) =>
+      trace.map((c) => (c.state.kind === "answered" ? c.state.ms : null));
+    expect(ms(before)).toEqual([1, null]);
+
+    clock += 3_600_000;
+    await value(r.resume("s"));
+    const [turn] = sessionTurns(await value(loadSessionLog(storage, "s")));
+    if (turn === undefined) throw new Error("no turn");
+    expect(ms(turnTrace(turn))).toEqual([1, 1]);
   });
 });

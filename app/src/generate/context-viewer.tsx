@@ -2,10 +2,44 @@ import { useEffect, useState } from "react";
 import type { ContextBreakdown } from "~/context/builder";
 import type { ContextRequest } from "~/context/requests";
 import type { LlmRequest } from "~/llm/types";
+import {
+  AgentTurnSlip,
+  type AgentTurnSlipProps,
+  NextTurnSlip,
+  type NextTurnSlipProps,
+} from "./agent-slip";
 import { draftOf, type RequestDraft, requestFromDraft } from "./draft";
 import { ARIA_SHORTCUTS, shortcutLabel } from "./shortcuts";
+import { count, Part } from "./slip-parts";
 
-export interface ContextViewerProps {
+/**
+ * The context viewer: one component for every request the app sends, set in
+ * a slip beside what it explains (DESIGN.md, Request Slip and Agent Slip).
+ * - `request` (the default): a prose generation's stored request, editable
+ *   before Send.
+ * - `turn`: a past or running story agent turn, read-only: what it sent and
+ *   each tool call it made (`./agent-slip.tsx`).
+ * - `next`: a story agent session's next turn, its prompt, model and
+ *   context editable, the edits sent with the composer's Send.
+ */
+export type ContextViewerProps =
+  | RequestViewerProps
+  | AgentTurnSlipProps
+  | NextTurnSlipProps;
+
+export function ContextViewer(props: ContextViewerProps) {
+  switch (props.kind) {
+    case "turn":
+      return <AgentTurnSlip {...props} />;
+    case "next":
+      return <NextTurnSlip {...props} />;
+    default:
+      return <RequestViewer {...props} />;
+  }
+}
+
+export interface RequestViewerProps {
+  readonly kind?: "request";
   /** The stored request to show: assembled, or a revision. */
   readonly record: ContextRequest;
   /**
@@ -39,7 +73,7 @@ export interface ContextViewerProps {
  * sending. Profile, endpoint and URL are shown, not editable. Edits are kept
  * here until Send; a new `record` discards them.
  */
-export function ContextViewer({
+function RequestViewer({
   record,
   breakdown = record.origin === "assembled" ? record.breakdown : null,
   onSend,
@@ -47,7 +81,7 @@ export function ContextViewer({
   sending = false,
   onStop,
   profileLabel,
-}: ContextViewerProps) {
+}: RequestViewerProps) {
   const [draft, setDraft] = useState<RequestDraft>(() =>
     draftOf(record.request),
   );
@@ -199,46 +233,6 @@ const originalPrompt = (request: LlmRequest) => {
   return input?.kind === "completion" ? input.prompt : "";
 };
 
-/**
- * One part of the request, folded to a line with its size until the writer
- * opens it: the exact text is there to read and edit, not in the way.
- */
-function Part({
-  label,
-  kind,
-  value,
-  original,
-  onChange,
-  code = false,
-}: {
-  label: string;
-  kind: string;
-  value: string;
-  original: string;
-  onChange: (value: string) => void;
-  code?: boolean;
-}) {
-  return (
-    <details className="context-viewer-part" data-role={kind}>
-      <summary>
-        <span className="context-viewer-part-label">{label}</span>
-        <span className="context-viewer-part-size">
-          {value === original ? "" : "edited · "}
-          {count(value.length)} characters
-        </span>
-      </summary>
-      <textarea
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={Math.min(20, value.split("\n").length + 1)}
-        spellCheck={!code}
-        className={code ? "context-viewer-code" : undefined}
-      />
-    </details>
-  );
-}
-
 function Breakdown({ breakdown }: { breakdown: ContextBreakdown }) {
   const { window, cards, budget, instruction } = breakdown;
   return (
@@ -285,8 +279,6 @@ function Breakdown({ breakdown }: { breakdown: ContextBreakdown }) {
     </div>
   );
 }
-
-const count = (n: number) => n.toLocaleString("en");
 
 function limitReason(limit: ContextBreakdown["window"]["limitedBy"]): string {
   switch (limit) {

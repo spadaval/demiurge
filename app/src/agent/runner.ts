@@ -2,8 +2,9 @@
  * The story agent runner: a multi-turn tool-calling loop between a model and
  * the story bible, owned by the app rather than by a model vendor's agent
  * framework. It decides everything the model sees: the system prompt
- * (`./prompt.ts`, editable per session), the context packet assembled from
- * the store at each writer message (`./context.ts`), the tools offered
+ * (`./prompt.ts`, editable per session with `configure`), the context packet
+ * assembled from the store at each writer message (`./context.ts`), which the
+ * writer may edit before it is sent, the tools offered
  * (`./profiles.ts`), and which backend and sampler each role uses. Every step
  * is logged in storage as it happens (`./records.ts`).
  *
@@ -34,6 +35,7 @@ import type {
   Fetch,
   LlmError,
   LlmRequest,
+  Sampler,
   StreamDelta,
   ToolCall,
   ToolCallMessage,
@@ -53,7 +55,9 @@ import {
   type AgentScope,
   buildContextPacket,
   type ContextError,
+  type ContextPacket,
   packetText,
+  scopeName,
   scopeProblem,
 } from "./context";
 import {
@@ -106,6 +110,10 @@ export type SessionSpec = {
   scope: AgentScope;
   /** Defaults to `defaultSystemPrompt(role)`. */
   systemPrompt?: string;
+  /** In place of the role binding's profile's model; its model by default. */
+  model?: string;
+  /** Laid over the role binding's sampler; none by default. */
+  sampler?: Sampler;
   /** Defaults to `DEFAULT_MAX_STEPS`. */
   maxSteps?: number;
   /** Stop for the writer's approval before any call that edits the bible. */
@@ -132,6 +140,27 @@ export type RunOptions = {
    */
   shouldPause?: () => boolean;
   onEvent?: (event: AgentEvent) => void;
+};
+
+export type MessageOptions = RunOptions & {
+  /**
+   * The context to send instead of a fresh packet: `packet`, assembled for
+   * this session's scope and shown to the writer, and `text`, the packet as
+   * the writer left it. When `text` differs from `packetText(packet)` it is
+   * sent in the packet's place and kept on the run as `editedContext`.
+   */
+  context?: { packet: ContextPacket; text: string };
+};
+
+/**
+ * Changes to a session, kept on its record. `model: null` and
+ * `sampler: null` drop the session's own, so the binding's are used as
+ * they are.
+ */
+export type SessionChanges = {
+  systemPrompt?: string;
+  model?: string | null;
+  sampler?: Sampler | null;
 };
 
 export type ResumeOptions = RunOptions & {
@@ -166,12 +195,25 @@ export type AgentError =
 export interface AgentRunner {
   /** Creates and saves a session. Makes no model call. */
   start(spec: SessionSpec): ResultAsync<AgentSession, AgentError>;
-  /** Sends the writer's message, with a fresh context packet, and runs. */
+  /**
+   * Sends the writer's message, with a fresh context packet or the one
+   * `options.context` gives, and runs.
+   */
   send(
     id: string,
     message: string,
-    options?: RunOptions,
+    options?: MessageOptions,
   ): ResultAsync<RunOutcome, AgentError>;
+  /**
+   * Changes the session's system prompt or sampler for its next model
+   * calls. The conversation's system message is the prompt, so a new prompt
+   * replaces it; earlier steps keep the requests they sent. Refused while a
+   * run of the session is going.
+   */
+  configure(
+    id: string,
+    changes: SessionChanges,
+  ): ResultAsync<AgentSession, AgentError>;
   /** Goes on with a run that stopped. */
   resume(
     id: string,
@@ -327,6 +369,8 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
       role: spec.role,
       scope: spec.scope,
       systemPrompt,
+      ...(spec.model === undefined ? {} : { model: spec.model }),
+      ...(spec.sampler === undefined ? {} : { sampler: spec.sampler }),
       maxSteps: spec.maxSteps ?? DEFAULT_MAX_STEPS,
       approveMutations: spec.approveMutations ?? false,
       messages: [{ role: "system", content: systemPrompt }],
@@ -363,7 +407,7 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
   function sendMessage(
     id: string,
     message: string,
-    run: RunOptions = {},
+    run: MessageOptions = {},
   ): ResultAsync<RunOutcome, AgentError> {
     return exclusive(id, async () => {
       const loaded = await loadSession(id);
@@ -377,14 +421,42 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
             "The model's last tool calls are not all answered: resume to run them, or resume with decline to refuse them",
         });
       }
-      const packet = await buildContextPacket(storage, session.scope);
-      if (packet.isErr()) return err(packet.error);
+      const given = run.context;
+      if (
+        given !== undefined &&
+        scopeName(given.packet.scope) !== scopeName(session.scope)
+      ) {
+        return err({
+          kind: "not_ready",
+          id,
+          message: `The context given is for ${scopeName(given.packet.scope)}, and this session is about ${scopeName(session.scope)}`,
+        });
+      }
+      let packet: ContextPacket;
+      if (given === undefined) {
+        const built = await buildContextPacket(storage, session.scope);
+        if (built.isErr()) return err(built.error);
+        packet = built.value;
+      } else {
+        packet = given.packet;
+      }
+      const assembled = packetText(packet);
+      const edited =
+        given !== undefined && given.text !== assembled
+          ? given.text
+          : undefined;
       const index = session.runs.length + 1;
       const at = now();
-      session.runs.push({ index, message, context: packet.value, at });
+      session.runs.push({
+        index,
+        message,
+        context: packet,
+        ...(edited === undefined ? {} : { editedContext: edited }),
+        at,
+      });
       session.messages.push({
         role: "user",
-        content: `${packetText(packet.value)}\n\n# The writer says\n\n${message}`,
+        content: `${edited ?? assembled}\n\n# The writer says\n\n${message}`,
       });
       session.next = "model";
       session.stopped = null;
@@ -392,6 +464,28 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
       const saved = await saveSession(storage, session);
       if (saved.isErr()) return err(saved.error);
       return loop(session, undefined, run, index);
+    });
+  }
+
+  function configure(
+    id: string,
+    changes: SessionChanges,
+  ): ResultAsync<AgentSession, AgentError> {
+    return exclusive(id, async () => {
+      const loaded = await loadSession(id);
+      if (loaded.isErr()) return err(loaded.error);
+      const session = loaded.value;
+      if (changes.systemPrompt !== undefined) {
+        session.systemPrompt = changes.systemPrompt;
+        session.messages[0] = { role: "system", content: changes.systemPrompt };
+      }
+      if (changes.model === null) delete session.model;
+      else if (changes.model !== undefined) session.model = changes.model;
+      if (changes.sampler === null) delete session.sampler;
+      else if (changes.sampler !== undefined) session.sampler = changes.sampler;
+      session.updatedAt = now();
+      const saved = await saveSession(storage, session);
+      return saved.isErr() ? err(saved.error) : ok(session);
     });
   }
 
@@ -449,7 +543,14 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
         tool_call_id: call.id,
         content: storyToolResultContent(answer),
       });
-      step.calls.push({ call, result: answer, changes: [], at: now() });
+      const at = now();
+      step.calls.push({
+        call,
+        result: answer,
+        changes: [],
+        at,
+        finishedAt: at,
+      });
     }
     step.finishedAt = now();
     session.updatedAt = step.finishedAt;
@@ -463,6 +564,11 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
     runIndex: number,
   ): Promise<Result<RunOutcome, AgentError>> {
     const binding = bindings[session.role];
+    // The session's model, if it has one, goes to the binding's server.
+    const profile =
+      session.model === undefined
+        ? binding.profile
+        : { ...binding.profile, model: session.model };
     const offered = offeredTools(toolAccess(session.role, binding));
     const touched: AgentStep[] = [];
     const touch = (step: AgentStep) => {
@@ -521,7 +627,7 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
         modelCalls += 1;
         const index = session.steps + 1;
         const request = buildRequest(
-          binding.profile,
+          profile,
           {
             kind: "chat",
             // A copy: the session goes on growing, the request must not.
@@ -530,9 +636,9 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
           },
           {
             stream: binding.stream ?? false,
-            ...(binding.sampler === undefined
+            ...(binding.sampler === undefined && session.sampler === undefined
               ? {}
-              : { sampler: binding.sampler }),
+              : { sampler: { ...binding.sampler, ...session.sampler } }),
           },
         );
         const startedAt = now();
@@ -543,7 +649,7 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
           sendOptions.onDelta = (delta) =>
             onEvent({ kind: "delta", step: index, delta });
         }
-        const answer = await complete(binding.profile, request, sendOptions);
+        const answer = await complete(profile, request, sendOptions);
         step = {
           version: AGENT_RECORD_VERSION,
           session: session.id,
@@ -637,9 +743,10 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
           tool_call_id: call.id,
           content: storyToolResultContent(result),
         });
-        const answered: StepCall = { call, result, changes, at };
+        const finishedAt = now();
+        const answered: StepCall = { call, result, changes, at, finishedAt };
         step.calls.push(answered);
-        step.finishedAt = now();
+        step.finishedAt = finishedAt;
         if (unanswered(session.messages).length === 0) session.next = "model";
         const saved = await save();
         if (saved.isErr()) return err(saved.error);
@@ -649,5 +756,5 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
     }
   }
 
-  return { start, send: sendMessage, resume };
+  return { start, send: sendMessage, configure, resume };
 }
