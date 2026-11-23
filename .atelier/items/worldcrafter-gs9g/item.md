@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-gs9g
 title: Cloudflare Worker optional inference proxy for hosted providers and home llama.cpp
-status: changes_requested
+status: in_review
 mission: worldcrafter-3z9j
 labels:
 - worker
@@ -55,7 +55,8 @@ proxy") has the steps for Sumeet.
 - **Keys**: only `Accept`, `X-Title` and `HTTP-Referer` reach the upstream
   from the browser (no cookie, Access JWT or `Authorization`). Redirects are
   refused (502) so a key can't follow one, secret values are replaced in
-  error bodies, and a missing secret is reported by name only.
+  every response body as it streams (`redactStream`, including errors a 200
+  carries), and a missing secret is reported by name only.
 - **Client** (`app/src/llm/client.ts`, `llm/proxy.ts`): `BackendProfile`
   gains `proxied`. `send` then posts to the same-origin proxy path with no
   `Authorization`, even if an old key is left on the profile. The stored
@@ -73,7 +74,7 @@ upstream and bad routes, header stripping and key redaction, missing
 secret, redirect refusal, and cancel both mid-stream (upstream stream
 cancelled) and before the answer (upstream signal aborted). The in-process
 transport in `worker/testing.ts` now behaves like a real `fetch` on abort.
-Profile and app tests cover the switch. `cd app && bun run check`: 1599
+Profile and app tests cover the switch. `cd app && bun run check`: 1601
 pass, 0 fail (the act() warnings are the existing ones `worldcrafter-d93c`
 tracks).
 
@@ -82,3 +83,6 @@ name, so a profile needs no extra field and can't be pointed at a server
 the Worker isn't configured for; and when proxied there's no per-request
 key passthrough, since the item puts keys only in Worker secrets.
 
+### Responses
+
+1-mvxp.1: fixed in 65a5ccc
