@@ -4,11 +4,11 @@ The app runs its own tool-calling loop between a model and the story bible (`app
 
 ## Sessions and roles
 
-A session has a role, a scope and a system prompt, fixed when it starts.
+A session has a role and a scope, fixed when it starts, and a system prompt and sampler the writer can change.
 
 - **Role.** `plan` is structural work and talk: outlining, reworking, weighing open questions. It offers every story tool by default. `prose` is drafting a scene, and offers no tools by default. Each role is bound to its own backend profile and sampler (`ProfileBindings` in `profiles.ts`), so planning can go to a reasoning model and drafting to a finetune or a local model. A binding can narrow or widen its tools (`all`, `queries`, `none`) and can stream. Bindings are browser configuration like the backend profile: the runner is given them, and a session records only its role, so no API key is stored.
 - **Scope.** The whole story, one scene, or one bible record (`drive:keep-light`). A scope the bible doesn't have is refused when the session starts.
-- **System prompt.** Editable per session. The default for `plan` is `.agents/skills/story-sketch/craft.md` word for word, then that skill's mechanics rewritten for the tools; a test fails when craft.md changes and the copy in `prompt.ts` doesn't. The default for `prose` is drafting guidance drawn from the skill's "Writing a scene".
+- **System prompt and sampler.** A session starts with its profile's defaults for the role (`defaults.ts`: what the writer saved as "Profile default", else the built-in prompt and no sampler of its own). `configure` changes either for the session's next model calls and keeps the change on the session record; the session's sampler is laid over its binding's. Earlier steps keep the requests they sent. The built-in default for `plan` is `.agents/skills/story-sketch/craft.md` word for word, then that skill's mechanics rewritten for the tools; a test fails when craft.md changes and the copy in `prompt.ts` doesn't. The default for `prose` is drafting guidance drawn from the skill's "Writing a scene".
 
 ## The context packet
 
@@ -16,15 +16,21 @@ Each writer message is sent with a context packet assembled from the store as it
 
 The packet goes at the top of the writer's message, not in the system prompt, so the conversation's prefix stays fixed and a local server can reuse its cache. Earlier messages keep the packet they were sent with; tool results after them are newer.
 
+The writer can edit the next turn's packet before sending it. `send` then takes the packet they were shown and the text they left it as, sends that text, and keeps it on the run as `editedContext` beside the packet it came from. A run is never changed once stored, so it holds both what was assembled and what was sent, and a replay sends the edit again (`replayOptions`).
+
 ## Running, stopping and the log
 
 A run starts with a message (`send`) or a `resume`. It calls the model, runs the tools it asks for, and calls it again until the model answers without a tool call. It stops early, and `resume` goes on, when the writer asks it to pause (checked before each model call and each tool call), when it has made `maxSteps` model calls, when the session asks for approval before edits (`resume` with `decline` refuses them and tells the model why), or when a model call fails. Aborting the signal cancels instead: the call in flight is dropped, calls not yet run are answered as cancelled, and the session waits for the writer.
 
 Storage holds the session (`<id>/session`: the conversation, each writer message with its packet, and where it stands) and one record per step (`<id>/step/000001`: the exact request, the model's answer, and each tool call with its result and the story records it changed, before and after), in the `agentRecords` collection. The session and its current step are saved in one batch after every model call and every tool call, so a session stopped anywhere, even by a crash, resumes where it was. `replayModel` answers with a log's recorded responses and refuses a request that differs from the recorded one, so a session can be replayed on a copy of the world as it started and checked against what it did.
 
+## The agent slip
+
+The context viewer (`app/src/generate/context-viewer.tsx`, `kind: "turn"` and `kind: "next"`) shows a session's turns, as DESIGN.md's Agent Slip describes. `inspect.ts` reads the log for it: the steps of each writer message as one turn, each tool call in order with how long it ran, the contradictions its edits kept, the records and prose its edits and `trace` queries suspect may now be stale, and the records each call wrote. The next turn's slip holds the writer's edits until the composer sends them, with `sendNextTurn` (`next-turn.ts`): a "Profile default" edit is saved first, then the session is changed, then the message goes.
+
 ## What it does not do yet
 
-- The UI (`worldcrafter-mtkn`) and running sessions in the Worker (`worldcrafter-ji5d`).
+- Talk pages hosting the slip (`worldcrafter-lhh3`) and running sessions in the Worker (`worldcrafter-ji5d`).
 - Writing a draft into the scene's document: the prose role's answer is in the log and the conversation, and putting it in the document is the editor's job.
 - Completion-endpoint models: every role uses chat. A finetune served only as raw completions would need a prompt layout for the conversation.
 - Timeline values the model writes are asserted, as the CLI's are. Whether they should carry an `inferred` authority is a product call.

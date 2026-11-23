@@ -1531,6 +1531,248 @@ a {
   border-color: var(--rule-strong);
 }
 
+/* ── Agent slip ───────────────────────────────────────────────────────── */
+
+/*
+ * The context viewer for a story agent turn (DESIGN.md, Agent Slip): the
+ * request slip's form, plus the tool trace, kept contradictions and trace
+ * suspects. Apparatus and neutrals throughout; nothing here is AI prose, so
+ * no vermilion, and raised umber only for a failure.
+ */
+.agent-slip {
+  font-family: var(--font-apparatus);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.agent-slip .context-viewer-header {
+  margin-bottom: 12px;
+}
+
+.agent-slip .request-slip-head {
+  margin-bottom: 2px;
+}
+
+/* A part as sent: its text in its setting, no field border. */
+.context-viewer-sent {
+  max-height: 16lh;
+  margin: 0 0 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  scrollbar-width: thin;
+}
+
+.agent-slip .context-viewer-cards {
+  margin: 0 0 10px;
+}
+
+.slip-scope {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+
+.slip-reach {
+  margin: 0 0 10px;
+  color: var(--ink-2);
+}
+
+.context-viewer-actions .slip-reach {
+  margin: 0;
+}
+
+.slip-label {
+  display: flex;
+  align-items: baseline;
+  margin: 18px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.slip-label-count {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.slip-trace,
+.slip-rows,
+.slip-refs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slip-trace > li,
+.slip-rows > li {
+  border-top: 1px solid var(--rule);
+  animation: slip-arrive var(--fade) var(--ease-out);
+}
+
+.slip-trace > li:last-child,
+.slip-rows > li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+@keyframes slip-arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+.slip-call summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.slip-call summary::-webkit-details-marker {
+  display: none;
+}
+
+.slip-call summary::before {
+  content: "›";
+  width: 8px;
+  color: var(--ink-3);
+  transition: rotate var(--fade) var(--ease-out);
+}
+
+.slip-call[open] summary::before {
+  rotate: 90deg;
+}
+
+.slip-call summary:focus-visible {
+  outline-offset: -1px;
+}
+
+.slip-call-ordinal,
+.slip-call-state {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.slip-call-name {
+  font:
+    400 12.5px / 1.5 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  color: var(--ink);
+}
+
+.slip-call-args {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+
+.slip-call-state {
+  white-space: nowrap;
+}
+
+.slip-call[data-state="failed"] .slip-call-state {
+  color: var(--ink);
+}
+
+.slip-call-body {
+  padding: 0 0 10px 16px;
+}
+
+.slip-code {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    400 12.5px / 1.5 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  color: var(--ink-2);
+}
+
+.slip-refs {
+  margin-bottom: 10px;
+}
+
+.slip-refs li {
+  padding: 1px 0;
+}
+
+.slip-ref-plain {
+  color: var(--ink-3);
+}
+
+/* A reference: ink text on an ink-3 underline that lifts to ink. */
+.slip-reference {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.slip-reference:hover {
+  text-decoration-color: var(--ink);
+}
+
+.slip-rows > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 7px 0;
+}
+
+.slip-row-kind {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.slip-row-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.slip-row-meta {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.slip-row-reason {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 /* ── Model settings ───────────────────────────────────────────────────── */
 
 .settings-sheet {
