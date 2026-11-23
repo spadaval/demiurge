@@ -7,7 +7,7 @@ status: open
 labels:
 - cleanup
 - story-model
-lead: null
+lead: mcp:b66be996-8cb2-4d67-a57b-cacf9ea7bc65
 planners:
 - ace64553-eec2-406a-84c3-c6360b8f5131
 created_at: 2026-11-22T22:38:25.931618779Z
