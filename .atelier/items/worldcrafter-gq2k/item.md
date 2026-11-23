@@ -86,4 +86,8 @@ Moves: defects found after merge, which counts neither today. Change: trace worl
 - 1-6qfl.1: rebutted: in a fresh clone of this branch with `bun install --frozen-lockfile` at the root, root `bun run lint` (Biome 2.4.4) exits 0 with 2 warnings and 1 info, with or without `app/`'s dependencies and with `.git` moved away, and prints no nested-configuration error. The page and checklist now call line 5 fixed only in part, since the root app has no type check command.
 - 1-6qfl.2: fixed in 62493cc
 
+### Take-over
+
+2026-11-22: the lead of mission worldcrafter-k7uh took this approved run over to merge it. Its gardener's thread had left it approved and unmerged since 2026-11-11, and worldcrafter-2x5z rewrites `AGENTS.md`, which this branch also edits, so it has to land first. Nothing on the branch changed after the round 2 approval except this note.
+
 ### Session
