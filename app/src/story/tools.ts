@@ -1162,6 +1162,20 @@ export function runStoryTool(
   );
 }
 
+/**
+ * Runs `command` as the agent's tool call of the same name runs it: the same
+ * save and the same report of what it kept and what may now be stale. A
+ * control that edits the bible directly builds its command and calls this,
+ * so it never takes a path of its own.
+ */
+export function runStoryCommand(
+  storage: StorageAdapter,
+  command: StoryCommand,
+  now: number = Date.now(),
+): ResultAsync<StoryToolRun, StoryStoreError> {
+  return runMutation(storage, command.type, command, now);
+}
+
 function runMutation(
   storage: StorageAdapter,
   name: string,

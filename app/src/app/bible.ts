@@ -8,6 +8,7 @@ import {
   type StoryStoreError,
 } from "~/story/store";
 import type { Story } from "~/story/story";
+import { runStoryCommand, type StoryToolResult } from "~/story/tools";
 import { createStore, type Store } from "~/workspace/store";
 import { describeStorageError } from "./environment";
 
@@ -45,6 +46,16 @@ export interface Bible {
     command: StoryCommand,
     now?: number,
   ): ResultAsync<StoryExecuted, StoryStoreError>;
+  /**
+   * Applies a story command as the story agent's tool call of the same name
+   * does (`runStoryCommand`), and gives its result: a refusal, or what the
+   * edit kept and what may still state what it changed. A direct edit in
+   * the inspector goes through here.
+   */
+  edit(
+    command: StoryCommand,
+    now?: number,
+  ): ResultAsync<StoryToolResult, StoryStoreError>;
 }
 
 /**
@@ -90,6 +101,8 @@ export function createBible(base: StorageAdapter): Bible {
     refresh,
     storage,
     execute: (command, now) => executeStoryCommand(storage, command, now),
+    edit: (command, now) =>
+      runStoryCommand(storage, command, now).map(({ result }) => result),
   };
 }
 

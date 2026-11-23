@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createMemoryStorage } from "~/storage/memory";
 import type { StorageAdapter, StoredDocument } from "~/storage/types";
 import documentsFile from "~/story/fixtures/lighthouse.documents.json";
-import { saveStory } from "~/story/store";
+import { loadStory, saveStory } from "~/story/store";
 import { parseStory, type Story } from "~/story/story";
 import { createStorageConnection } from "~/workspace/connection";
 import type { KeyValueStore } from "~/workspace/tabs";
@@ -53,7 +53,7 @@ const keyValue = (): KeyValueStore => {
 /** The storage the last `setup` made, for tests that change it behind the app. */
 let storage: StorageAdapter = createMemoryStorage();
 
-async function setup(story: Story = lighthouse) {
+async function setup(story: Story = lighthouse, readOnly = false) {
   storage = createMemoryStorage();
   for (const document of documents) {
     (await storage.documents.save(document))._unsafeUnwrap();
@@ -78,10 +78,11 @@ async function setup(story: Story = lighthouse) {
       }),
     ),
     tabStore: keyValue(),
-    readOnly: false,
+    readOnly,
     saveDelayMs: 60_000,
   });
   (await workspace.refreshDocuments())._unsafeUnwrap();
+  if (readOnly) return workspace;
   (
     await createAppWorldStore(workspace).execute({
       name: "attachEntry",
@@ -149,8 +150,17 @@ const rows = (view: HTMLElement, group: string) => {
   const section = [...view.querySelectorAll(".ledger-group")].find(
     (s) => s.querySelector("h2")?.textContent === group,
   );
+  // The ledger as it reads: direct-edit controls are left out.
   return [...(section?.querySelectorAll(".ledger-rows > li") ?? [])].map(
-    (li) => li.textContent ?? "",
+    (li) => {
+      const read = li.cloneNode(true) as Element;
+      for (const control of read.querySelectorAll(
+        ".edit-actions, .edit-action, .edit-form",
+      )) {
+        control.remove();
+      }
+      return read.textContent ?? "";
+    },
   );
 };
 
@@ -593,5 +603,247 @@ describe("record touches", () => {
       ref: { kind: "candidate", questionId: "why-leave", id: "debt" },
     });
     expect(parseAt("nonsense")).toEqual({ kind: "unknown", text: "nonsense" });
+  });
+});
+
+describe("direct edits in the World inspector", () => {
+  const stored = async () => (await loadStory(storage))._unsafeUnwrap();
+
+  /** The button named `name` (its label, or else its text). */
+  const button = (view: HTMLElement, name: string) => {
+    const found = [
+      ...view.querySelectorAll<HTMLButtonElement>(".page button"),
+    ].find((b) => (b.getAttribute("aria-label") ?? b.textContent) === name);
+    if (!found) throw new Error(`no button "${name}"`);
+    return found;
+  };
+
+  const field = <T extends HTMLInputElement | HTMLSelectElement>(
+    view: HTMLElement,
+    label: string,
+  ) => {
+    const found = [
+      ...view.querySelectorAll<T>(".page input, .page select"),
+    ].find((f) => f.getAttribute("aria-label") === label);
+    if (!found) throw new Error(`no field "${label}"`);
+    return found;
+  };
+
+  /** Sets a field's value the way React notices. */
+  async function type(
+    target: HTMLInputElement | HTMLSelectElement,
+    value: string,
+  ) {
+    const setter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(target),
+      "value",
+    )?.set;
+    await act(async () => {
+      setter?.call(target, value);
+      target.dispatchEvent(
+        new Event(target instanceof HTMLSelectElement ? "change" : "input", {
+          bubbles: true,
+        }),
+      );
+    });
+  }
+
+  const report = (view: HTMLElement) =>
+    view.querySelector(".edit-report")?.textContent ?? "";
+
+  /** Clicks, then waits for the edit's report and the bible to show it. */
+  async function edit(view: HTMLElement, target: HTMLElement) {
+    await act(async () => target.click());
+    await until(() => report(view) !== "");
+    await settle();
+  }
+
+  const rail = (view: HTMLElement, name: string) =>
+    [...view.querySelectorAll(".inspect-row")]
+      .find((row) => row.firstChild?.textContent === name)
+      ?.querySelector(".inspect-count")?.textContent;
+
+  test("choosing a candidate answers the question, with what may now be stale", async () => {
+    const { view } = await render(await setup(), "/world?at=questions");
+    await edit(view, button(view, "Choose “He wanted adventure.”"));
+    const question = (await stored()).openQuestions.find(
+      (q) => q.id === "why-leave",
+    );
+    expect(question?.answer).toBe("wanderlust");
+    expect(rows(view, "Questions")).toContain(
+      "ChosenHe wanted adventure.touches 0",
+    );
+    expect(report(view)).toStartWith("Chose “He wanted adventure.”.");
+    // The trace the agent gets: the prose that reveals the old answer,
+    // linked to its document.
+    expect(report(view)).toContain(
+      "May still state the old “Why did Ivo leave the guild?”",
+    );
+    const prose = [...view.querySelectorAll(".edit-report a")].find(
+      (a) => a.getAttribute("href") === "/doc/doc-confession",
+    );
+    expect(prose).toBeDefined();
+  });
+
+  test("rejecting asks why; reopening puts it back, or reopens the question", async () => {
+    const { view } = await render(await setup(), "/world?at=questions");
+    expect(rail(view, "Open Questions")).toBe("0");
+    await act(async () =>
+      button(view, "Reject “He wanted adventure.”").click(),
+    );
+    await type(field(view, "Why reject “He wanted adventure.”?"), "Not him.");
+    await edit(view, button(view, "Reject"));
+    const candidate = () =>
+      stored().then((story) =>
+        story.openQuestions
+          .find((q) => q.id === "why-leave")
+          ?.candidates.find((c) => c.id === "wanderlust"),
+      );
+    expect((await candidate())?.rejected).toBe("Not him.");
+    expect(rows(view, "Questions")).toContain(
+      "He wanted adventure.Rejected · Not him.touches 0",
+    );
+    expect(view.querySelector(".edit-form")).toBeNull();
+
+    await edit(view, button(view, "Reopen “He wanted adventure.”"));
+    expect((await candidate())?.rejected).toBeUndefined();
+
+    await edit(
+      view,
+      button(
+        view,
+        "Reopen the question answered by “He owes the guild a ship.”",
+      ),
+    );
+    const story = await stored();
+    const question = story.openQuestions.find((q) => q.id === "why-leave");
+    expect(question?.answer).toBeUndefined();
+    expect(rows(view, "Questions")[0]).toBe("Why did Ivo leave the guild?open");
+    // The rail counts it undecided again.
+    expect(rail(view, "Open Questions")).toBe("1");
+  });
+
+  test("a scene moves one place in the telling order", async () => {
+    const { view } = await render(await setup(), "/world?at=reader-order");
+    await edit(view, button(view, "Move “Confession” earlier"));
+    expect((await stored()).scenes.map((s) => s.id)).toEqual([
+      "arrival",
+      "confession",
+      "storm-night",
+    ]);
+    expect(rows(view, "Reading order")).toEqual([
+      "1Arrivaltouches 63",
+      "2Confessiontouches 5",
+      "3The night the light failedtouches 6",
+    ]);
+    expect(report(view)).toStartWith("Moved “Confession” to 2.");
+  });
+
+  test("a scene's viewpoint is chosen from the cast", async () => {
+    const { view } = await render(await setup(), "/world?at=scene:storm-night");
+    const viewpoint = () =>
+      [...view.querySelectorAll(".record-field")].find(
+        (f) => f.querySelector("dt")?.textContent === "Viewpoint",
+      );
+    expect(viewpoint()?.querySelector(".gap")?.textContent).toBe("not set");
+    const select = field<HTMLSelectElement>(
+      view,
+      "Viewpoint of “The night the light failed”",
+    );
+    await type(select, "ivo");
+    await until(() => report(view) !== "");
+    await settle();
+    const scene = (await stored()).scenes.find((s) => s.id === "storm-night");
+    expect(scene?.viewpoint).toBe("ivo");
+    expect(viewpoint()?.querySelector("a")?.textContent).toBe("Ivo");
+    expect(report(view)).toStartWith(
+      "Told “The night the light failed” through “Ivo”.",
+    );
+  });
+
+  test("a count's value is set at an event, and a contradiction it makes is kept and said", async () => {
+    const { view } = await render(await setup(), "/world?at=count:oil");
+    await type(field(view, "Value"), "5");
+    await type(field<HTMLSelectElement>(view, "At event"), "tide");
+    await edit(view, button(view, "Set"));
+    const oil = (await stored()).counts.find((c) => c.id === "oil");
+    expect(oil?.values.find((v) => v.at === "tide")?.value).toBe(5);
+    expect(report(view)).toContain(
+      'Count: "Barrels of oil" rises from 1 at "The wreck" to 5 at "The spring tide", though it only falls.',
+    );
+    expect(rail(view, "Contradictions")).toBe("2");
+    // The field is cleared for the next value.
+    expect(field<HTMLInputElement>(view, "Value").value).toBe("");
+  });
+
+  test("a gap is marked deliberate with a reason, and unmarked", async () => {
+    const { view } = await render(
+      await setup(),
+      "/world?at=drive:leave-island",
+    );
+    const gaps = () =>
+      [...view.querySelectorAll(".record-gaps li .gap")].map(
+        (g) => g.textContent,
+      );
+    expect(gaps()).toEqual([
+      'Nobody holds the drive "Leave the island" yet.',
+      'Nothing opposes the drive "Leave the island" yet.',
+    ]);
+    const marks = [
+      ...view.querySelectorAll<HTMLButtonElement>(".record-gaps button"),
+    ];
+    await act(async () => marks[1]?.click());
+    await type(
+      field(
+        view,
+        'Why is it fine that nothing opposes the drive "Leave the island" yet?',
+      ),
+      "Only the sea is against it.",
+    );
+    await edit(view, button(view, "Keep the gap"));
+    expect(gaps()).toEqual([
+      'Nobody holds the drive "Leave the island" yet.',
+      "gap kept · Only the sea is against it.",
+    ]);
+    const marked = (await stored()).deliberateGaps;
+    expect(JSON.stringify(marked)).toContain("Only the sea is against it.");
+
+    await edit(
+      view,
+      button(view, "Unmark the kept gap: Only the sea is against it."),
+    );
+    expect(gaps()).toEqual([
+      'Nobody holds the drive "Leave the island" yet.',
+      'Nothing opposes the drive "Leave the island" yet.',
+    ]);
+  });
+
+  test("a refused edit says why, and changes nothing", async () => {
+    const { view } = await render(await setup(), "/world?at=questions");
+    // Removed behind the app's back, so the sheet still offers it.
+    const { applyStoryCommand } = await import("~/story/commands");
+    const removed = applyStoryCommand(await stored(), {
+      type: "removeCandidate",
+      questionId: "why-leave",
+      id: "wanderlust",
+    })._unsafeUnwrap().story;
+    (await saveStory(storage, removed, 2))._unsafeUnwrap();
+    await edit(view, button(view, "Choose “He wanted adventure.”"));
+    expect(report(view)).toStartWith(
+      "Not changed: candidate wanderlust does not exist.",
+    );
+    expect(view.querySelector(".edit-report")?.hasAttribute("data-error")).toBe(
+      true,
+    );
+  });
+
+  test("a read-only tab shows no controls", async () => {
+    const { view } = await render(
+      await setup(lighthouse, true),
+      "/world?at=questions",
+    );
+    expect(view.querySelector(".edit-action")).toBeNull();
+    await follow(view, "Reader-Order3", ".rail");
+    expect(view.querySelector(".edit-action")).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import { parseStory, type Story } from "./story";
 import {
   executeStoryTool,
   executeStoryToolCall,
+  runStoryCommand,
   STORY_TOOLS,
   type StoryToolResult,
   storyTool,
@@ -663,5 +664,38 @@ describe("a model's tool call", () => {
       tool: "addCause",
       error: { kind: "invalid_arguments" },
     });
+  });
+});
+
+describe("runStoryCommand", () => {
+  test("runs a command as the agent's tool call of that name does", async () => {
+    const answer = {
+      type: "answerOpenQuestion",
+      id: "why-leave",
+      candidateId: "wanderlust",
+    } as const;
+    const { type: _, ...args } = answer;
+    const byTool = await call("answerOpenQuestion", args);
+    const toolStory = await value(loadStory(storage));
+
+    storage = createMemoryStorage();
+    await value(saveStory(storage, fixture, 1000));
+    await value(
+      storage.batch(
+        documents.map((record) => ({ kind: "saveDocument" as const, record })),
+      ),
+    );
+    const direct = await value(runStoryCommand(storage, answer, 2000));
+    expect(direct.result).toEqual(byTool);
+    expect(await value(loadStory(storage))).toEqual(toolStory);
+    expect(direct.changes.length).toBeGreaterThan(0);
+  });
+
+  test("a refused command is a refusal, as for a tool call", async () => {
+    const { result } = await value(
+      runStoryCommand(storage, { type: "moveScene", id: "nowhere", index: 0 }),
+    );
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error.kind).toBe("refused");
   });
 });

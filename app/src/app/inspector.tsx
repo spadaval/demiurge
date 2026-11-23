@@ -1,7 +1,9 @@
 /**
  * The World inspector (DESIGN.md, World Inspector): the story bible read as
  * the edition's appendix, five ledgers and a detail sheet per record, in the
- * World tab. It reads; editing records is out of its scope.
+ * World tab. It mostly reads: the few edits where a click beats asking the
+ * agent are direct controls (`./bible-edit.tsx`), and the rest is the
+ * agent's.
  */
 
 import { Link, useSearch } from "@tanstack/react-router";
@@ -11,18 +13,22 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
 } from "react";
+import type { StoryCommand } from "~/story/commands";
 import {
   type Contradiction,
   storyContradictions,
 } from "~/story/contradictions";
 import { countSeries, seriesTexts } from "~/story/counts";
-import { deliberateGaps } from "~/story/gaps";
+import { deliberateGaps, type Gap, storyGaps } from "~/story/gaps";
 import { membershipsInStoryOrder } from "~/story/order";
-import { formatRef } from "~/story/refs";
+import { formatRef, parseRef } from "~/story/refs";
 import { describePosition } from "~/story/render";
 import {
   type Actor,
+  type Candidate,
+  type Count,
   type Drive,
   isAnswered,
   type Membership,
@@ -33,8 +39,10 @@ import {
   SCENE_LINK_WORDS,
   type Story,
 } from "~/story/story";
+import type { EditWarnings, SuspectData } from "~/story/tools";
 import { refLabel, type Touch } from "~/story/touches";
 import type { Position } from "~/time/timeline";
+import { BibleEditsProvider, useBibleEdits } from "./bible-edit";
 import { useServices, useStore } from "./hooks";
 import {
   atText,
@@ -111,15 +119,17 @@ function Inspector({ story, at }: { story: Story; at: InspectorAt }) {
   );
   return (
     <InspectorContext value={data}>
-      <article className="sheet inspector-sheet" aria-label="World inspector">
-        {at.kind === "view" && <ViewSheet view={at.view} />}
-        {at.kind === "record" && <RecordSheet subject={at.ref} />}
-        {at.kind === "unknown" && (
-          <SheetHead title="Not in the bible">
-            “{at.text}” names no view or record of the story bible.
-          </SheetHead>
-        )}
-      </article>
+      <BibleEditsProvider sheet={atText(at)}>
+        <article className="sheet inspector-sheet" aria-label="World inspector">
+          {at.kind === "view" && <ViewSheet view={at.view} />}
+          {at.kind === "record" && <RecordSheet subject={at.ref} />}
+          {at.kind === "unknown" && (
+            <SheetHead title="Not in the bible">
+              “{at.text}” names no view or record of the story bible.
+            </SheetHead>
+          )}
+        </article>
+      </BibleEditsProvider>
     </InspectorContext>
   );
 }
@@ -147,6 +157,7 @@ function SheetHead({
       )}
       <h1 className="sheet-title">{title}</h1>
       {children && <p className="inspector-lede">{children}</p>}
+      <EditReport />
     </header>
   );
 }
@@ -596,33 +607,9 @@ function QuestionRows({ question: q }: { question: OpenQuestion }) {
         ]}
         meta={questionStatus(story, q)}
       />
-      {q.candidates.map((c) => {
-        const chosen = isAnswered(q) && q.answer === c.id;
-        const touches = reach(story, candidate(c.id));
-        return (
-          <li
-            key={c.id}
-            className="ledger-row"
-            data-sub
-            data-candidate={
-              chosen ? "chosen" : c.rejected !== undefined ? "rejected" : "live"
-            }
-          >
-            <div className="ledger-body">
-              <p className="ledger-lead">
-                {chosen && <span className="ledger-chosen">Chosen</span>}
-                <RecordRef subject={candidate(c.id)} />
-              </p>
-              {c.rejected !== undefined && (
-                <p className="ledger-line">Rejected · {c.rejected}</p>
-              )}
-            </div>
-            <span className="ledger-meta">
-              <RecordRef subject={candidate(c.id)}>touches {touches}</RecordRef>
-            </span>
-          </li>
-        );
-      })}
+      {q.candidates.map((c) => (
+        <CandidateRow key={c.id} question={q} candidate={c} />
+      ))}
       {superseded.length > 0 && (
         <li className="ledger-row" data-sub>
           <details className="ledger-fold">
@@ -646,6 +633,646 @@ function QuestionRows({ question: q }: { question: OpenQuestion }) {
           </details>
         </li>
       )}
+    </>
+  );
+}
+
+function CandidateRow({
+  question: q,
+  candidate: c,
+}: {
+  question: OpenQuestion;
+  candidate: Candidate;
+}) {
+  const { story } = useInspector();
+  const chosen = isAnswered(q) && q.answer === c.id;
+  const subject: Ref = { kind: "candidate", questionId: q.id, id: c.id };
+  return (
+    <li
+      className="ledger-row"
+      data-sub
+      data-candidate={
+        chosen ? "chosen" : c.rejected !== undefined ? "rejected" : "live"
+      }
+    >
+      <div className="ledger-body">
+        <p className="ledger-lead">
+          {chosen && <span className="ledger-chosen">Chosen</span>}
+          <RecordRef subject={subject} />
+        </p>
+        {c.rejected !== undefined && (
+          <p className="ledger-line">Rejected · {c.rejected}</p>
+        )}
+        <CandidateControls question={q} candidate={c} />
+      </div>
+      <span className="ledger-meta">
+        <RecordRef subject={subject}>touches {reach(story, subject)}</RecordRef>
+      </span>
+    </li>
+  );
+}
+
+// ── Direct edits ─────────────────────────────────────────────────────────
+
+/**
+ * The last direct edit's outcome, under the sheet head (DESIGN.md, World
+ * Inspector, Direct edits): what was done, then what it kept (timeline
+ * problems and other contradictions, story material in `ink-2`) and the
+ * records and prose that may still state what it changed, as references.
+ * A refusal or a failed save is an error, in raised umber.
+ */
+function EditReport() {
+  const { outcome, dismiss } = useBibleEdits();
+  return (
+    <div aria-live="polite">
+      {outcome !== null && (
+        <section
+          className="edit-report"
+          data-error={outcome.kind === "saved" ? undefined : true}
+          aria-label="Last edit"
+        >
+          <p className="edit-report-head">
+            {outcome.kind === "saved" && outcome.done}
+            {outcome.kind === "refused" &&
+              `Not changed: ${outcome.message}${outcome.message.endsWith(".") ? "" : "."}`}
+            {outcome.kind === "failed" && outcome.message}
+            <button type="button" className="notice-dismiss" onClick={dismiss}>
+              Dismiss
+            </button>
+          </p>
+          {outcome.kind === "saved" && outcome.warnings !== null && (
+            <EditWarningLines warnings={outcome.warnings} />
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function EditWarningLines({ warnings: w }: { warnings: EditWarnings }) {
+  const { story } = useInspector();
+  const kept = [
+    ...w.timelineProblems.map((message) => `Timeline: ${message}`),
+    ...w.contradictions.map(
+      ({ source, message }) =>
+        `${source.replace(/^./, (c) => c.toUpperCase())}: ${message}`,
+    ),
+  ];
+  const notes = [
+    ...(w.alsoRemoved.length > 0
+      ? [`Also removed: ${w.alsoRemoved.join(", ")}.`]
+      : []),
+    ...(w.droppedLinks === null
+      ? []
+      : [
+          `Dropped from ${w.droppedLinks.scene}: ${w.droppedLinks.refs.join(", ")}.`,
+        ]),
+    ...w.crossedLinks.map(
+      ({ scene, how, ref }) =>
+        `Scene ${scene} now both ${how} and withholds ${ref}; one of the two is probably meant.`,
+    ),
+  ];
+  const { stale } = w;
+  if (kept.length === 0 && notes.length === 0 && stale === null) return null;
+  return (
+    <ul className="edit-report-lines">
+      {kept.map((line) => (
+        <li key={line}>
+          {line} <ViewLink view="contradictions">kept</ViewLink>
+        </li>
+      ))}
+      {notes.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+      {stale?.kind === "countNote" && (
+        <li>
+          May now be stale: the note at{" "}
+          <RecordRef subject={event(stale.next.at)} />, “{stale.next.note}”,
+          says {stale.stated}, the change of {stale.was} from {stale.from.value}
+          ; from the new {stale.value} it is {stale.now}.
+        </li>
+      )}
+      {stale?.kind === "suspects" && (
+        <li>
+          May still state the old {(() => {
+            const ref = parseRef(stale.ref);
+            return ref.isOk() ? quoted(story, ref.value) : stale.ref;
+          })()}, likeliest first; nothing was rewritten:
+          <ul className="edit-report-suspects">
+            {stale.suspects.map((s) => (
+              <SuspectLine key={suspectKey(s)} suspect={s} />
+            ))}
+          </ul>
+          {stale.traced > stale.suspects.length && (
+            <span className="edit-report-more">
+              {plural(
+                stale.traced - stale.suspects.length,
+                "more record is",
+                "more records are",
+              )}{" "}
+              linked to it without naming it.
+            </span>
+          )}
+        </li>
+      )}
+    </ul>
+  );
+}
+
+const suspectKey = (s: SuspectData) =>
+  s.target.kind === "record"
+    ? s.target.ref
+    : `${s.target.scene}/${s.target.blockId ?? ""}/${s.target.text}`;
+
+/** One suspect: a record, or a paragraph of a scene's prose, with why. */
+function SuspectLine({ suspect: s }: { suspect: SuspectData }) {
+  const { target } = s;
+  const why = s.reasons.join("; ");
+  if (target.kind === "record") {
+    const ref = parseRef(target.ref);
+    return (
+      <li>
+        {ref.isOk() ? <RecordRef subject={ref.value} /> : target.ref}
+        <span className="touch-how">{why}</span>
+      </li>
+    );
+  }
+  const scene: Ref = { kind: "scene", id: target.scene };
+  return (
+    <li>
+      {target.documentId === null ? (
+        <RecordRef subject={scene} />
+      ) : (
+        <Link
+          to="/doc/$documentId"
+          params={{ documentId: target.documentId }}
+          className="ref"
+        >
+          <RefLabel subject={scene} />
+        </Link>
+      )}
+      {target.text.trim() !== "" && (
+        <span className="edit-report-quote">
+          {" "}
+          “
+          {target.text.length > 120
+            ? `${target.text.slice(0, 119).trimEnd()}…`
+            : target.text}
+          ”
+        </span>
+      )}
+      <span className="touch-how">{why}</span>
+    </li>
+  );
+}
+
+/** Quoted for an edit's report: a record's label, cut short if long. */
+function quoted(story: Story, ref: Ref): string {
+  const label = refLabel(story, ref);
+  return `“${label.length > 60 ? `${label.slice(0, 59).trimEnd()}…` : label}”`;
+}
+
+/** A text action that runs a story command, as the gloss's do. */
+function EditAction({
+  command,
+  done,
+  label,
+  children,
+}: {
+  command: StoryCommand;
+  done: string;
+  /** The accessible name, when the text alone doesn't say what it acts on. */
+  label?: string;
+  children: ReactNode;
+}) {
+  const { pending, edit } = useBibleEdits();
+  return (
+    <button
+      type="button"
+      className="edit-action"
+      disabled={pending}
+      aria-label={label}
+      onClick={() => void edit(command, done)}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * A reason asked for inline, for an edit that keeps one (a rejection, a
+ * gap kept). Submitting runs the command the reason makes and closes the
+ * form once it saves.
+ */
+function ReasonForm({
+  label,
+  placeholder,
+  submit,
+  command,
+  done,
+  onClose,
+}: {
+  label: string;
+  placeholder: string;
+  submit: string;
+  command: (reason: string) => StoryCommand;
+  done: (reason: string) => string;
+  onClose: () => void;
+}) {
+  const { pending, edit } = useBibleEdits();
+  const [reason, setReason] = useState("");
+  const trimmed = reason.trim();
+  return (
+    <form
+      className="edit-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (trimmed === "") return;
+        void edit(command(trimmed), done(trimmed)).then(
+          (saved) => saved && onClose(),
+        );
+      }}
+    >
+      <input
+        type="text"
+        aria-label={label}
+        placeholder={placeholder}
+        value={reason}
+        // biome-ignore lint/a11y/noAutofocus: the form opens on the action that asks for it
+        autoFocus
+        onChange={(e) => setReason(e.target.value)}
+      />
+      <button
+        type="submit"
+        className="edit-action"
+        disabled={pending || trimmed === ""}
+      >
+        {submit}
+      </button>
+      <button type="button" className="edit-action" onClick={onClose}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Choose, reject or reopen a candidate answer. Reopening a chosen answer
+ * takes it back (the question is open again, the answer kept as
+ * superseded); reopening a rejected one puts it back in the running.
+ */
+function CandidateControls({
+  question: q,
+  candidate: c,
+}: {
+  question: OpenQuestion;
+  candidate: Candidate;
+}) {
+  const { story } = useInspector();
+  const { writable } = useBibleEdits();
+  const [rejecting, setRejecting] = useState(false);
+  if (!writable) return null;
+  const name = quoted(story, { kind: "candidate", questionId: q.id, id: c.id });
+  const chosen = isAnswered(q) && q.answer === c.id;
+  return (
+    <>
+      <p className="ledger-line edit-actions">
+        {chosen ? (
+          <EditAction
+            command={{ type: "unanswerOpenQuestion", id: q.id }}
+            done={`Reopened ${quoted(story, { kind: "openQuestion", id: q.id })}; ${name} is kept as superseded.`}
+            label={`Reopen the question answered by ${name}`}
+          >
+            Reopen
+          </EditAction>
+        ) : c.rejected !== undefined ? (
+          <EditAction
+            command={{
+              type: "rejectCandidate",
+              questionId: q.id,
+              id: c.id,
+              reason: null,
+            }}
+            done={`Put ${name} back in the running.`}
+            label={`Reopen ${name}`}
+          >
+            Reopen
+          </EditAction>
+        ) : (
+          <>
+            <EditAction
+              command={{
+                type: "answerOpenQuestion",
+                id: q.id,
+                candidateId: c.id,
+              }}
+              done={`Chose ${name}.`}
+              label={`Choose ${name}`}
+            >
+              Choose
+            </EditAction>
+            {!rejecting && (
+              <button
+                type="button"
+                className="edit-action"
+                aria-label={`Reject ${name}`}
+                onClick={() => setRejecting(true)}
+              >
+                Reject
+              </button>
+            )}
+          </>
+        )}
+      </p>
+      {rejecting && (
+        <ReasonForm
+          label={`Why reject ${name}?`}
+          placeholder="Why rule it out?"
+          submit="Reject"
+          command={(reason) => ({
+            type: "rejectCandidate",
+            questionId: q.id,
+            id: c.id,
+            reason,
+          })}
+          done={(reason) => `Rejected ${name}: ${reason}`}
+          onClose={() => setRejecting(false)}
+        />
+      )}
+    </>
+  );
+}
+
+/** Earlier and later: moves a scene one place in the telling order. */
+function SceneMoves({ row }: { row: SceneRowData }) {
+  const { story } = useInspector();
+  const { writable } = useBibleEdits();
+  if (!writable) return null;
+  const name = quoted(story, { kind: "scene", id: row.scene.id });
+  const index = row.position - 1;
+  const move = (to: number, word: string) => (
+    <EditAction
+      command={{ type: "moveScene", id: row.scene.id, index: to }}
+      done={`Moved ${name} to ${to + 1}.`}
+      label={`Move ${name} ${word}`}
+    >
+      {word}
+    </EditAction>
+  );
+  return (
+    <span className="edit-actions">
+      {index > 0 && move(index - 1, "earlier")}
+      {index < story.scenes.length - 1 && move(index + 1, "later")}
+    </span>
+  );
+}
+
+/** The actor whose eyes a scene is told through, chosen from the cast. */
+function ViewpointControl({ scene }: { scene: string }) {
+  const { story } = useInspector();
+  const { writable, pending, edit } = useBibleEdits();
+  const s = story.scenes.find((x) => x.id === scene);
+  if (!s) return null;
+  const current =
+    s.viewpoint === undefined ? (
+      <span className="gap">not set</span>
+    ) : (
+      <RecordRef subject={actor(s.viewpoint)} />
+    );
+  if (!writable) return current;
+  const name = quoted(story, { kind: "scene", id: scene });
+  const people = story.actors.filter((a) => a.kind === "person");
+  const groups = story.actors.filter((a) => a.kind !== "person");
+  const option = (a: Actor) => (
+    <option key={a.id} value={a.id}>
+      {a.name}
+    </option>
+  );
+  return (
+    <>
+      {current}
+      <select
+        className="edit-select"
+        aria-label={`Viewpoint of ${name}`}
+        value={s.viewpoint ?? ""}
+        disabled={pending}
+        onChange={(e) => {
+          const chosen = e.target.value === "" ? null : e.target.value;
+          void edit(
+            { type: "setSceneViewpoint", id: scene, actor: chosen },
+            chosen === null
+              ? `Cleared the viewpoint of ${name}.`
+              : `Told ${name} through ${quoted(story, actor(chosen))}.`,
+          );
+        }}
+      >
+        <option value="">No viewpoint</option>
+        {people.length > 0 && (
+          <optgroup label="Characters">{people.map(option)}</optgroup>
+        )}
+        {groups.length > 0 && (
+          <optgroup label="Organisations">{groups.map(option)}</optgroup>
+        )}
+      </select>
+    </>
+  );
+}
+
+/**
+ * A count's value at an event: a value already there is replaced, keeping
+ * its note unless a new one is written.
+ */
+function CountValueForm({ count: c }: { count: Count }) {
+  const { story, contradictions } = useInspector();
+  const { pending, edit } = useBibleEdits();
+  const { placed, unplaced } = eventRows(story, contradictions);
+  const events = [...placed, ...unplaced].map((r) => r.event);
+  const [value, setValue] = useState("");
+  const [at, setAt] = useState(c.values.at(-1)?.at ?? events[0]?.id ?? "");
+  const [note, setNote] = useState("");
+  if (events.length === 0) {
+    return (
+      <p className="ledger-empty">
+        A value is set at an event, and the story has none yet.
+      </p>
+    );
+  }
+  const number = value.trim() === "" ? Number.NaN : Number(value);
+  const ready = Number.isFinite(number) && events.some((e) => e.id === at);
+  const name = quoted(story, { kind: "count", id: c.id });
+  return (
+    <form
+      className="edit-form"
+      aria-label={`Set a value of ${name}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!ready) return;
+        const written = note.trim();
+        void edit(
+          {
+            type: "setCount",
+            id: c.id,
+            at,
+            value: number,
+            ...(written === "" ? {} : { note: written }),
+          },
+          `Set ${name} to ${number} at ${quoted(story, event(at))}.`,
+        ).then((saved) => {
+          if (!saved) return;
+          setValue("");
+          setNote("");
+        });
+      }}
+    >
+      <input
+        type="number"
+        className="edit-number"
+        aria-label="Value"
+        placeholder="Value"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <label className="edit-label">
+        at{" "}
+        <select
+          className="edit-select"
+          aria-label="At event"
+          value={at}
+          onChange={(e) => setAt(e.target.value)}
+        >
+          {events.map((e) => (
+            <option key={e.id} value={e.id}>
+              {refLabel(story, event(e.id))}
+            </option>
+          ))}
+        </select>
+      </label>
+      <input
+        type="text"
+        aria-label="Note"
+        placeholder="Note, if it changes"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <button
+        type="submit"
+        className="edit-action"
+        disabled={pending || !ready}
+      >
+        Set
+      </button>
+    </form>
+  );
+}
+
+const sameRef = (a: Ref, b: Ref) => formatRef(a) === formatRef(b);
+
+/**
+ * The gaps about one record, each with Mark deliberate, and the gaps kept
+ * as deliberate, each with Unmark. A gap is a prompt, not an error
+ * (`~/story/gaps.ts`), so they read in `ink-3`.
+ */
+function GapControls({ subject }: { subject: Ref }) {
+  const { story } = useInspector();
+  const { writable } = useBibleEdits();
+  const [marking, setMarking] = useState<string | null>(null);
+  const about = (gap: Gap) => gap.ref !== null && sameRef(gap.ref, subject);
+  const open = storyGaps(story).filter(about);
+  const kept = deliberateGaps(story).filter(({ gap }) => about(gap));
+  if (open.length === 0 && kept.length === 0) return null;
+  return (
+    <section className="record-gaps" aria-labelledby="record-gaps">
+      <h2 id="record-gaps" className="record-gaps-label">
+        Gaps
+      </h2>
+      <ul className="record-list">
+        {open.map((gap) => (
+          <li key={gap.kind}>
+            <span className="gap">{gap.message}</span>
+            {writable && marking !== gap.kind && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="edit-action"
+                  onClick={() => setMarking(gap.kind)}
+                >
+                  Mark deliberate
+                </button>
+              </>
+            )}
+            {writable && marking === gap.kind && (
+              <ReasonForm
+                label={`Why is it fine that ${gap.message.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}?`}
+                placeholder="Why it's fine as it is"
+                submit="Keep the gap"
+                command={(reason) => ({
+                  type: "markGapDeliberate",
+                  gap: gap.kind,
+                  ref: subject,
+                  reason,
+                })}
+                done={(reason) => `Kept the gap as deliberate: ${reason}`}
+                onClose={() => setMarking(null)}
+              />
+            )}
+          </li>
+        ))}
+        {kept.map(({ gap, reason }) => (
+          <li key={gap.kind}>
+            <span className="gap">gap kept · {reason}</span>
+            {writable && (
+              <>
+                {" "}
+                <EditAction
+                  command={{
+                    type: "unmarkGapDeliberate",
+                    gap: gap.kind,
+                    ref: subject,
+                  }}
+                  done="Listed the gap again."
+                  label={`Unmark the kept gap: ${reason}`}
+                >
+                  Unmark
+                </EditAction>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The direct edits a record's detail offers, below its fields. */
+function RecordEdits({ subject }: { subject: Ref }) {
+  const { story } = useInspector();
+  const { writable } = useBibleEdits();
+  const count =
+    subject.kind === "count"
+      ? story.counts.find((c) => c.id === subject.id)
+      : undefined;
+  const question =
+    subject.kind === "candidate"
+      ? story.openQuestions.find((q) => q.id === subject.questionId)
+      : undefined;
+  const candidate =
+    subject.kind === "candidate"
+      ? question?.candidates.find((c) => c.id === subject.id)
+      : undefined;
+  return (
+    <>
+      {question && candidate && (
+        <div className="record-edit">
+          <CandidateControls question={question} candidate={candidate} />
+        </div>
+      )}
+      {writable && count && (
+        <div className="record-edit">
+          <CountValueForm count={count} />
+        </div>
+      )}
+      <GapControls subject={subject} />
     </>
   );
 }
@@ -888,6 +1515,7 @@ function SceneLedgerRow({ row }: { row: SceneRowData }) {
         </p>
       </div>
       <span className="ledger-meta">
+        <SceneMoves row={row} />
         <RecordRef subject={subject} record>
           touches {reach(story, subject)}
         </RecordRef>
@@ -1074,6 +1702,8 @@ function RecordSheet({ subject }: { subject: Ref }) {
             ))}
           </dl>
         ))}
+        {/* Keyed, so a reason half written doesn't carry to the next record. */}
+        <RecordEdits key={formatRef(subject)} subject={subject} />
         <RecordActions subject={subject} />
       </div>
       {touches && (
@@ -1403,15 +2033,7 @@ function recordFields(story: Story, ref: Ref): Field[][] {
           },
         ],
         [
-          {
-            label: "Viewpoint",
-            value:
-              s.viewpoint === undefined ? (
-                <span className="gap">not set</span>
-              ) : (
-                <RecordRef subject={actor(s.viewpoint)} />
-              ),
-          },
+          { label: "Viewpoint", value: <ViewpointControl scene={s.id} /> },
           { label: "Actors", value: refList(s.actors.map(actor)) },
           { label: "Depicts", value: refList(s.depicts.map(event)) },
           { label: "Pressures", value: refList(s.pressures.map(drive)) },
