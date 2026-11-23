@@ -8,7 +8,7 @@
  */
 import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { errAsync } from "neverthrow";
+import { errAsync, ResultAsync } from "neverthrow";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { canonicalize } from "~/content/canonicalize";
@@ -874,8 +874,8 @@ test("after sending a retargeted slip, a later model change still applies", asyn
   expect(await regenerateModel("Third.")).toBe("model-c");
 });
 
-test("the slip shows the scene's story bible sections, to pin or leave out", async () => {
-  // The lighthouse bible, its arrival scene's prose held in doc1.
+/** Saves the lighthouse bible with its arrival scene's prose held in doc1. */
+async function linkArrivalToDoc1() {
   const story = parseStory(
     await Bun.file(
       new URL("../story/fixtures/lighthouse.story.json", import.meta.url),
@@ -893,6 +893,10 @@ test("the slip shows the scene's story bible sections, to pin or leave out", asy
       1000,
     )
   )._unsafeUnwrap();
+}
+
+test("the slip shows the scene's story bible sections, to pin or leave out", async () => {
+  await linkArrivalToDoc1();
   await render(withProfile());
   await generateNext();
 
@@ -962,4 +966,64 @@ test("the slip shows the scene's story bible sections, to pin or leave out", asy
     "pinned and left-out bible sections were cleared",
   );
   expect(system()).not.toContain("## The scene");
+});
+
+test("while a section change is put together, the old request can't be sent, and closing the slip drops it", async () => {
+  await linkArrivalToDoc1();
+  await render(withProfile());
+  await generateNext();
+  const first = services.generation.slip.get()?.record.id;
+
+  // Hold the next read of the bible.
+  const list = storage.storyRecords.list.bind(storage.storyRecords);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  storage.storyRecords.list = (...args) =>
+    ResultAsync.fromSafePromise(held).andThen(() => list(...args));
+
+  await click(
+    query("button[aria-label='Leave out People in it']") as Element | null,
+  );
+  await until(
+    () => services.generation.slip.get()?.assembling === true,
+    "the rebuild to start",
+  );
+  expect(query(".request-slip")?.textContent).toContain(
+    "Putting the request together again",
+  );
+  expect(button("Send", ".request-slip")?.disabled).toBe(true);
+  expect(
+    query<HTMLButtonElement>("button[aria-label='Pin The scene']")?.disabled,
+  ).toBe(true);
+
+  // Neither Send nor a second change goes through meanwhile.
+  await act(() => services.generation.sendSlip(null));
+  await act(() =>
+    services.generation.selectSections({ pinned: ["The scene"], excluded: [] }),
+  );
+  expect(received).toHaveLength(0);
+  expect(services.generation.slip.get()?.record.id).toBe(first);
+
+  // Closed before it is done, the slip stays closed.
+  await click(button("Close", ".request-slip"));
+  expect(query(".request-slip")).toBeNull();
+  release();
+  storage.storyRecords.list = list;
+  await act(() => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(services.generation.slip.get()).toBeNull();
+  expect(query(".request-slip")).toBeNull();
+  expect(received).toHaveLength(0);
+
+  // Reopened, the request has the change, and the rebuild is finished.
+  await generateNext();
+  expect(services.generation.slip.get()?.assembling).toBe(false);
+  expect(
+    (
+      query(".request-slip")?.querySelectorAll("textarea")[0] as
+        | HTMLTextAreaElement
+        | undefined
+    )?.value,
+  ).not.toContain("## People in it");
 });

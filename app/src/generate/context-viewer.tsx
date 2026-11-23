@@ -75,6 +75,11 @@ export interface RequestViewerProps {
    * sections are shown and can't be changed (a segment's past request).
    */
   readonly onSelectSections?: (selection: SectionSelection) => void;
+  /**
+   * The request is being put together again after a section change: Send
+   * and the section actions wait for the new `record`.
+   */
+  readonly assembling?: boolean;
 }
 
 /**
@@ -92,6 +97,7 @@ function RequestViewer({
   onStop,
   profileLabel,
   onSelectSections,
+  assembling = false,
 }: RequestViewerProps) {
   const [draft, setDraft] = useState<RequestDraft>(() =>
     draftOf(record.request),
@@ -141,6 +147,7 @@ function RequestViewer({
           {...(onSelectSections && !sending && record.origin === "assembled"
             ? { onSelect: onSelectSections }
             : {})}
+          assembling={assembling}
         />
       ) : null}
 
@@ -224,7 +231,7 @@ function RequestViewer({
             <button
               type="submit"
               className="context-viewer-send"
-              disabled={disabled || problem !== null}
+              disabled={disabled || assembling || problem !== null}
               aria-keyshortcuts={ARIA_SHORTCUTS.generate}
               title={shortcutLabel("generate")}
             >
@@ -319,10 +326,12 @@ function BibleSections({
   bible,
   unit,
   onSelect,
+  assembling,
 }: {
   bible: BibleBreakdown;
   unit: string;
   onSelect?: (selection: SectionSelection) => void;
+  assembling: boolean;
 }) {
   const selection: SectionSelection = {
     pinned: bible.sections.filter((s) => s.pinned).map((s) => s.title),
@@ -350,6 +359,11 @@ function BibleSections({
       <p className="context-viewer-bible-head">
         Story bible for <code>scene:{bible.scene}</code>
       </p>
+      {assembling ? (
+        <output className="context-viewer-note">
+          Putting the request together again…
+        </output>
+      ) : null}
       {bible.cleared.length > 0 ? (
         <p className="context-viewer-note">
           No longer in the bible, so cleared: {bible.cleared.join(", ")}.
@@ -375,6 +389,7 @@ function BibleSections({
               <span className="context-viewer-section-actions">
                 <button
                   type="button"
+                  disabled={assembling}
                   aria-pressed={section.pinned}
                   aria-label={`${section.pinned ? "Unpin" : "Pin"} ${section.title}`}
                   onClick={() => pin(section.title, !section.pinned)}
@@ -383,6 +398,7 @@ function BibleSections({
                 </button>
                 <button
                   type="button"
+                  disabled={assembling}
                   aria-pressed={section.excluded}
                   aria-label={`${section.excluded ? "Include" : "Leave out"} ${section.title}`}
                   onClick={() => exclude(section.title, !section.excluded)}

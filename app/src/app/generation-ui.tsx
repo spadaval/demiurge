@@ -160,6 +160,7 @@ export function RequestSlip({
         onSend={(edited) => void generation.sendSlip(edited)}
         disabled={(active !== null && !slip.sending) || placeGone}
         sending={slip.sending}
+        assembling={slip.assembling}
         onStop={() => void generation.stop(slip.documentId)}
         {...(slip.replaces === null
           ? {

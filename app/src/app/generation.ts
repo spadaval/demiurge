@@ -65,6 +65,12 @@ export interface Slip {
    * now. Only that request is in memory; sending stores it as a revision.
    */
   readonly retargeted: boolean;
+  /**
+   * The request is being put together again with a new bible section
+   * selection (`selectSections`): it can't be sent, and its sections can't
+   * be changed, until the new one replaces it.
+   */
+  readonly assembling: boolean;
 }
 
 /**
@@ -281,7 +287,13 @@ export function createGeneration(options: GenerationOptions): Generation {
   const sectionsOf = (documentId: string) =>
     selections.get(documentId) ?? NO_SELECTION;
 
+  /**
+   * Assembles a request and shows it, unless the slip changed meanwhile
+   * (closed, replaced, or sent): the slip shown when it started is the one
+   * it replaces, so a late result never reopens or overwrites another.
+   */
   const openRequest = async (documentId: string, after?: string | null) => {
+    const startedOver = slip.get();
     const session = workspace.session(documentId);
     const generator = generatorOf(documentId);
     const current = profile.get();
@@ -304,38 +316,45 @@ export function createGeneration(options: GenerationOptions): Generation {
       layout: "chat",
       budget: REQUEST_BUDGET,
     });
-    prepared.match((record) => {
-      // A pin or exclusion of a section the bible no longer has is cleared;
-      // the breakdown names it. With no scene linked to the document now,
-      // every one is, and the notice says so.
-      const { bible } = record.breakdown;
-      const chosen = selection.pinned.length + selection.excluded.length;
-      if (selections.get(documentId) === selection && chosen > 0) {
-        if (bible === undefined) {
-          selections.delete(documentId);
-          notice.set({
-            kind: "info",
-            text: "No scene in the story bible holds this document now, so its pinned and left-out bible sections were cleared.",
-          });
-        } else if (bible.cleared.length > 0) {
-          const kept = (titles: readonly string[]) =>
-            titles.filter((t) => !bible.cleared.includes(t));
-          selections.set(documentId, {
-            pinned: kept(selection.pinned),
-            excluded: kept(selection.excluded),
-          });
-        }
+    if (slip.get() !== startedOver) return;
+    if (prepared.isErr()) {
+      if (startedOver?.assembling) {
+        slip.set({ ...startedOver, assembling: false });
       }
-      slip.set({
-        documentId,
-        record,
-        breakdown: record.breakdown,
-        replaces: null,
-        sending: false,
-        assembledOver,
-        retargeted: false,
-      });
-    }, fail);
+      return fail(prepared.error);
+    }
+    const record = prepared.value;
+    // A pin or exclusion of a section the bible no longer has is cleared;
+    // the breakdown names it. With no scene linked to the document now,
+    // every one is, and the notice says so.
+    const { bible } = record.breakdown;
+    const chosen = selection.pinned.length + selection.excluded.length;
+    if (selections.get(documentId) === selection && chosen > 0) {
+      if (bible === undefined) {
+        selections.delete(documentId);
+        notice.set({
+          kind: "info",
+          text: "No scene in the story bible holds this document now, so its pinned and left-out bible sections were cleared.",
+        });
+      } else if (bible.cleared.length > 0) {
+        const kept = (titles: readonly string[]) =>
+          titles.filter((t) => !bible.cleared.includes(t));
+        selections.set(documentId, {
+          pinned: kept(selection.pinned),
+          excluded: kept(selection.excluded),
+        });
+      }
+    }
+    slip.set({
+      documentId,
+      record,
+      breakdown: record.breakdown,
+      replaces: null,
+      sending: false,
+      assembledOver,
+      retargeted: false,
+      assembling: false,
+    });
   };
 
   return {
@@ -351,9 +370,20 @@ export function createGeneration(options: GenerationOptions): Generation {
 
     async selectSections(selection) {
       const shown = slip.get();
-      if (!shown || shown.sending || shown.replaces !== null) return;
+      if (
+        !shown ||
+        shown.sending ||
+        shown.assembling ||
+        shown.replaces !== null
+      ) {
+        return;
+      }
       selections.set(shown.documentId, selection);
+      const assembling: Slip = { ...shown, assembling: true };
+      slip.set(assembling);
       await openRequest(shown.documentId, shown.record.after);
+      // It gave up before assembling (the document closed, say).
+      if (slip.get() === assembling) slip.set(shown);
     },
 
     async showSegmentRequest(documentId, segmentId) {
@@ -370,6 +400,7 @@ export function createGeneration(options: GenerationOptions): Generation {
         sending: false,
         assembledOver: null,
         retargeted,
+        assembling: false,
       });
     },
 
@@ -377,7 +408,7 @@ export function createGeneration(options: GenerationOptions): Generation {
 
     async sendSlip(edited) {
       const shown = slip.get();
-      if (!shown || shown.sending) return;
+      if (!shown || shown.sending || shown.assembling) return;
       const generator = generatorOf(shown.documentId);
       if (!generator) return;
       const sending: Slip = { ...shown, sending: true };

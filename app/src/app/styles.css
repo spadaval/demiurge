@@ -1358,7 +1358,13 @@ a {
 }
 
 .context-viewer-bible .context-viewer-note {
+  display: block;
   margin: 4px 0 0;
+}
+
+.context-viewer-section-actions button:disabled {
+  color: var(--ink-3);
+  cursor: default;
 }
 
 .context-viewer-bible li {
@@ -1383,7 +1389,7 @@ a {
   cursor: pointer;
 }
 
-.context-viewer-section-actions button:hover,
+.context-viewer-section-actions button:hover:not(:disabled),
 .context-viewer-section-actions button[aria-pressed="true"] {
   color: var(--ink);
   text-decoration: underline;
