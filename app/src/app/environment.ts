@@ -1,5 +1,5 @@
 import type { StorageError } from "~/storage/types";
-import type { SaveStatus } from "~/workspace/document-session";
+import type { ReadOnlyReason, SaveStatus } from "~/workspace/document-session";
 import type { PersistenceResult } from "~/workspace/persistence";
 import type { CommandError } from "~/workspace/workspace";
 import type { WriterRole } from "~/workspace/writer-lock";
@@ -20,6 +20,8 @@ export function describeCommandError(error: CommandError): string {
     case "failure":
     case "read_only":
       return describeStorageError(error);
+    case "document_read_only":
+      return describeReadOnly(error.reason);
     case "closed":
       return "The tab was closed before the document finished opening.";
     case "still_open":
@@ -27,6 +29,13 @@ export function describeCommandError(error: CommandError): string {
     case "unsaved":
       return `Not closed: ${describeSaveStatus(error.status)}`;
   }
+}
+
+/** Why a document can't be changed, as a sentence. */
+export function describeReadOnly(reason: ReadOnlyReason): string {
+  return reason.kind === "other_tab"
+    ? "This tab is read-only because Demiurge is open in another tab."
+    : `This document is read-only: Demiurge couldn't save a copy of it before editing. ${describeStorageError(reason.error)} Free up disk space, then close and reopen it.`;
 }
 
 export function describeSaveStatus(status: SaveStatus): string {
@@ -38,7 +47,9 @@ export function describeSaveStatus(status: SaveStatus): string {
     case "saving":
       return "Saving…";
     case "read_only":
-      return "Read-only";
+      return status.reason.kind === "other_tab"
+        ? "Read-only"
+        : describeReadOnly(status.reason);
     case "invalid":
       return `Not saved: the document has content Demiurge can't store (${status.error.reason}${
         status.error.kind === "invalid_content"

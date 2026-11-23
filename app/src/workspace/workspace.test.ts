@@ -519,6 +519,46 @@ describe("workspace commands", () => {
     expect(ws.tabs.get()).toEqual(NO_TABS);
   });
 
+  test("a document that couldn't be snapshotted on open refuses a rename", async () => {
+    const storage = createMemoryStorage();
+    (
+      await storage.documents.save({
+        id: "doc1",
+        title: UNTITLED,
+        content: [{ type: "p", id: "p1", children: [{ text: "" }] }],
+        updatedAt: 1,
+      })
+    )._unsafeUnwrap();
+    const full: StorageAdapter = {
+      ...storage,
+      snapshots: {
+        ...storage.snapshots,
+        save: () =>
+          errAsync({
+            kind: "failure",
+            operation: "save",
+            collection: "snapshots",
+            message: "disk full",
+            cause: null,
+          }),
+      },
+      close: () => undefined,
+    };
+    const later = workspace({ storage: full });
+    const opened = (await later.commands.openDocument("doc1"))._unsafeUnwrap();
+    expect(opened.readOnlyReason?.kind).toBe("no_snapshot");
+    expect(
+      (await later.commands.renameDocument("doc1", "x"))._unsafeUnwrapErr(),
+    ).toMatchObject({
+      kind: "document_read_only",
+      documentId: "doc1",
+      reason: { kind: "no_snapshot" },
+    });
+    expect((await storage.documents.load("doc1"))._unsafeUnwrap().title).toBe(
+      UNTITLED,
+    );
+  });
+
   test("a read-only workspace can open documents but not create or rename them", async () => {
     const storage = createMemoryStorage();
     const writer = workspace({ storage });
