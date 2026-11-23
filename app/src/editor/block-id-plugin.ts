@@ -175,7 +175,21 @@ export const BlockIdPlugin = NodeIdPlugin.configure({
             }
           }
 
+          // Text and selection changes replace `editor.children` but no
+          // element's ID, so a current index stays current across them.
+          // Streamed text alternates them with inserts, and rebuilding the
+          // index each time cost a pass over the document per render.
+          const current = index?.children === editor.children ? index : null;
           apply(operation);
+          if (
+            current &&
+            count === operationCount &&
+            (operation.type === "insert_text" ||
+              operation.type === "remove_text" ||
+              operation.type === "set_selection")
+          ) {
+            index = { children: editor.children, ids: current.ids };
+          }
         },
 
         insertData(dataTransfer) {
