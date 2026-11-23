@@ -329,7 +329,7 @@ describe("reading a world file", () => {
       "an unknown snapshot reason",
       { ...world, snapshots: [{ ...world.snapshots[0], reason: "manual" }] },
       "records.snapshots[0].reason",
-      "expected one of accepted_ai_change, periodic, repaired_on_load",
+      "expected one of accepted_ai_change, periodic, repaired_on_load, sync_conflict",
     ],
     [
       "a malformed outline chapter",

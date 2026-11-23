@@ -50,7 +50,7 @@ The application is `app/`, and its commands run from there with bun, after a `bu
 - **Tests**: `bun test`, with happy-dom and fake-indexeddb for browser APIs (`app/src/test/`). Tests sit next to the code as `*.test.ts(x)`.
 
 ## File Structure
-- `app/`: the application. `app/src/` is organised by area: `app/` (shell, routes, pages), `editor/`, `content/`, `storage/`, `world/` (entries, kinds, names, facts), `story/`, `time/`, `outline/`, `layers/`, `context/` and `generate/` (model context and generation), `agent/` (the story agent runner, `docs/rebuild/story-agent.md`), `llm/`, `workspace/`. `app/scripts/` holds the story CLI and measurement scripts.
+- `app/`: the application. `app/src/` is organised by area: `app/` (shell, routes, pages), `editor/`, `content/`, `storage/`, `world/` (entries, kinds, names, facts), `story/`, `time/`, `outline/`, `layers/`, `context/` and `generate/` (model context and generation), `agent/` (the story agent runner, `docs/rebuild/story-agent.md`), `llm/`, `workspace/`, `sync/` (the sync client) and `worker/` (the Cloudflare Worker: sync API and static assets, `docs/rebuild/sync.md`). `app/scripts/` holds the story CLI and measurement scripts.
 - `docs/`: `rebuild/` holds the design of the current app, `rounds/`, `strategies/` and `verdicts/` hold the story-model trial rounds and their results, and `philosophy.md` the product's principles.
 - `PRODUCT.md`, `DESIGN.md` and `README.md` describe the product and its design. `.atelier/` holds work tracking and `.impeccable/` design-system metadata.
 

@@ -203,6 +203,7 @@ const SNAPSHOT_REASONS: readonly SnapshotReason[] = [
   "accepted_ai_change",
   "periodic",
   "repaired_on_load",
+  "sync_conflict",
 ];
 const snapshotReason = expect(
   (v) => SNAPSHOT_REASONS.some((reason) => reason === v),
@@ -337,6 +338,19 @@ const COLLECTIONS: {
     key: (record) => record.id,
   },
 };
+
+/**
+ * Checks one record of `name` the way import checks the records of a file:
+ * exactly its storage fields, with the right types. For records that arrive
+ * from elsewhere, such as from the sync backend (`src/sync/`).
+ */
+export function checkStoredRecord<Name extends CollectionName>(
+  name: Name,
+  value: unknown,
+  path = "record",
+): Result<CollectionRecords[Name], WorldFileError> {
+  return COLLECTIONS[name].check(value, path);
+}
 
 function checkCollection<Name extends CollectionName>(
   name: Name,
