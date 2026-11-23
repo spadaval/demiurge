@@ -14,8 +14,9 @@
  * from: the `serverRev` the device last pulled or pushed for it, or 0 for a
  * record the server has never sent it. The Worker accepts it only when
  * `baseRev` is the record's current `serverRev` (0 when the server has no
- * record), and otherwise answers `conflict` with what it holds, so a device
- * that was offline cannot overwrite a newer edit or delete.
+ * record), and otherwise answers `conflict` with the revision it holds, so a
+ * device that was offline cannot overwrite a newer edit or delete. The device
+ * then pulls again to get that revision.
  *
  * Routes, under Cloudflare Access: `POST /api/sync/<worldId>/pull` with a
  * `PullRequest` answers a `PullResponse`; `POST /api/sync/<worldId>/push`
@@ -43,8 +44,9 @@ export const SYNCED_COLLECTIONS: readonly SyncedCollectionName[] =
 export const MAX_PULL_CHANGES = 200;
 export const MAX_PUSH_CHANGES = 100;
 /**
- * Largest record, as UTF-8 bytes of JSON, the Worker keeps: a Durable
- * Object's SQLite row holds at most 2 MB.
+ * Largest record, as UTF-8 bytes of JSON, the Worker keeps. A Durable
+ * Object's SQLite row may hold 8 MB; this app's limit is lower so that a
+ * pull page (`MAX_PULL_BYTES`) always has room for any record.
  */
 export const MAX_RECORD_BYTES = 1_900_000;
 /**
@@ -117,8 +119,12 @@ export type PushResult =
       readonly status: "conflict";
       readonly collection: SyncedCollectionName;
       readonly key: string;
-      /** What the Worker holds instead, newer than the push's `baseRev`. */
-      readonly current: ServerChange;
+      /**
+       * The revision the Worker holds instead, newer than the push's
+       * `baseRev`. The record itself comes with the next pull: answering
+       * with it would make a push's response as large as 100 records.
+       */
+      readonly serverRev: number;
     }
   | {
       /** The Worker can't keep this record (too large). Nothing changed. */
@@ -369,12 +375,14 @@ function checkPushResult(value: unknown, path: string): Check<PushResult> {
         });
       }
       if (fields.status === "conflict") {
-        return checkServerChange(fields.current, `${path}.current`).andThen(
-          (current) =>
-            current.collection === collection && current.key === key
-              ? ok({ status: "conflict" as const, collection, key, current })
-              : invalid(`${path}.current`, "expected the same record"),
-        );
+        return isRev(fields.serverRev) && fields.serverRev > 0
+          ? ok({
+              status: "conflict" as const,
+              collection,
+              key,
+              serverRev: fields.serverRev,
+            })
+          : invalid(`${path}.serverRev`, "expected a positive integer");
       }
       if (fields.status === "rejected") {
         return typeof fields.reason === "string"

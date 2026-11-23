@@ -12,8 +12,9 @@
  *   edit is dropped (reported in `SyncReport.conflicts`).
  * A server delete is a revision like any other: a record edited here does
  * not come back, and only a save after the delete has synced recreates it.
- * Pull finds most of these; a push the Worker refuses as stale (another
- * device pushed between this pull and this push) ends the same way.
+ * Pull finds most of these. A push the Worker refuses as stale (another
+ * device pushed between this pull and this push) is followed by a second
+ * pull, which brings the newer revision and ends the same way.
  *
  * Client clocks decide nothing: `updatedAt` and `deletedAt` are data.
  */
@@ -297,25 +298,31 @@ async function runSync({
     return ok(true);
   };
 
-  // Pull.
   let cursor = state.cursor;
-  for (;;) {
-    const page = await transport.pull({ since: cursor });
-    if (page.isErr()) return err(page.error);
-    for (const change of page.value.changes) {
-      const adopted = await adopt(change);
-      if (adopted.isErr()) return err(adopted.error);
-      if (adopted.value) pulled++;
+  /** Pulls every page after the cursor, adopting each change. */
+  const pullAll = async (): Promise<Result<void, SyncError>> => {
+    for (;;) {
+      const page = await transport.pull({ since: cursor });
+      if (page.isErr()) return err(page.error);
+      for (const change of page.value.changes) {
+        const adopted = await adopt(change);
+        if (adopted.isErr()) return err(adopted.error);
+        if (adopted.value) pulled++;
+      }
+      cursor = Math.max(cursor, page.value.cursor);
+      const saved = persist(cursor);
+      if (saved.isErr()) return err(saved.error);
+      if (!page.value.more) return ok(undefined);
     }
-    cursor = Math.max(cursor, page.value.cursor);
-    const saved = persist(cursor);
-    if (saved.isErr()) return err(saved.error);
-    if (!page.value.more) break;
-  }
+  };
+
+  const firstPull = await pullAll();
+  if (firstPull.isErr()) return err(firstPull.error);
 
   // Push.
   const outgoing = await localChanges(storage, records);
   if (outgoing.isErr()) return err(outgoing.error);
+  let refused = false;
   for (const batch of batches(outgoing.value)) {
     const response = await transport.push({
       deviceId,
@@ -330,9 +337,9 @@ async function runSync({
         records[id] = { rev: result.serverRev, hash: sent.hash };
         pushed++;
       } else if (result.status === "conflict") {
-        const adopted = await adopt(result.current);
-        if (adopted.isErr()) return err(adopted.error);
-        if (adopted.value) pulled++;
+        // Another device pushed since the pull above; the pull below brings
+        // its revision, and `adopt` keeps this device's prose first.
+        refused = true;
       } else {
         rejected.push({
           collection: result.collection,
@@ -343,6 +350,11 @@ async function runSync({
     }
     const saved = persist(cursor);
     if (saved.isErr()) return err(saved.error);
+  }
+
+  if (refused) {
+    const secondPull = await pullAll();
+    if (secondPull.isErr()) return err(secondPull.error);
   }
 
   return ok({ pulled, pushed, conflicts, rejected });

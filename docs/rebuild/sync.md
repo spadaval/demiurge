@@ -34,9 +34,9 @@ gets no advantage or penalty: `updatedAt` and `deletedAt` travel as data.
 Because the counter is per world, the highest `serverRev` a device has pulled
 is its cursor, and a pull is "every record whose newest revision is above my
 cursor", in pages of at most 200 records and 8 MB of record JSON (a
-Worker has 128 MB of memory). A page always holds its first record, and a
-record can't exceed 1.9 MB (a Durable Object row holds 2 MB), so every
-pull makes progress.
+Worker has 128 MB of memory). A page always holds its first record, and the
+Worker refuses records over 1.9 MB (below the Durable Object row limit of
+8 MB), so every pull makes progress.
 
 ## Pull, then push
 
@@ -46,9 +46,11 @@ pull makes progress.
    had it).
 
 The Worker takes a push only when `baseRev` is the record's current revision,
-in one SQLite transaction per push. Otherwise it answers `conflict` with what
-it holds. So a stale device can never overwrite a newer edit or delete; at
-worst its push is refused and it takes the newer revision.
+in one SQLite transaction per push. Otherwise it answers `conflict` with the
+revision it holds, and the device pulls again to get it. The conflict carries
+no record, so a push's response stays small however large the newer records
+are. So a stale device can never overwrite a newer edit or delete; at worst
+its push is refused and it takes the newer revision.
 
 A device knows a record is dirty by comparing a hash of its content with the
 hash it recorded when the record last synced (`state.ts`). Saving and

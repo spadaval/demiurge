@@ -239,6 +239,40 @@ describe.each(ADAPTERS)("sync with %s storage", (_, makeStorage) => {
     ).toEqual(["sync_conflict"]);
   });
 
+  test("(b) many stale edits refused at once: each large newer passage is pulled, and each local edit kept", async () => {
+    const { laptop, phone } = await startedTogether(makeStorage);
+    const ids = Array.from({ length: 12 }, (_, i) => `scene-${i + 2}`);
+    const passage = "A long passage. ".repeat(20_000);
+    for (const id of ids) {
+      await ok(laptop.storage.documents.save({ ...scene("v1"), id }));
+    }
+    await ok(laptop.sync());
+    await ok(phone.sync());
+    for (const id of ids) {
+      await ok(
+        phone.storage.documents.save({ ...scene(`phone ${id}`, 2), id }),
+      );
+      await ok(laptop.storage.documents.save({ ...scene(passage, 2), id }));
+    }
+    phone.beforeNextPush = async () => ok(laptop.sync());
+
+    const report = await ok(phone.sync());
+
+    expect(phone.pushResults.map((r) => r.status)).toEqual(
+      ids.map(() => "conflict"),
+    );
+    expect(report.conflicts).toHaveLength(ids.length);
+    for (const id of ids) {
+      expect((await ok(phone.storage.documents.load(id))).content).toEqual([
+        paragraph("b1", passage),
+      ]);
+      expect(await snapshotsOf(phone.storage, id)).toEqual([
+        { reason: "sync_conflict", content: [paragraph("b1", `phone ${id}`)] },
+      ]);
+    }
+    expect(await ok(phone.sync())).toMatchObject({ pulled: 0, pushed: 0 });
+  });
+
   test("(c) a stale edit does not bring back a record deleted on another device", async () => {
     const { laptop, phone } = await startedTogether(makeStorage);
     await ok(laptop.storage.documents.delete("scene-1"));

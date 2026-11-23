@@ -57,7 +57,7 @@ describe("ledger", () => {
     });
     expect(stale.results[0]).toMatchObject({
       status: "conflict",
-      current: { serverRev: 2, record: { title: "newer" } },
+      serverRev: 2,
     });
     const fresh = l.push({ deviceId: "b", changes: [doc("d1", "also new")] });
     expect(fresh.results[0]?.status).toBe("conflict");
@@ -77,7 +77,7 @@ describe("ledger", () => {
     });
     expect(stale.results[0]).toMatchObject({
       status: "conflict",
-      current: { serverRev: 2, record: null, deletedAt: 5 },
+      serverRev: 2,
     });
     const recreate = l.push({
       deviceId: "b",
@@ -187,6 +187,34 @@ describe("ledger", () => {
 
   test("any legal record fits in a page, so every pull makes progress", () => {
     expect(MAX_RECORD_BYTES).toBeLessThan(MAX_PULL_BYTES);
+  });
+
+  test("a push of many stale edits gets a small answer, however large the records it lost to", () => {
+    const l = ledger();
+    const big = "x".repeat(Math.floor(MAX_RECORD_BYTES * 0.9));
+    const keys = Array.from({ length: 20 }, (_, i) => `d${i}`);
+    for (const key of keys)
+      l.push({ deviceId: "a", changes: [doc(key, "v1")] });
+    for (const [i, key] of keys.entries()) {
+      l.push({
+        deviceId: "a",
+        changes: [{ ...doc(key, big), baseRev: i + 1 }],
+      });
+    }
+    const stale = l.push({
+      deviceId: "b",
+      changes: keys.map((key, i) => ({ ...doc(key, "tiny"), baseRev: i + 1 })),
+    });
+    expect(stale.results.map((r) => r.status)).toEqual(
+      keys.map(() => "conflict"),
+    );
+    expect(stale.results[0]).toEqual({
+      status: "conflict",
+      collection: "documents",
+      key: "d0",
+      serverRev: 21,
+    });
+    expect(JSON.stringify(stale).length).toBeLessThan(5_000);
   });
 
   test("keeps its records when reopened", () => {

@@ -74,19 +74,19 @@ export function openLedger({ sql, transaction, now }: LedgerOptions): Ledger {
     for (const statement of SCHEMA) [...sql.exec(statement)];
   });
 
-  const current = (
+  /** The revision held for a key, without reading its record. */
+  const currentRev = (
     collection: SyncedCollectionName,
     key: string,
-  ): ServerChange | null => {
+  ): number | null => {
     const [row] = [
       ...sql.exec(
-        `SELECT collection, key, rev, synced_at, record, deleted_at
-           FROM records WHERE collection = ? AND key = ?`,
+        `SELECT rev FROM records WHERE collection = ? AND key = ?`,
         collection,
         key,
       ),
     ];
-    return row === undefined ? null : toChange(row);
+    return row === undefined ? null : integer(row.rev);
   };
 
   const nextRev = (): number => {
@@ -114,12 +114,12 @@ export function openLedger({ sql, transaction, now }: LedgerOptions): Ledger {
         reason: `the record is ${bytes} bytes of JSON; the most is ${MAX_RECORD_BYTES}`,
       };
     }
-    const held = current(collection, key);
+    const heldRev = currentRev(collection, key);
     // With nothing held, any `baseRev` is taken: a device holding a
     // revision this ledger never gave out (the ledger was reset) has nothing
     // newer to lose, and refusing would strand its edit.
-    if (held !== null && held.serverRev !== change.baseRev) {
-      return { status: "conflict", collection, key, current: held };
+    if (heldRev !== null && heldRev !== change.baseRev) {
+      return { status: "conflict", collection, key, serverRev: heldRev };
     }
     const serverRev = nextRev();
     [
