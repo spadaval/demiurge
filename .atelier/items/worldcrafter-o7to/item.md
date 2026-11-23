@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-o7to
 title: Direct-manipulation controls for high-frequency bible edits
-status: in_review
+status: changes_requested
 mission: worldcrafter-3z9j
 labels:
 - ui
