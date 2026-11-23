@@ -1,7 +1,20 @@
 /**
- * The lossless `export` projection: markdown plus directives, and its parser.
- * `parseMarkdown(exportMarkdown(tree))` deep-equals `tree` for every tree that
- * passes `validateDocument`.
+ * Markdown for content trees, in two forms:
+ *
+ * - `exportReadableMarkdown`: the readable, one-way export (Boundary 3's
+ *   `export`, docs/rebuild/data-model-boundaries.md), for reading and sharing
+ *   outside the app. Plain CommonMark with no IDs, no directives and no
+ *   parser; its rules are on the function, below the ID-carrying format.
+ * - `exportMarkdown` and `parseMarkdown`: the ID-carrying format, built when
+ *   markdown was meant to round-trip. `parseMarkdown(exportMarkdown(tree))`
+ *   deep-equals `tree` for every tree that passes `validateDocument`. Nothing
+ *   in the product reads or writes it; it is kept, unchanged, as a strict
+ *   format that tests use to pin trees. It is not the exact export: that is
+ *   the world file (`storage/world-file.ts`), which keeps every record of a
+ *   world and not only its prose.
+ *
+ * The ID-carrying format
+ * ----------------------
  *
  * Syntax
  * ------
@@ -51,6 +64,7 @@
  */
 
 import { err, ok, type Result } from "neverthrow";
+import { blockText, walkBlocks } from "./projections";
 import {
   AI_SEGMENT_STATUSES,
   type AiSegmentStatus,
@@ -296,6 +310,370 @@ function writeBlocks(blocks: TopBlock[]): string {
 export function exportMarkdown(value: unknown): Result<string, ContentError> {
   return validateDocument(value).map((document) => {
     const out = writeBlocks(document);
+    return out === "" ? "" : `${out}\n`;
+  });
+}
+
+// ------------------------------------------------------- readable export
+
+/** Characters escaped wherever they appear in readable text. */
+const READABLE_ESCAPED = new Set(["\\", "*", "~", "`", "[", "]"]);
+/** Characters that could start block syntax when first on a line. */
+const READABLE_LINE_START = new Set(["#", ">", "-", "+", "=", "|"]);
+const READABLE_DELIMITERS: Record<ToggleMark, string> = {
+  bold: "**",
+  italic: "*",
+  strikethrough: "~~",
+};
+const ENTITY = /^&(?:#\d+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/;
+const WORD = /[\p{L}\p{N}]/u;
+
+/** One piece of a block's inline markdown, before whitespace is moved. */
+type ReadableToken =
+  | { kind: "text"; text: string }
+  | { kind: "code"; text: string }
+  | { kind: "syntax"; text: string; closes: boolean; opens: boolean };
+
+/**
+ * Marks on a whitespace-only leaf can't be seen and would only put emphasis
+ * delimiters beside spaces, which CommonMark doesn't read as emphasis. Such
+ * a leaf takes the marks it shares with both neighbours, and leaves that end
+ * up alike are merged.
+ */
+function readableLeaves(leaves: Text[]): Text[] {
+  const adjusted = leaves.map((leaf, i): Text => {
+    if (leaf.code || leaf.text === "" || /\S/.test(leaf.text)) return leaf;
+    const before = leaves[i - 1];
+    const after = leaves[i + 1];
+    const next: Text = { text: leaf.text };
+    for (const mark of TOGGLE_MARKS) {
+      if (before?.[mark] && after?.[mark]) next[mark] = true;
+    }
+    return next;
+  });
+  const merged: Text[] = [];
+  for (const leaf of adjusted) {
+    const last = merged.at(-1);
+    if (last && !last.code && !leaf.code && sameMarks(last, leaf)) {
+      merged[merged.length - 1] = { ...last, text: last.text + leaf.text };
+    } else {
+      merged.push(leaf);
+    }
+  }
+  return merged;
+}
+
+function readableLeafTokens(leaves: Text[], tokens: ReadableToken[]): void {
+  const open: ToggleMark[] = [];
+  const closeFrom = (index: number) => {
+    for (let i = open.length - 1; i >= index; i--) {
+      const mark = open[i] as ToggleMark;
+      tokens.push({
+        kind: "syntax",
+        text: READABLE_DELIMITERS[mark],
+        closes: true,
+        opens: false,
+      });
+    }
+    open.length = index;
+  };
+  for (const leaf of readableLeaves(leaves)) {
+    const wanted = TOGGLE_MARKS.filter((mark) => leaf[mark]);
+    let keep = 0;
+    while (keep < open.length && wanted.includes(open[keep] as ToggleMark))
+      keep++;
+    closeFrom(keep);
+    for (const mark of wanted) {
+      if (!open.includes(mark)) {
+        tokens.push({
+          kind: "syntax",
+          text: READABLE_DELIMITERS[mark],
+          closes: false,
+          opens: true,
+        });
+        open.push(mark);
+      }
+    }
+    tokens.push({ kind: leaf.code ? "code" : "text", text: leaf.text });
+  }
+  closeFrom(0);
+}
+
+type SyntaxToken = Extract<ReadableToken, { kind: "syntax" }>;
+
+/**
+ * Moves whitespace out of emphasis: closing delimiters go before the spaces
+ * that precede them and opening ones after the spaces that follow them, so
+ * `**bold **` is written `**bold** `, which CommonMark reads as bold. A run
+ * of delimiters between two texts is closes then opens (one leaf to the
+ * next), and the moved whitespace lands between the two.
+ */
+function hoistWhitespace(tokens: ReadableToken[]): ReadableToken[] {
+  const out: ReadableToken[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i] as ReadableToken;
+    if (token.kind !== "syntax") {
+      out.push({ ...token });
+      i++;
+      continue;
+    }
+    let end = i;
+    while (tokens[end]?.kind === "syntax") end++;
+    const run = tokens.slice(i, end) as SyntaxToken[];
+    const closes = run.filter((t) => t.closes);
+    const opens = run.filter((t) => t.opens);
+    let moved = "";
+    const before = out.at(-1);
+    if (closes.length > 0 && before?.kind === "text") {
+      const trailing = /\s+$/.exec(before.text)?.[0] ?? "";
+      before.text = before.text.slice(0, before.text.length - trailing.length);
+      moved += trailing;
+    }
+    out.push(...closes);
+    const after = tokens[end];
+    let rest: string | null = null;
+    if (opens.length > 0 && after?.kind === "text") {
+      const leading = /^\s+/.exec(after.text)?.[0] ?? "";
+      moved += leading;
+      rest = after.text.slice(leading.length);
+      end++;
+    }
+    if (moved !== "") out.push({ kind: "text", text: moved });
+    out.push(...opens);
+    if (rest !== null) out.push({ kind: "text", text: rest });
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * Writes readable inline markdown. `lineStart` says whether the first line
+ * can start block syntax (not in a heading). Leading spaces of each line are
+ * dropped: they would read as indented code, and HTML collapses them anyway.
+ */
+class ReadableWriter {
+  out = "";
+  private atLineStart: boolean;
+
+  constructor(lineStart: boolean) {
+    this.atLineStart = lineStart;
+  }
+
+  syntax(value: string): void {
+    this.out += value;
+    this.atLineStart = false;
+  }
+
+  text(value: string): void {
+    for (let i = 0; i < value.length; i++) {
+      const ch = value[i] as string;
+      if (ch === "\n") {
+        this.out += "\\\n";
+        this.atLineStart = true;
+        continue;
+      }
+      if (this.atLineStart) {
+        if (ch === " " || ch === "\t") continue;
+        this.atLineStart = false;
+        const number = /^\d+[.)]/.exec(value.slice(i));
+        if (number) {
+          this.out += `${number[0].slice(0, -1)}\\${number[0].slice(-1)}`;
+          i += number[0].length - 1;
+          continue;
+        }
+        if (READABLE_LINE_START.has(ch)) {
+          this.out += `\\${ch}`;
+          continue;
+        }
+      }
+      this.out += this.escape(value, i);
+    }
+  }
+
+  private escape(value: string, i: number): string {
+    const ch = value[i] as string;
+    if (READABLE_ESCAPED.has(ch)) return `\\${ch}`;
+    // `_` between letters or digits can't be emphasis.
+    if (ch === "_") {
+      const inWord =
+        WORD.test(value[i - 1] ?? this.out.at(-1) ?? "") &&
+        WORD.test(value[i + 1] ?? "");
+      return inWord ? ch : "\\_";
+    }
+    // Only what could open an HTML tag, an autolink or an entity.
+    if (ch === "<" && /[A-Za-z/!?]/.test(value[i + 1] ?? "")) return "\\<";
+    if (ch === "&" && ENTITY.test(value.slice(i))) return "\\&";
+    return ch;
+  }
+
+  code(value: string): void {
+    const longestRun = Math.max(
+      0,
+      ...(value.match(/`+/g) ?? []).map((run) => run.length),
+    );
+    const fence = "`".repeat(longestRun + 1);
+    const pad =
+      value.startsWith("`") ||
+      value.endsWith("`") ||
+      (value.startsWith(" ") && value.endsWith(" ") && /[^ ]/.test(value));
+    this.syntax(`${fence}${pad ? ` ${value} ` : value}${fence}`);
+  }
+}
+
+function writeReadableTokens(writer: ReadableWriter, leaves: Text[]): void {
+  const tokens: ReadableToken[] = [];
+  readableLeafTokens(leaves, tokens);
+  for (const token of hoistWhitespace(tokens)) {
+    if (token.kind === "syntax") writer.syntax(token.text);
+    else if (token.kind === "code") writer.code(token.text);
+    else writer.text(token.text);
+  }
+}
+
+function writeReadableInlines(children: Inline[], lineStart: boolean): string {
+  const writer = new ReadableWriter(lineStart);
+  let run: Text[] = [];
+  for (const child of children) {
+    if ("type" in child) {
+      writeReadableTokens(writer, run);
+      run = [];
+      writer.syntax("[");
+      writeReadableTokens(writer, child.children);
+      writer.syntax(`](${child.url.replace(/[\\()<>]/g, "\\$&")})`);
+    } else {
+      run.push(child);
+    }
+  }
+  writeReadableTokens(writer, run);
+  // Line breaks at either end of a block show as nothing or a stray `\`.
+  return writer.out.replace(/^(?:\\\n)+/, "").replace(/(?:\\\n)+$/, "");
+}
+
+/** A heading's text on one line, its line breaks as spaces. */
+function readableHeading(level: number, children: Inline[]): string {
+  const flat = children.map(
+    (child): Inline =>
+      "type" in child
+        ? {
+            ...child,
+            children: child.children.map((leaf) => ({
+              ...leaf,
+              text: leaf.text.replaceAll("\n", " "),
+            })),
+          }
+        : { ...child, text: child.text.replaceAll("\n", " ") },
+  );
+  // A closing run of `#` after a space would be read as the heading's end.
+  const text = writeReadableInlines(flat, false).replace(
+    /(^|\s)(#+\s*)$/,
+    "$1\\$2",
+  );
+  return `${"#".repeat(level)} ${text}`;
+}
+
+/** An open list item while writing nested lists: its indent and content column. */
+type ReadableItem = { indent: number; column: number };
+
+/**
+ * The readable, one-way markdown export of a document, for reading and
+ * sharing outside the app (Boundary 3's `export`). It is CommonMark with GFM
+ * strikethrough, and keeps only what a reader sees:
+ *
+ *     # Heading                 h1, h2, h3 as #, ##, ###
+ *     Some *italic* and **bold** text, ~~struck~~, `code`.
+ *     > Quoted.
+ *     ---                       hr
+ *     - Item                    lists nest by indentation; numbers are the
+ *       1. Nested               editor's
+ *     [label](old-mill)         links, internal ones by canonical name
+ *
+ * Dropped: block IDs, AI segment boundaries and status (their blocks are
+ * written in place, as text), placeholders (instructions to the writer),
+ * empty blocks, leading spaces of lines, and line breaks at either end of a
+ * block. A line break inside a block is a backslash at the end of the line,
+ * except in a heading, where it becomes a space. An indent that skips levels
+ * nests under the closest shallower item, as markdown has no deeper level.
+ * Numbered items keep the numbers the editor shows; where the numbering
+ * restarts without a block between (at a placeholder or an AI segment edge),
+ * a blank line separates the two runs, and most renderers will continue the
+ * first list's numbering.
+ *
+ * Text is escaped so a reader shows it as written, but escaping is kept to
+ * what CommonMark could misread, so the source stays readable: `\ * ~ \` [ ]`
+ * anywhere, `_` outside words, `<` before a tag or autolink, `&` before an
+ * entity, and block syntax (`#`, `>`, `-`, `+`, `=`, `|`, `1.`) at the start
+ * of a line. Whitespace at the edges of a marked span moves outside it, so
+ * CommonMark reads the emphasis. Some marked spans have no CommonMark form
+ * (for example bold ending in punctuation right before a letter); those are
+ * written with their delimiters and a renderer may show the delimiters.
+ *
+ * There is no parser: exact export and import go through the world file
+ * (`storage/world-file.ts`). Validates first: anything outside the schema
+ * is an `invalid_content` error.
+ */
+export function exportReadableMarkdown(
+  value: unknown,
+): Result<string, ContentError> {
+  return validateDocument(value).map((document) => {
+    let out = "";
+    let open: ReadableItem[] = [];
+    // As in `prose`: a single newline only between items of one list.
+    let listContinues = false;
+    for (const step of walkBlocks(document)) {
+      if (step.kind === "placeholder") continue;
+      const { block, listNumber, restart } = step;
+      const listItem = listNumber > 0;
+      if (restart || !listItem) {
+        listContinues = false;
+        open = [];
+      }
+      const empty = block.type !== "hr" && blockText(block) === "";
+      if (empty) continue;
+      if (out !== "") out += listItem && listContinues ? "\n" : "\n\n";
+      listContinues = listItem;
+
+      switch (block.type) {
+        case "p": {
+          if (block.indent === undefined || block.listStyleType === undefined) {
+            out += writeReadableInlines(block.children, true);
+            break;
+          }
+          const { indent } = block;
+          const level = open.findIndex((item) => item.indent >= indent);
+          const depth = level === -1 ? open.length : level;
+          const markerColumn = open[depth - 1]?.column ?? 0;
+          const marker =
+            block.listStyleType === "decimal" ? `${listNumber}. ` : "- ";
+          const column = markerColumn + marker.length;
+          open = [...open.slice(0, depth), { indent, column }];
+          out += writeReadableInlines(block.children, true)
+            .split("\n")
+            .map(
+              (line, i) =>
+                (i === 0
+                  ? " ".repeat(markerColumn) + marker
+                  : " ".repeat(column)) + line,
+            )
+            .join("\n");
+          break;
+        }
+        case "h1":
+        case "h2":
+        case "h3":
+          out += readableHeading(Number(block.type.slice(1)), block.children);
+          break;
+        case "blockquote":
+          out += writeReadableInlines(block.children, true)
+            .split("\n")
+            .map((line) => `> ${line}`)
+            .join("\n");
+          break;
+        case "hr":
+          out += "---";
+          break;
+      }
+    }
     return out === "" ? "" : `${out}\n`;
   });
 }

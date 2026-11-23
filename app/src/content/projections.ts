@@ -203,12 +203,12 @@ class Writer {
 }
 
 /**
- * One step of `walk`: a text block with its list number (0 unless it is a
+ * One step of `walkBlocks`: a text block with its list number (0 unless it is a
  * numbered or bulleted item) or a placeholder. `restart` is true on the first
  * block after a numbering reset that `prose` doesn't otherwise see: the
  * start of the document, a placeholder, or either edge of an AI segment.
  */
-type Step =
+export type BlockStep =
   | {
       readonly kind: "block";
       readonly block: Block;
@@ -225,14 +225,14 @@ type Step =
  * are numbered among themselves, and a placeholder or a segment edge
  * restarts numbering, as in the editor and the export.
  */
-function* walk(document: ContentDocument): Generator<Step> {
+export function* walkBlocks(document: ContentDocument): Generator<BlockStep> {
   let counts = new Map<number, { style: ListStyle; count: number }>();
   let restart = true;
   const reset = () => {
     counts = new Map();
     restart = true;
   };
-  const step = (block: Block): Step => {
+  const step = (block: Block): BlockStep => {
     let listNumber = 0;
     if (block.type === "p" && block.listStyleType && block.indent) {
       const { indent, listStyleType: style } = block;
@@ -245,7 +245,7 @@ function* walk(document: ContentDocument): Generator<Step> {
     } else {
       counts.clear();
     }
-    const result: Step = { kind: "block", block, listNumber, restart };
+    const result: BlockStep = { kind: "block", block, listNumber, restart };
     restart = false;
     return result;
   };
@@ -288,7 +288,7 @@ function writeProse(document: ContentDocument): Projection {
 
   // Numbering counts empty items and restarts at a placeholder, as the
   // editor does, even though neither is written.
-  for (const step of walk(document)) {
+  for (const step of walkBlocks(document)) {
     if (step.kind === "placeholder") continue;
     const { block, listNumber, restart } = step;
     const listItem = listNumber > 0;
@@ -307,7 +307,7 @@ function writeProse(document: ContentDocument): Projection {
 
 function writeAddressable(document: ContentDocument): Projection {
   const out = new Writer();
-  for (const step of walk(document)) {
+  for (const step of walkBlocks(document)) {
     if (out.text !== "") out.insert("\n");
     if (step.kind === "placeholder") {
       const { id, children } = step.placeholder;
@@ -325,7 +325,7 @@ function writeAddressable(document: ContentDocument): Projection {
 function writePlain(document: ContentDocument): Projection {
   const out = new Writer();
   let first = true;
-  for (const step of walk(document)) {
+  for (const step of walkBlocks(document)) {
     if (step.kind === "placeholder") continue;
     // Not `out.text !== ""`: an empty first block writes no text.
     if (!first) out.insert("\n");

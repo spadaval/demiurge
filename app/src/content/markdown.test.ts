@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { exportMarkdown, parseMarkdown } from "./markdown";
+import {
+  exportMarkdown,
+  exportReadableMarkdown,
+  parseMarkdown,
+} from "./markdown";
 import type { Block, ContentDocument, Inline, Text } from "./schema";
 import { fixture, generateTrees, p } from "./test-trees";
 
@@ -525,5 +529,236 @@ describe("rejection", () => {
 describe("generated trees", () => {
   test("parse(export(tree)) equals tree for 500 random trees", () => {
     for (const tree of generateTrees(500)) roundTrip(tree);
+  });
+});
+
+describe("readable export", () => {
+  const readable = (tree: unknown) =>
+    exportReadableMarkdown(tree)._unsafeUnwrap();
+  const item = (
+    id: string,
+    listStyleType: "disc" | "decimal",
+    indent: number,
+    ...children: Inline[]
+  ): Block => ({ type: "p", id, listStyleType, indent, children });
+
+  test("fixture: no IDs, no directives, AI text in place, placeholders gone", () => {
+    expect(readable(fixture)).toBe(
+      [
+        "# The Old Mill",
+        "",
+        "## Arrival",
+        "",
+        "### Night *one*",
+        "",
+        "Plain, **bold**, *italic*, ~~struck~~ and `code`.",
+        "",
+        "See [the mill](old-mill) or [the web](https://example.com/a_\\(b\\)?q=1).",
+        "",
+        "> Quoted line",
+        "",
+        "---",
+        "",
+        "- one",
+        "  - nested",
+        "    1. deep",
+        "    2. deeper",
+        "- two",
+        "",
+        "Between lists.",
+        "",
+        "1. first",
+        "2. second",
+        "",
+        "Generated **prose**.",
+        "",
+        "- item",
+        "",
+        "## Generated heading",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("an empty or text-free document exports nothing", () => {
+    for (const tree of [
+      [],
+      [{ type: "placeholder", id: "ph", children: [{ text: "Write" }] }],
+      [p("b", { text: "" })],
+    ]) {
+      expect(readable(tree)).toBe("");
+    }
+  });
+
+  test("escapes only what CommonMark could misread", () => {
+    expect(
+      readable([
+        p("a", {
+          text: '"Hi," she said: snake_case, _x_, 1 < 2, <b>, &amp; & a*b ~x~ [x] \\ `t` #tag',
+        }),
+      ]),
+    ).toBe(
+      '"Hi," she said: snake_case, \\_x\\_, 1 < 2, \\<b>, \\&amp; & a\\*b \\~x\\~ \\[x\\] \\\\ \\`t\\` #tag\n',
+    );
+  });
+
+  test("block syntax at the start of a line is escaped, leading spaces dropped", () => {
+    expect(
+      readable([
+        p("a", {
+          text: "# one\n  2. two\n- three\n> four\n+ five\n=== six\n| seven\n    code? no",
+        }),
+      ]),
+    ).toBe(
+      [
+        "\\# one\\",
+        "2\\. two\\",
+        "\\- three\\",
+        "\\> four\\",
+        "\\+ five\\",
+        "\\=== six\\",
+        "\\| seven\\",
+        "code? no",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("line breaks: backslash inside a block, trimmed at its ends, a space in a heading", () => {
+    expect(
+      readable([
+        p("a", { text: "\none\ntwo\n\n" }),
+        { type: "blockquote", id: "q", children: [{ text: "said\nagain" }] },
+        { type: "h2", id: "h", children: [{ text: "Two\nlines" }] },
+        item("l", "decimal", 1, { text: "item\nmore" }),
+      ]),
+    ).toBe(
+      [
+        "one\\",
+        "two",
+        "",
+        "> said\\",
+        "> again",
+        "",
+        "## Two lines",
+        "",
+        "1. item\\",
+        "   more",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("a closing # run in a heading is escaped", () => {
+    expect(
+      readable([{ type: "h1", id: "h", children: [{ text: "Part #" }] }]),
+    ).toBe("# Part \\#\n");
+  });
+
+  test("whitespace moves outside emphasis so CommonMark reads it", () => {
+    const tree: ContentDocument = [
+      p(
+        "a",
+        { text: "a " },
+        { text: "bold ", bold: true },
+        { text: "plain" },
+        { text: " it", italic: true },
+        { text: "!" },
+      ),
+      // A marked space between two leaves keeps only their shared marks.
+      p(
+        "b",
+        { text: "x", bold: true },
+        { text: " ", bold: true, italic: true },
+        { text: "y", bold: true },
+        { text: " ", italic: true },
+        { text: "z" },
+      ),
+    ];
+    expect(readable(tree)).toBe("a **bold** plain *it*!\n\n**x y** z\n");
+  });
+
+  test("lists: nested by indentation, skipped levels nest under the closest", () => {
+    expect(
+      readable([
+        item("a", "decimal", 1, { text: "one" }),
+        item("b", "disc", 3, { text: "skipped" }),
+        item("c", "disc", 4, { text: "deeper" }),
+        item("d", "decimal", 1, { text: "two" }),
+        item("e", "decimal", 1, { text: "" }),
+        item("f", "decimal", 1, { text: "four" }),
+        p("x", { text: "after" }),
+        item("g", "disc", 2, { text: "starts indented" }),
+      ]),
+    ).toBe(
+      [
+        "1. one",
+        "   - skipped",
+        "     - deeper",
+        "2. two",
+        "4. four",
+        "",
+        "after",
+        "",
+        "- starts indented",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("numbering restarts at a placeholder and an AI segment, with a blank line", () => {
+    expect(
+      readable([
+        item("a", "decimal", 1, { text: "a" }),
+        { type: "placeholder", id: "ph", children: [{ text: "more" }] },
+        item("b", "decimal", 1, { text: "b" }),
+        {
+          type: "ai_segment",
+          id: "s",
+          status: "generating",
+          children: [item("c", "decimal", 1, { text: "c" })],
+        },
+      ]),
+    ).toBe(["1. a", "", "1. b", "", "1. c", ""].join("\n"));
+  });
+
+  test("links and code keep their syntax", () => {
+    expect(
+      readable([
+        p(
+          "a",
+          { text: "See " },
+          {
+            type: "a",
+            url: "café",
+            children: [{ text: "the " }, { text: "café", bold: true }],
+          },
+          { text: " and " },
+          { text: "a`b", code: true },
+          { text: "." },
+        ),
+      ]),
+    ).toBe("See [the **café**](café) and ``a`b``.\n");
+  });
+
+  test("rejects a tree outside the schema", () => {
+    expect(
+      exportReadableMarkdown([
+        { type: "table", id: "t", children: [] },
+      ])._unsafeUnwrapErr(),
+    ).toMatchObject({ kind: "invalid_content", path: "[0]" });
+  });
+
+  test("exports every generated tree with none of its IDs or directives", () => {
+    for (const tree of generateTrees(300, 11)) {
+      const markdown = readable(tree);
+      const ids = tree.flatMap((block) => [
+        block.id,
+        ...(block.type === "ai_segment" ? block.children.map((c) => c.id) : []),
+      ]);
+      // Generated IDs are `b_<n>`, which generated text never holds.
+      for (const id of ids) expect(markdown).not.toContain(id);
+      expect(markdown).not.toMatch(/^:::(ai|placeholder)\{/m);
+    }
   });
 });
