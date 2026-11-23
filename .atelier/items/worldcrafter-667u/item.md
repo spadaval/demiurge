@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-667u
 title: Build app-owned story agent runner with editable system prompt, deterministic scene context, and model profiles
-status: open
+status: building
 mission: worldcrafter-r7vd
 labels:
 - agent
@@ -12,7 +12,8 @@ priority: high
 blocked_by:
 - worldcrafter-7r87
 - worldcrafter-erje
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A51564328-ab55-47e2-a228-a246e1757d43%3Adelegate-task%3A75462b19-5424-4689-8d4b-58711f4caff4
 ready: null
 trivial: null
 caused_by: null
