@@ -9,7 +9,7 @@
  */
 
 import { err, ok, type Result } from "neverthrow";
-import type { ChatMessage, JsonObject, LlmRequest } from "~/llm/types";
+import type { JsonObject, LlmRequest, TextMessage } from "~/llm/types";
 
 export type RequestDraft = {
   /**
@@ -17,18 +17,18 @@ export type RequestDraft = {
    * endpoint reads; it then stays in `parameters`, as stored.
    */
   input:
-    | { kind: "chat"; messages: ChatMessage[] }
+    | { kind: "chat"; messages: TextMessage[] }
     | { kind: "completion"; prompt: string }
     | null;
   /** The rest of the body, as formatted JSON. */
   parameters: string;
 };
 
-const ROLES: readonly ChatMessage["role"][] = ["system", "user", "assistant"];
+const ROLES: readonly TextMessage["role"][] = ["system", "user", "assistant"];
 
-function chatMessages(value: unknown): ChatMessage[] | null {
+function chatMessages(value: unknown): TextMessage[] | null {
   if (!Array.isArray(value)) return null;
-  const messages: ChatMessage[] = [];
+  const messages: TextMessage[] = [];
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null) return null;
     const { role, content, ...rest } = entry as Record<string, unknown>;
