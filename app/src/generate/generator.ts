@@ -103,6 +103,7 @@ import {
   checkRequest,
   retarget,
   send as sendRequest,
+  targetOf,
 } from "~/llm/client";
 import type {
   BackendProfile,
@@ -374,11 +375,15 @@ export function createGenerator(options: GeneratorOptions): Generator {
    */
   const current = (record: ContextRequest): CurrentRequest => {
     const profile = options.profile(record.request.profile);
-    if (!profile || addressedTo(profile, record.request)) {
+    if (!profile || addressedTo(profile, record.request, record.madeFor)) {
       return { record, retargeted: false };
     }
     return {
-      record: { ...record, request: retarget(profile, record.request) },
+      record: {
+        ...record,
+        request: retarget(profile, record.request, record.madeFor),
+        madeFor: targetOf(profile),
+      },
       retargeted: true,
     };
   };
@@ -393,7 +398,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
       const { record, retargeted } = current(stored);
       if (!retargeted) return okAsync({ record, retargeted });
       return requests
-        .revise(stored.id, record.request)
+        .revise(stored.id, record.request, record.madeFor)
         .mapErr((e): GenerateError => e)
         .map((revision) => ({ record: revision, retargeted }));
     });
@@ -450,7 +455,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
         });
         if (built.isErr())
           return errAsync<AssembledRecord, GenerateError>(built.error);
-        return requests.save(built.value, input.after);
+        return requests.save(built.value, input.after, targetOf(profile));
       });
   }
 

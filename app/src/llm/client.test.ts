@@ -6,6 +6,7 @@ import {
   checkRequest,
   retarget,
   send,
+  targetOf,
 } from "./client";
 import { SseParser } from "./sse";
 import type {
@@ -611,6 +612,43 @@ describe("retargeting a stored request", () => {
     const request = made();
     expect(addressedTo(openrouter, request)).toBe(true);
     expect(retarget(openrouter, request).body.n_probs).toBe(3);
+  });
+
+  test("with what the profile was, only what the profile changed changes", () => {
+    const madeFor = targetOf(profile);
+    const base = made();
+    const edited: LlmRequest = {
+      ...base,
+      body: { ...base.body, model: "mine", provider: { sort: "price" } },
+    };
+    // Unchanged profile: the writer's model and parameters are left alone.
+    expect(addressedTo(profile, edited, madeFor)).toBe(true);
+    // A new profile model: the writer's own model stays.
+    const remodelled: BackendProfile = { ...profile, model: "mistral" };
+    expect(addressedTo(remodelled, edited, madeFor)).toBe(false);
+    expect(retarget(remodelled, edited, madeFor).body).toEqual(edited.body);
+    // Not edited, the request takes the profile's new model.
+    expect(retarget(remodelled, base, madeFor).body.model).toBe("mistral");
+    // A new server: its URL and the profile's model.
+    const moved: BackendProfile = {
+      ...profile,
+      baseUrl: "http://127.0.0.1:9/v1",
+    };
+    const sent = retarget(moved, edited, madeFor);
+    expect(sent.url).toBe("http://127.0.0.1:9/v1/chat/completions");
+    expect(sent.body.model).toBe("qwen");
+    // Same kind: no parameter is dropped, even one for another kind.
+    expect(sent.body.provider).toEqual({ sort: "price" });
+    // A new kind: the old kind's own parameters go.
+    const generic: BackendProfile = {
+      ...profile,
+      kind: "generic",
+      sampler: {},
+    };
+    const regeneric = retarget(generic, edited, madeFor).body;
+    expect(regeneric.n_probs).toBeUndefined();
+    expect(regeneric.provider).toBeUndefined();
+    expect(regeneric.model).toBe("mine");
   });
 
   test("a generic server takes neither llama.cpp's nor OpenRouter's own parameters", () => {

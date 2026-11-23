@@ -11,6 +11,7 @@ import type {
   LlmError,
   LlmInput,
   LlmRequest,
+  ProfileTarget,
   Sampler,
   StreamDelta,
   TokenLogprob,
@@ -127,41 +128,79 @@ const foreignKey = (profile: BackendProfile, key: string): boolean =>
     ([kind, keys]) => kind !== profile.kind && keys.has(key),
   );
 
+/** The settings of `profile` that say where its requests go and what reads them. */
+export const targetOf = (profile: BackendProfile): ProfileTarget => ({
+  baseUrl: profile.baseUrl.replace(/\/+$/, ""),
+  kind: profile.kind,
+  model: profile.model ?? null,
+});
+
+const sameTarget = (a: ProfileTarget, b: ProfileTarget) =>
+  a.baseUrl.replace(/\/+$/, "") === b.baseUrl.replace(/\/+$/, "") &&
+  a.kind === b.kind &&
+  a.model === b.model;
+
 /**
- * `request` addressed to `profile` as it is now: its endpoint URL, its
- * model (or none), and without parameters only another kind of server
- * reads (llama.cpp's `n_probs` sent to OpenRouter, say). Everything else is
- * kept, the writer's edits included. For a stored request whose profile
- * has since changed, so it can be sent again; `checkRequest` still sends a
- * profile's key only to that profile's URL.
+ * `request`, made when its profile was `madeFor`, addressed to `profile` as
+ * it is now. Only what the profile changed changes; the writer's edits stay:
+ * - a new server: the profile's endpoint URL, and the profile's model, as
+ *   the request's may not exist there;
+ * - a new model at the same server: the profile's model, unless the writer
+ *   had chosen another in the request;
+ * - a new kind of server: without parameters only another kind reads
+ *   (llama.cpp's `n_probs` sent to OpenRouter, say), except ones the
+ *   profile's own sampler sets.
+ *
+ * Without `madeFor` (a request stored before it was recorded), what the
+ * profile was is guessed from the request: a different URL, model or a
+ * parameter for another kind of server all count as changes.
+ *
+ * `checkRequest` still sends a profile's key only to that profile's URL.
  */
 export function retarget(
   profile: BackendProfile,
   request: LlmRequest,
+  madeFor?: ProfileTarget,
 ): LlmRequest {
+  const now = targetOf(profile);
+  const url = endpointUrl(profile, request.endpoint);
+  const moved = madeFor
+    ? madeFor.baseUrl.replace(/\/+$/, "") !== now.baseUrl
+    : request.url !== url;
+  const writerModel =
+    madeFor !== undefined && (request.body.model ?? null) !== madeFor.model;
+  const newModel = madeFor ? madeFor.model !== now.model : true;
+  const newKind = madeFor ? madeFor.kind !== now.kind : true;
   const body: JsonObject = {};
   for (const [key, value] of Object.entries(request.body)) {
-    if (key !== "model" && !foreignKey(profile, key)) body[key] = value;
+    if (key === "model" || (newKind && foreignKey(profile, key))) continue;
+    body[key] = value;
   }
-  if (profile.model !== undefined) body.model = profile.model;
-  return {
-    ...request,
-    profile: profile.name,
-    url: endpointUrl(profile, request.endpoint),
-    body,
-  };
+  const keepModel = !moved && (writerModel || !newModel);
+  const model = keepModel ? request.body.model : profile.model;
+  if (model !== undefined) body.model = model;
+  return { ...request, profile: profile.name, url, body };
 }
 
 /**
- * Whether `request` is addressed to `profile` as it is now, so `retarget`
- * would leave it as it is: its endpoint, its model, and no parameter for
- * another kind of server.
+ * Whether `request`, made when its profile was `madeFor`, is addressed to
+ * `profile` as it is now, so it needs no `retarget`. With `madeFor`, that is
+ * whether the profile's server, kind and model are unchanged; without it,
+ * guessed from the request as `retarget` does.
  */
-export const addressedTo = (profile: BackendProfile, request: LlmRequest) =>
-  request.profile === profile.name &&
-  request.url === endpointUrl(profile, request.endpoint) &&
-  request.body.model === profile.model &&
-  !Object.keys(request.body).some((key) => foreignKey(profile, key));
+export function addressedTo(
+  profile: BackendProfile,
+  request: LlmRequest,
+  madeFor?: ProfileTarget,
+): boolean {
+  if (request.profile !== profile.name) return false;
+  if (madeFor) return sameTarget(madeFor, targetOf(profile));
+  return (
+    request.url === endpointUrl(profile, request.endpoint) &&
+    request.body.model === profile.model &&
+    !Object.keys(request.body).some((key) => foreignKey(profile, key))
+  );
+}
 
 const ROLES = new Set(["system", "user", "assistant"]);
 

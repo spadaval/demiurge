@@ -703,6 +703,47 @@ test("after the model is renamed and moved, earlier AI text still regenerates th
   expect(urls).toContain(`${moved}/chat/completions`);
 });
 
+test("a model the writer chose in the slip stays through Request and Regenerate", async () => {
+  await render(withProfile());
+  await generateNext();
+  const parameters = query<HTMLTextAreaElement>(
+    ".request-slip [data-role=parameters] textarea",
+  ) as HTMLTextAreaElement;
+  await type(
+    parameters,
+    parameters.value.replace('"stub-model"', '"writer-chosen-model"'),
+  );
+  scripts.push(stream("First."));
+  await click(button("Send edited request", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  expect((received[0]?.body as { model: string }).model).toBe(
+    "writer-chosen-model",
+  );
+
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).not.toContain(
+    "The model settings have changed",
+  );
+  expect(
+    query<HTMLTextAreaElement>(".request-slip [data-role=parameters] textarea")
+      ?.value,
+  ).toContain('"writer-chosen-model"');
+  await click(button("Close", ".request-slip"));
+
+  scripts.push(stream("Second."));
+  await click(button("Regenerate", "section[data-ai-segment]"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the regenerated output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe(
+    "writer-chosen-model",
+  );
+});
+
 test("a request shown retargeted in the slip is stored once, when sent", async () => {
   await render(withProfile());
   await generateNext();

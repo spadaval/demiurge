@@ -6,5 +6,6 @@ export {
   retarget,
   type SendOptions,
   send,
+  targetOf,
 } from "./client";
 export type * from "./types";
