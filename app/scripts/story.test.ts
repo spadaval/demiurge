@@ -3,7 +3,14 @@
  * a file in a temporary directory.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import {
   copyFileSync,
   existsSync,
@@ -20,6 +27,13 @@ import { parseStory, type Story } from "../src/story/story";
 import { EDITS, READS } from "./story";
 
 const SCRIPT = fileURLToPath(new URL("./story.ts", import.meta.url));
+
+// Each test runs its commands as separate processes, one after another: the
+// --help test alone runs one per command, over 80, in about 4 s on an idle
+// host. Short processes wait for a core at every step on a busy one, so
+// Bun's 5 s default failed these tests at load 17-25. The timeout only
+// guards against a hang; nothing here is a speed check.
+setDefaultTimeout(60_000);
 
 type Run = { code: number; stdout: string; stderr: string };
 
