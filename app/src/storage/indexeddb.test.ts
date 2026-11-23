@@ -330,6 +330,126 @@ describe("IndexedDB persistence", () => {
     reopened.close();
   });
 
+  test("upgrading from version 3 keeps every record and adds tombstones", async () => {
+    const factory = new IDBFactory();
+    const records = {
+      documents: [
+        {
+          id: "doc1",
+          title: "The Salt Road",
+          content: contentFixture,
+          updatedAt: 1,
+        },
+      ],
+      worldEntries: [
+        { documentId: "doc1", facts: { aliases: ["Mara"] }, updatedAt: 1 },
+      ],
+      annotations: [
+        {
+          id: "seg_01",
+          documentId: "doc1",
+          kind: "ai_provenance",
+          data: { model: "local" },
+          updatedAt: 1,
+        },
+      ],
+      requests: [
+        {
+          id: "r1",
+          documentId: "doc1",
+          request: { prompt: "Go." },
+          createdAt: 1,
+        },
+      ],
+      outlines: [
+        {
+          id: "manuscript",
+          books: [
+            {
+              id: "b1",
+              title: "Book One",
+              chapters: [{ id: "c1", title: "Arrival", scenes: ["doc1"] }],
+            },
+          ],
+          updatedAt: 1,
+        },
+      ],
+      timelines: [{ id: "world", timeline: { events: [] }, updatedAt: 1 }],
+      storyRecords: [
+        { id: "actor/mara", kind: "actor", data: { id: "mara" }, updatedAt: 2 },
+      ],
+      agentRecords: [
+        {
+          id: "s1/session",
+          sessionId: "s1",
+          kind: "session",
+          data: { role: "plan" },
+          updatedAt: 3,
+        },
+      ],
+    };
+    const snapshot = {
+      documentId: "doc1",
+      reason: "periodic" as const,
+      createdAt: 5,
+    };
+
+    // The database as a version 3 release left it, written without the adapter.
+    await new Promise<void>((resolve, reject) => {
+      const request3 = factory.open("worldcrafter", 3);
+      request3.onupgradeneeded = (event) =>
+        upgrade(request3.result, event.oldVersion, 3);
+      request3.onsuccess = () => {
+        const db = request3.result;
+        expect([...db.objectStoreNames]).not.toContain("tombstones");
+        const tx = db.transaction(
+          [...Object.keys(records), "snapshots", "snapshotContent"],
+          "readwrite",
+        );
+        for (const [store, list] of Object.entries(records)) {
+          for (const record of list) tx.objectStore(store).put(record);
+        }
+        const add = tx.objectStore("snapshots").add(snapshot);
+        add.onsuccess = () =>
+          tx
+            .objectStore("snapshotContent")
+            .put({ id: add.result, content: contentFixture });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onabort = () => reject(tx.error);
+      };
+      request3.onerror = () => reject(request3.error);
+    });
+
+    const upgraded = await open(factory);
+    const dumped = (await upgraded.dump())._unsafeUnwrap();
+    const { snapshots, ...keyed } = dumped;
+    expect(keyed).toEqual(records);
+    expect(snapshots).toEqual([
+      { ...snapshot, id: expect.any(Number), content: contentFixture },
+    ]);
+    expect(
+      (await upgraded.annotations.listForDocument("doc1"))._unsafeUnwrap(),
+    ).toEqual(records.annotations);
+    expect(
+      (await upgraded.agentRecords.listForSession("s1"))._unsafeUnwrap(),
+    ).toEqual(records.agentRecords);
+    expect((await upgraded.documents.listTombstones())._unsafeUnwrap()).toEqual(
+      [],
+    );
+    (await upgraded.storyRecords.delete("actor/mara"))._unsafeUnwrap();
+    upgraded.close();
+
+    const reopened = await open(factory);
+    expect((await reopened.storyRecords.list())._unsafeUnwrap()).toEqual([]);
+    expect(
+      (await reopened.storyRecords.listTombstones())._unsafeUnwrap(),
+    ).toEqual([{ key: "actor/mara", deletedAt: expect.any(Number) }]);
+    reopened.close();
+  });
+
   test("opening a database from a newer schema fails as a Result", async () => {
     const factory = new IDBFactory();
     await new Promise<void>((resolve, reject) => {

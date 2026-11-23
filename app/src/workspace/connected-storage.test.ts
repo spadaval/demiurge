@@ -175,3 +175,22 @@ test("a writer tab's operations reach storage through the connection", async () 
     document,
   );
 });
+
+test("tombstones are listed through the connection", async () => {
+  const { backing, storage } = setup(false);
+  (await storage.documents.save(document))._unsafeUnwrap();
+  (await storage.documents.delete("d1"))._unsafeUnwrap();
+  const tombstones = (await storage.documents.listTombstones())._unsafeUnwrap();
+  expect(tombstones).toEqual([{ key: "d1", deletedAt: expect.any(Number) }]);
+  expect(tombstones).toEqual(
+    (await backing.documents.listTombstones())._unsafeUnwrap(),
+  );
+});
+
+test("a read-only tab still lists tombstones", async () => {
+  const { backing, storage } = setup(true);
+  (await backing.storyRecords.delete("actor/mara"))._unsafeUnwrap();
+  expect((await storage.storyRecords.listTombstones())._unsafeUnwrap()).toEqual(
+    [{ key: "actor/mara", deletedAt: expect.any(Number) }],
+  );
+});

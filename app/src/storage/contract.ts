@@ -185,6 +185,56 @@ export function describeStorageContract(
           await value(collection().delete("missing"));
         });
 
+        test("delete leaves a tombstone with when it ran", async () => {
+          await value(collection().save(make("k1", 1)));
+          const before = Date.now();
+          await value(collection().delete("k1"));
+          const after = Date.now();
+          const [tombstone, ...rest] = await value(
+            collection().listTombstones(),
+          );
+          expect(rest).toEqual([]);
+          expect(tombstone?.key).toBe("k1");
+          expect(tombstone?.deletedAt).toBeGreaterThanOrEqual(before);
+          expect(tombstone?.deletedAt).toBeLessThanOrEqual(after);
+          expect(await value(collection().list())).toEqual([]);
+          expect(await error(collection().load("k1"))).toMatchObject({
+            kind: "not_found",
+            id: "k1",
+          });
+        });
+
+        test("deleting a missing record leaves a tombstone too", async () => {
+          await value(collection().delete("missing"));
+          expect(
+            (await value(collection().listTombstones())).map((t) => t.key),
+          ).toEqual(["missing"]);
+        });
+
+        test("lists tombstones in ascending key order, live keys left out", async () => {
+          for (const key of ["k1", "k2", "k3", "k4"]) {
+            await value(collection().save(make(key, 1)));
+          }
+          for (const key of ["k3", "k1", "k4"]) {
+            await value(collection().delete(key));
+          }
+          expect(
+            (await value(collection().listTombstones())).map((t) => t.key),
+          ).toEqual(["k1", "k3", "k4"]);
+          expect(await value(collection().list())).toEqual([make("k2", 1)]);
+        });
+
+        test("save after a delete brings the record back", async () => {
+          await value(collection().save(make("k1", 1)));
+          await value(collection().delete("k1"));
+          await value(collection().save(make("k1", 2)));
+          expect<unknown>(await value(collection().load("k1"))).toEqual(
+            make("k1", 2),
+          );
+          expect(await value(collection().list())).toEqual([make("k1", 2)]);
+          expect(await value(collection().listTombstones())).toEqual([]);
+        });
+
         test("loading a missing record is a not_found error", async () => {
           expect(await error(collection().load("missing"))).toMatchObject({
             kind: "not_found",
@@ -330,6 +380,11 @@ export function describeStorageContract(
       expect(await value(storage.agentRecords.listForSession("none"))).toEqual(
         [],
       );
+      await value(storage.agentRecords.delete("s1/step/1"));
+      expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
+        record("session", "s1"),
+        record("step/2", "s1"),
+      ]);
     });
 
     test("stored records are not shared with the caller", async () => {
@@ -369,6 +424,19 @@ export function describeStorageContract(
       expect(await value(storage.annotations.listForDocument("none"))).toEqual(
         [],
       );
+      await value(storage.annotations.delete("seg_b"));
+      expect(await value(storage.annotations.listForDocument("doc1"))).toEqual([
+        annotation("b_a", "doc1"),
+      ]);
+    });
+
+    test("a collection's tombstones are its own", async () => {
+      await value(storage.documents.delete("shared-key"));
+      expect(await value(storage.annotations.listTombstones())).toEqual([]);
+      expect(await value(storage.storyRecords.listTombstones())).toEqual([]);
+      expect(
+        (await value(storage.documents.listTombstones())).map((t) => t.key),
+      ).toEqual(["shared-key"]);
     });
 
     describe("snapshots", () => {
@@ -558,6 +626,7 @@ export function describeStorageContract(
         expect(await value(storage.storyRecords.list())).toEqual([
           storyRecord("drive/a", "kept"),
         ]);
+        expect(await value(storage.storyRecords.listTombstones())).toEqual([]);
       });
 
       test("saves agent records together, or none of them", async () => {
@@ -599,6 +668,50 @@ export function describeStorageContract(
           agentRecord("session", { steps: 1 }),
           agentRecord("step", { n: 1 }),
         ]);
+      });
+
+      test("saving a document and annotation after their delete brings them back", async () => {
+        await value(storage.documents.save(document("Before")));
+        await value(storage.annotations.save(annotation));
+        await value(storage.documents.delete("doc1"));
+        await value(storage.annotations.delete("seg_01"));
+        expect(
+          await value(storage.annotations.listForDocument("doc1")),
+        ).toEqual([]);
+        await value(
+          storage.batch([
+            { kind: "saveDocument", record: document("After") },
+            { kind: "saveAnnotation", record: annotation },
+          ]),
+        );
+        expect(await value(storage.documents.load("doc1"))).toEqual(
+          document("After"),
+        );
+        expect(
+          await value(storage.annotations.listForDocument("doc1")),
+        ).toEqual([annotation]);
+        expect(await value(storage.documents.listTombstones())).toEqual([]);
+        expect(await value(storage.annotations.listTombstones())).toEqual([]);
+      });
+
+      test("deleting a story record leaves a tombstone; saving it again removes it", async () => {
+        await value(storage.storyRecords.save(storyRecord("drive/a", "a")));
+        const before = Date.now();
+        await value(
+          storage.batch([{ kind: "deleteStoryRecord", id: "drive/a" }]),
+        );
+        const [tombstone] = await value(storage.storyRecords.listTombstones());
+        expect(tombstone?.key).toBe("drive/a");
+        expect(tombstone?.deletedAt).toBeGreaterThanOrEqual(before);
+        await value(
+          storage.batch([
+            { kind: "saveStoryRecord", record: storyRecord("drive/a", "back") },
+          ]),
+        );
+        expect(await value(storage.storyRecords.list())).toEqual([
+          storyRecord("drive/a", "back"),
+        ]);
+        expect(await value(storage.storyRecords.listTombstones())).toEqual([]);
       });
 
       test("an empty batch succeeds", async () => {
@@ -744,6 +857,18 @@ export function describeStorageContract(
         expect(await value(storage.documents.list())).toEqual([]);
         expect(await value(storage.snapshots.list("doc-a"))).toEqual([]);
       });
+
+      test("a restore removes the tombstones of the keys it writes", async () => {
+        await value(storage.documents.delete("doc-a"));
+        await value(storage.documents.delete("doc-other"));
+        await value(storage.storyRecords.delete("story"));
+        await value(storage.restore(world));
+        expect(await value(storage.dump())).toEqual(world);
+        expect(
+          (await value(storage.documents.listTombstones())).map((t) => t.key),
+        ).toEqual(["doc-other"]);
+        expect(await value(storage.storyRecords.listTombstones())).toEqual([]);
+      });
     });
 
     test("operations on a closed store fail as Results, not throws", async () => {
@@ -756,6 +881,7 @@ export function describeStorageContract(
         await error(storage.annotations.listForDocument("d")),
         await error(storage.agentRecords.listForSession("s")),
         await error(storage.requests.delete("d")),
+        await error(storage.timelines.listTombstones()),
         await error(storage.dump()),
         await error(storage.restore({ ...emptyWorld, documents: [document] })),
         await error(

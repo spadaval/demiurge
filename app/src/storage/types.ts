@@ -33,6 +33,44 @@ export const COLLECTION_NAMES = [
 /** Names a collection, for errors and for the world dump. */
 export type CollectionName = (typeof COLLECTION_NAMES)[number];
 
+/**
+ * The collections that sync between devices: every one but snapshots, which
+ * are device-local history. Deleting from one of these leaves a `Tombstone`.
+ */
+export type SyncedCollectionName = Exclude<CollectionName, "snapshots">;
+
+/**
+ * Each synced collection's key field and change-time field, which a sync
+ * backend reads to match and order records across devices. Stored requests
+ * are never edited after they are saved, so `createdAt` is their change time.
+ * The check at the end of this file holds every record type to these fields.
+ */
+export const SYNC_FIELDS = {
+  documents: { key: "id", changedAt: "updatedAt" },
+  worldEntries: { key: "documentId", changedAt: "updatedAt" },
+  annotations: { key: "id", changedAt: "updatedAt" },
+  requests: { key: "id", changedAt: "createdAt" },
+  outlines: { key: "id", changedAt: "updatedAt" },
+  timelines: { key: "id", changedAt: "updatedAt" },
+  storyRecords: { key: "id", changedAt: "updatedAt" },
+  agentRecords: { key: "id", changedAt: "updatedAt" },
+} as const satisfies {
+  readonly [Name in SyncedCollectionName]: {
+    readonly key: string;
+    readonly changedAt: "updatedAt" | "createdAt";
+  };
+};
+
+/**
+ * What a delete leaves behind in a synced collection, so another device can
+ * learn of it. Saving the key again removes its tombstone.
+ */
+export interface Tombstone {
+  readonly key: string;
+  /** Epoch milliseconds, set by the store when the delete ran. */
+  readonly deletedAt: number;
+}
+
 export type StorageOperation = "open" | "save" | "load" | "list" | "delete";
 
 /** A load asked for a record that does not exist. Expected, not exceptional. */
@@ -205,13 +243,20 @@ export interface Snapshot extends SnapshotInfo {
 /**
  * A keyed collection. `save` inserts or replaces (last write wins). `load` of
  * a missing key fails with `NotFoundError`. `list` is ascending by key.
- * `delete` of a missing key succeeds.
+ *
+ * `delete` removes the record and leaves a `Tombstone` for its key, so sync
+ * can carry the delete to other devices; it succeeds for a missing key too,
+ * leaving a tombstone, since the record may exist on another device. A
+ * tombstoned key loads as `not_found` and is left out of every list. `save`
+ * of a tombstoned key brings the record back and removes the tombstone.
  */
 export interface Collection<T> {
   save(record: T): ResultAsync<void, StorageError>;
   load(key: string): ResultAsync<T, StorageError>;
   list(): ResultAsync<T[], StorageError>;
   delete(key: string): ResultAsync<void, StorageError>;
+  /** Every deleted key not saved since, ascending by key. */
+  listTombstones(): ResultAsync<Tombstone[], StorageError>;
 }
 
 export interface AnnotationCollection extends Collection<AnnotationRecord> {
@@ -270,7 +315,8 @@ export interface CollectionRecords {
 /**
  * Every record of a world, by collection. Keyed collections are ascending by
  * key, as `list` returns them; snapshots are ascending by ID and keep the ID
- * and `createdAt` the store gave them.
+ * and `createdAt` the store gave them. Tombstones are left out: a world file
+ * carries what the world holds, not what was deleted from it.
  */
 export type WorldRecords = {
   readonly [Name in CollectionName]: readonly CollectionRecords[Name][];
@@ -317,7 +363,8 @@ export interface StorageAdapter {
   dump(): ResultAsync<WorldRecords, StorageError>;
   /**
    * Writes every record of `records` as one atomic step, inserting or
-   * replacing by key. Snapshots keep their ID and `createdAt`, and later
+   * replacing by key and removing the tombstone of each key it writes.
+   * Snapshots keep their ID and `createdAt`, and later
    * snapshot saves get IDs above every restored one. Restoring a dump into an
    * empty store makes `dump` return it unchanged. A failure names the first
    * collection that has a record.
@@ -326,3 +373,42 @@ export interface StorageAdapter {
   /** Releases the store. Later operations fail with a `StorageFailure`. */
   close(): void;
 }
+
+/**
+ * The record type a synced collection of `StorageAdapter` holds, or `never`
+ * if the member is not a `Collection`.
+ */
+type SyncedRecord<Name extends SyncedCollectionName> =
+  StorageAdapter[Name] extends Collection<infer R> ? R : never;
+
+/**
+ * True when `R` has a string `Key` and a numeric change time `ChangedAt`: the
+ * fields a sync backend needs to match and order a record across devices.
+ */
+export type SyncReady<R, Key extends string, ChangedAt extends string> = [
+  R,
+] extends [never]
+  ? false
+  : R extends { readonly [K in Key]: string } & {
+        readonly [K in ChangedAt]: number;
+      }
+    ? true
+    : false;
+
+type AssertTrue<T extends true> = T;
+
+/**
+ * Fails to compile when a synced collection's record type lacks the key or
+ * change time `SYNC_FIELDS` names for it, or when a collection is added to
+ * `COLLECTION_NAMES` without an entry in `SYNC_FIELDS` (the `satisfies` there
+ * fails first).
+ */
+export type SyncedCollectionsAreSyncReady = AssertTrue<
+  {
+    [Name in SyncedCollectionName]: SyncReady<
+      SyncedRecord<Name>,
+      (typeof SYNC_FIELDS)[Name]["key"],
+      (typeof SYNC_FIELDS)[Name]["changedAt"]
+    >;
+  }[SyncedCollectionName]
+>;
