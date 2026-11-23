@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-7r87
 title: Expose story commands as native typed LLM tools with validation and contradiction reporting
-status: open
+status: building
 mission: worldcrafter-r7vd
 labels:
 - agent
@@ -11,7 +11,8 @@ labels:
 priority: high
 blocked_by:
 - worldcrafter-lgz8
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A51564328-ab55-47e2-a228-a246e1757d43%3Adelegate-task%3Aee5a005f-4923-4425-822b-0df17322b0df
 ready: null
 trivial: null
 caused_by: null
