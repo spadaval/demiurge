@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-j8gz
 title: Update PRODUCT.md and README.md for unified typed-store and app-owned agent direction
-status: changes_requested
+status: in_review
 mission: worldcrafter-k7uh
 labels:
 - docs
@@ -42,3 +42,7 @@ Out: `AGENTS.md` (owned by `worldcrafter-2x5z`), historical strategy docs under 
 - `README.md`: Tech Stack, Commands and Project Structure describe `app/` (React 19, Vite, TanStack Router on hash history, Plate, plain CSS, `StorageAdapter`, neverthrow, Biome, bun test, Worker static hosting). No root `src/`, Legend State, Tailwind, OpenAPI client, TanStack Start or tRPC remain, and `bun dev` is replaced by a note that there is no dev script. The intro says the bible was tested headless and is moving into the app.
 - Links: every file path and Markdown link in both files was checked with a script and exists. The only two that are not files are `app/dist/` (build output) and `https://bun.sh/`.
 - No code changed, so `bun run check` was not needed for this item.
+
+### Responses
+
+1-pjd9.1: fixed in d4baba8
