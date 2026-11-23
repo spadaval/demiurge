@@ -69,6 +69,9 @@ A scene whose prose a story-bible scene names now shows the bible's view of it i
 
 Round 2: both findings were right, and both new component tests fail on round 1's code. `bibleLayers` now takes the scene's other marks and reserves the place of each keyed one that still locates, so a bible note whose only words end there becomes a note about the scene. The gloss orders notes by the order `assignKeys` gave their keys. `cd app && bun run check`: 1624 tests pass. `measure-layers`: 0 px movement, slowest 32.9 ms.
 
+
+Round 3: round 2 approved `b94ba7c`, but master had since merged `worldcrafter-wqh0`, whose `services.bible` (the World inspector's) duplicated this item's `services.story`. Each opened its own connected storage and read the same records, and the inspector re-read only when opened. The mission lead passed on advice from wqh0's implementer to keep the inspector current. I merged master (`9509209`) and made the two one service, `app/src/app/bible.ts`. It keeps wqh0's interface, and its rule that a failed read keeps the last story shown with the error in `error`. It adds this item's write-watching `storage`, coalesced reads and `execute`. `app/src/app/story.ts` is gone, and its tests moved to `bible.test.ts`. Generation and the scene apparatus use `bible.storage`. The inspector's own `refresh()` calls on opening stay, and are now just extra reads. A new test in `inspector.test.tsx` shows the open inspector's Cast & Drives count and sheet following an `addActor` command without a refresh. The merge commit passed the pre-commit hook with `ATELIER_SKIP`, because the hook read wqh0's status, which comes byte for byte from master, as a hand edit. `cd app && bun run check`: 1642 tests pass across 77 files. `measure-layers`: 0 px movement, slowest 33.6 ms. Per the mission lead, nothing is pushed after `atelier merge`.
+
 ### Responses
 
 1-ik8g.1: fixed in 52c3df9
