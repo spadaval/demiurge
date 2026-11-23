@@ -15,7 +15,9 @@
  * included: an unknown tool, arguments that don't fit the schema (each
  * issue with its path), or a command or query the story refuses. Only a
  * failure of storage itself, or a stored bible that doesn't load, is an
- * error, since the model can't fix those.
+ * error, since the model can't fix those. A mutation that saved is never
+ * one: if its scene prose can't be read for the report after, every linked
+ * scene is listed as not read and the report goes on without it.
  *
  * Nothing the story keeps is kept quiet. A mutation's result carries the
  * timeline problems and other contradictions it added, what went with a
@@ -73,6 +75,7 @@ import {
   type ProseNotRead,
   type StoredProse,
   storedProse,
+  unreadProse,
 } from "./stored-prose";
 import {
   COUNT_DIRECTIONS,
@@ -1184,23 +1187,29 @@ function runMutation(
 ) {
   return executeStoryCommand(storage, command, now)
     .andThen(({ before, story: after, problems, changes }) =>
-      storedProse(storage, after).map((prose): StoryToolRun => {
-        const report = editReport(before, after, command, {
-          problems,
-          prose: prose.prose,
-        });
-        return {
-          result: {
-            ok: true,
-            tool: name,
-            kind: "mutation",
-            lines: editReportLines(after, report, { source: prose }),
-            warnings: warningsData(report, prose),
-            ...notRead(prose),
-          },
-          changes,
-        };
-      }),
+      // The edit is saved: a failed read of its prose narrows the report,
+      // and doesn't make the edit read as failed.
+      storedProse(storage, after)
+        .orElse((error) =>
+          okAsync<StoredProse, StoryStoreError>(unreadProse(after, error)),
+        )
+        .map((prose): StoryToolRun => {
+          const report = editReport(before, after, command, {
+            problems,
+            prose: prose.prose,
+          });
+          return {
+            result: {
+              ok: true,
+              tool: name,
+              kind: "mutation",
+              lines: editReportLines(after, report, { source: prose }),
+              warnings: warningsData(report, prose),
+              ...notRead(prose),
+            },
+            changes,
+          };
+        }),
     )
     .orElse((error) =>
       isRefusal(error)

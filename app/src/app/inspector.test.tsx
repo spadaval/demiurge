@@ -818,6 +818,71 @@ describe("direct edits in the World inspector", () => {
     ]);
   });
 
+  test("an edit says which scenes' prose its trace couldn't read", async () => {
+    const workspace = await setup();
+    // Confession's document is gone, and the storm's isn't valid content.
+    (await storage.documents.delete("doc-confession"))._unsafeUnwrap();
+    (
+      await storage.documents.save({
+        id: "doc-storm-night",
+        title: "The night the light failed",
+        content: [{ type: "p" }],
+        updatedAt: 2,
+      })
+    )._unsafeUnwrap();
+    const { view } = await render(workspace, "/world?at=questions");
+    await edit(view, button(view, "Choose “He wanted adventure.”"));
+    const unread = [...view.querySelectorAll(".edit-report-unread li")].map(
+      (li) => [
+        li.querySelector("a")?.textContent,
+        li.querySelector(".touch-how")?.textContent,
+      ],
+    );
+    expect(unread[0]).toEqual([
+      "2 The night the light failed",
+      expect.stringMatching(/^document doc-storm-night is not valid content: /),
+    ]);
+    expect(unread[1]).toEqual([
+      "3 Confession",
+      "document doc-confession does not exist",
+    ]);
+  });
+
+  test("an edit that saved reads as saved when its prose can't be read after", async () => {
+    const { view } = await render(await setup(), "/world?at=questions");
+    // Reads of documents fail from here, and the workspace's reconnect
+    // after the failure doesn't close the adapter, so what was saved can be
+    // read. Its fields are read-only in its type, not in memory.
+    const documents = storage.documents;
+    Object.assign(storage, {
+      close: () => {},
+      documents: {
+        ...documents,
+        load: () =>
+          errAsync({
+            kind: "failure",
+            operation: "load",
+            message: "disk gone",
+            cause: null,
+          }),
+      },
+    });
+    await edit(view, button(view, "Choose “He wanted adventure.”"));
+    Object.assign(storage, { documents });
+    expect(report(view)).toStartWith("Chose “He wanted adventure.”.");
+    expect(view.querySelector(".edit-report")?.hasAttribute("data-error")).toBe(
+      false,
+    );
+    expect(view.querySelector(".edit-report-unread")?.textContent).toContain(
+      // The workspace's reconnect after the failure is what fails last.
+      "3 Confessiondocument doc-confession could not be read: no reopen",
+    );
+    const question = (await stored()).openQuestions.find(
+      (q) => q.id === "why-leave",
+    );
+    expect(question?.answer).toBe("wanderlust");
+  });
+
   test("a refused edit says why, and changes nothing", async () => {
     const { view } = await render(await setup(), "/world?at=questions");
     // Removed behind the app's back, so the sheet still offers it.

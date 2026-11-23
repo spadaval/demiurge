@@ -20,6 +20,7 @@ import {
 } from "react";
 import type { StoryCommand } from "~/story/commands";
 import type { StoryStoreError } from "~/story/store";
+import type { ProseNotRead } from "~/story/stored-prose";
 import type { EditWarnings } from "~/story/tools";
 import { describeStorageError } from "./environment";
 import { useServices } from "./hooks";
@@ -34,6 +35,11 @@ export type EditOutcome =
       readonly kind: "saved";
       readonly done: string;
       readonly warnings: EditWarnings | null;
+      /**
+       * Linked scenes whose prose the trace couldn't read, so may still
+       * state what changed though no suspect names them.
+       */
+      readonly proseNotRead: readonly ProseNotRead[];
     }
   /** The story refused the command; nothing changed. */
   | {
@@ -109,6 +115,7 @@ export function BibleEditsProvider({
         kind: "saved",
         done,
         warnings: answer.kind === "mutation" ? answer.warnings : null,
+        proseNotRead: answer.proseNotRead ?? [],
       });
       return true;
     },

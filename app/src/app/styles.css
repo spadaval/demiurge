@@ -2498,6 +2498,10 @@ a {
   color: var(--ink-2);
 }
 
+.edit-report-unread {
+  margin-top: 6px;
+}
+
 .edit-report-more {
   display: block;
   margin-top: 4px;

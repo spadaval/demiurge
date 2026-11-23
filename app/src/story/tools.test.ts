@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { ResultAsync } from "neverthrow";
+import { errAsync, type ResultAsync } from "neverthrow";
 import type { ToolCall } from "../llm/types";
 import { createMemoryStorage } from "../storage/memory";
 import type { StorageAdapter, StoredDocument } from "../storage/types";
@@ -689,6 +689,43 @@ describe("runStoryCommand", () => {
     expect(direct.result).toEqual(byTool);
     expect(await value(loadStory(storage))).toEqual(toolStory);
     expect(direct.changes.length).toBeGreaterThan(0);
+  });
+
+  test("an edit that saved stays saved when its prose can't be read after", async () => {
+    const failing: StorageAdapter = {
+      ...storage,
+      documents: {
+        ...storage.documents,
+        load: () =>
+          errAsync({
+            kind: "failure",
+            operation: "load",
+            message: "disk gone",
+            cause: null,
+          }),
+      },
+    };
+    const { result } = await value(
+      runStoryCommand(failing, {
+        type: "answerOpenQuestion",
+        id: "why-leave",
+        candidateId: "wanderlust",
+      }),
+    );
+    expect(result.ok && result.kind).toBe("mutation");
+    const unread = result.ok ? result.proseNotRead : undefined;
+    expect(unread?.map((n) => [n.scene, n.reason])).toEqual([
+      ["arrival", "unreadable"],
+      ["storm-night", "unreadable"],
+      ["confession", "unreadable"],
+    ]);
+    expect(unread?.[0]?.message).toBe(
+      "document doc-arrival could not be read: disk gone",
+    );
+    const story = await value(loadStory(storage));
+    expect(story.openQuestions.find((q) => q.id === "why-leave")?.answer).toBe(
+      "wanderlust",
+    );
   });
 
   test("a refused command is a refusal, as for a tool call", async () => {

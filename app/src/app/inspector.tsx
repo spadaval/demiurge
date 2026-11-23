@@ -25,6 +25,7 @@ import { deliberateGaps, type Gap, storyGaps } from "~/story/gaps";
 import { membershipsInStoryOrder } from "~/story/order";
 import { formatRef, parseRef } from "~/story/refs";
 import { describePosition } from "~/story/render";
+import type { ProseNotRead } from "~/story/stored-prose";
 import {
   type Actor,
   type Candidate,
@@ -703,6 +704,9 @@ function EditReport() {
           {outcome.kind === "saved" && outcome.warnings !== null && (
             <EditWarningLines warnings={outcome.warnings} />
           )}
+          {outcome.kind === "saved" && outcome.proseNotRead.length > 0 && (
+            <ProseNotReadLines notRead={outcome.proseNotRead} />
+          )}
         </section>
       )}
     </div>
@@ -776,6 +780,26 @@ function EditWarningLines({ warnings: w }: { warnings: EditWarnings }) {
         </li>
       )}
     </ul>
+  );
+}
+
+/**
+ * Scenes whose prose the edit's trace couldn't read: they may still state
+ * the old version though no suspect names them.
+ */
+function ProseNotReadLines({ notRead }: { notRead: readonly ProseNotRead[] }) {
+  return (
+    <div className="edit-report-unread">
+      Not traced, so may still state the old version:
+      <ul className="edit-report-suspects">
+        {notRead.map((n) => (
+          <li key={`${n.scene}/${n.documentId}`}>
+            <RecordRef subject={{ kind: "scene", id: n.scene }} record />
+            <span className="touch-how">{n.message}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

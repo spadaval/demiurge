@@ -25,7 +25,11 @@ import type { Prose } from "./trace";
 export type ProseNotRead = {
   scene: string;
   documentId: string;
-  reason: "missing" | "invalid_content";
+  /**
+   * `unreadable` when storage failed reading the documents: after an edit
+   * has saved, that is reported here rather than as the edit's failure.
+   */
+  reason: "missing" | "invalid_content" | "unreadable";
   message: string;
 };
 
@@ -149,4 +153,40 @@ export function storedProse(
       },
     };
   });
+}
+
+const storageProblem = (error: StorageError) =>
+  error.kind === "failure"
+    ? error.message
+    : error.kind === "read_only"
+      ? "storage is read-only"
+      : `document ${error.id} does not exist`;
+
+/**
+ * Prose for `story` when storage failed reading it: nothing read, and every
+ * linked scene listed as not read, with why. A mutation's report uses it,
+ * since its edit is saved whether or not the prose can be traced after.
+ */
+export function unreadProse(story: Story, error: StorageError): StoredProse {
+  const notRead = story.scenes.flatMap((scene): ProseNotRead[] =>
+    scene.documentId === undefined
+      ? []
+      : [
+          {
+            scene: scene.id,
+            documentId: scene.documentId,
+            reason: "unreadable",
+            message: `document ${scene.documentId} could not be read: ${storageProblem(error)}`,
+          },
+        ],
+  );
+  return {
+    prose: [],
+    notRead,
+    shared: [],
+    place: () => undefined,
+    proseLine: (scene) =>
+      `prose: ${notRead.find((n) => n.scene === scene.id)?.message ?? "no document linked (not written yet)"}`,
+    locate: (scene) => `scene:${scene} prose`,
+  };
 }
