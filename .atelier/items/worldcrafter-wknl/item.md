@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-wknl
 title: 'Writer notes: decide their representation and keep them out of model context'
-status: in_review
+status: approved
 mission: worldcrafter-3z9j
 labels: []
 priority: medium
