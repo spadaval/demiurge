@@ -3,7 +3,7 @@ schema: atelier.mission
 schema_version: 3
 id: worldcrafter-mtkn
 title: Night Edition bible inspector and scoped agent conversation
-status: open
+status: done
 labels:
 - ui
 - night-edition
