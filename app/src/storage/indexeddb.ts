@@ -4,17 +4,20 @@ import {
   type FailureContext,
   failure,
   notFound,
+  restoreContext,
 } from "./internal";
-import type {
-  AnnotationCollection,
-  AnnotationRecord,
-  Collection,
-  CollectionName,
-  Snapshot,
-  SnapshotCollection,
-  SnapshotInfo,
-  StorageAdapter,
-  StorageError,
+import {
+  type AnnotationCollection,
+  type AnnotationRecord,
+  COLLECTION_NAMES,
+  type Collection,
+  type CollectionName,
+  type Snapshot,
+  type SnapshotCollection,
+  type SnapshotInfo,
+  type StorageAdapter,
+  type StorageError,
+  type WorldRecords,
 } from "./types";
 
 /**
@@ -397,6 +400,89 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         },
       );
     },
+    dump: () =>
+      runIn(
+        { operation: "list" },
+        [...COLLECTION_NAMES, SNAPSHOT_CONTENT],
+        "readonly",
+        (tx) => {
+          const all = (store: StoreName) => tx.objectStore(store).getAll();
+          const requests = {
+            documents: all("documents"),
+            worldEntries: all("worldEntries"),
+            annotations: all("annotations"),
+            requests: all("requests"),
+            snapshots: all("snapshots"),
+            snapshotContent: all(SNAPSHOT_CONTENT),
+            outlines: all("outlines"),
+            timelines: all("timelines"),
+            storyRecords: all("storyRecords"),
+          };
+          return () => {
+            const read = <T>(request: IDBRequest) => request.result as T[];
+            return {
+              records: {
+                documents: read(requests.documents),
+                worldEntries: read(requests.worldEntries),
+                annotations: read(requests.annotations),
+                requests: read(requests.requests),
+                outlines: read(requests.outlines),
+                timelines: read(requests.timelines),
+                storyRecords: read(requests.storyRecords),
+              } as Omit<WorldRecords, "snapshots">,
+              infos: read<SnapshotInfo>(requests.snapshots),
+              contents: read<SnapshotContentRecord>(requests.snapshotContent),
+            };
+          };
+        },
+      ).andThen(({ records, infos, contents }) => {
+        const byId = new Map(contents.map((record) => [record.id, record]));
+        const snapshots: Snapshot[] = [];
+        for (const info of infos) {
+          const record = byId.get(info.id);
+          if (record === undefined) {
+            return errAsync(
+              failure(
+                { operation: "list", collection: "snapshots", id: info.id },
+                new Error(
+                  "snapshot metadata exists but its content is missing",
+                ),
+              ),
+            );
+          }
+          snapshots.push({ ...info, content: record.content });
+        }
+        return okAsync<WorldRecords>({ ...records, snapshots });
+      }),
+    restore: (records) =>
+      runIn(
+        restoreContext(records),
+        [...COLLECTION_NAMES, SNAPSHOT_CONTENT],
+        "readwrite",
+        (tx) => {
+          const putAll = (store: StoreName, list: readonly unknown[]) => {
+            const target = tx.objectStore(store);
+            for (const record of list) target.put(record);
+          };
+          putAll("documents", records.documents);
+          putAll("worldEntries", records.worldEntries);
+          putAll("annotations", records.annotations);
+          putAll("requests", records.requests);
+          putAll("outlines", records.outlines);
+          putAll("timelines", records.timelines);
+          putAll("storyRecords", records.storyRecords);
+          // An explicit key above the key generator's moves it past that
+          // key, so later snapshot saves get higher IDs.
+          for (const { content, ...info } of records.snapshots) {
+            tx.objectStore("snapshots").put(info);
+            tx.objectStore(SNAPSHOT_CONTENT).put({
+              id: info.id,
+              content,
+            } satisfies SnapshotContentRecord);
+          }
+          return () => undefined;
+        },
+      ),
     close: () => db.close(),
   };
 }
