@@ -12,6 +12,7 @@ import type { Environment } from "./environment";
 import type { Generation } from "./generation";
 import type { LayerSource } from "./layers";
 import type { Manuscript } from "./manuscript";
+import type { StoryBible } from "./story";
 import type { WorldIndex } from "./world";
 
 /** Everything the app's views use, created once at startup. */
@@ -21,6 +22,8 @@ export interface AppServices {
   readonly world: WorldStore;
   readonly worldIndex: WorldIndex;
   readonly manuscript: Manuscript;
+  /** The story bible, live: the scene apparatus and the stamp read it. */
+  readonly story: StoryBible;
   readonly layers: LayerStore;
   readonly layerSource: LayerSource;
   readonly environment: Environment;

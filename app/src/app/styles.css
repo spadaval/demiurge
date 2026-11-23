@@ -922,7 +922,12 @@ a {
   );
 }
 
-[data-layer-world] :is(.lm-entity, .lm-suggest) {
+/* Words naming a story-bible record a World note is about. */
+.lm-record {
+  --line: linear-gradient(var(--ink-3), var(--ink-3));
+}
+
+[data-layer-world] :is(.lm-entity, .lm-suggest, .lm-record) {
   --line-w: 100%;
 }
 

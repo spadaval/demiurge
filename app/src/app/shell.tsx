@@ -13,6 +13,7 @@ import {
   shortcutLabel,
   shortcutOf,
 } from "~/generate/shortcuts";
+import { bibleScene } from "~/layers/bible";
 import { LAYER_LABELS, LAYERS, layersForScene, mentions } from "~/layers/model";
 import { createStore } from "~/workspace/store";
 import type { CommandError } from "~/workspace/workspace";
@@ -214,13 +215,37 @@ function TabStrip({
   );
 }
 
+/**
+ * When the scene is: from the story bible when the document is a bible
+ * scene's prose and the bible places it, else from the outline's timeline.
+ */
 function StoryTimeStamp({ active }: { active: string | null }) {
-  const { manuscript } = useServices();
+  const { manuscript, story } = useServices();
   const state = useStore(manuscript.state);
-  if (!active || state.kind !== "ready") return null;
-  const scene = state.view.scenes.get(active);
-  if (!scene) return null;
-  if (!scene.time) {
+  const storyState = useStore(story.state);
+  const bible = useMemo(
+    () =>
+      active !== null && storyState.kind === "ready"
+        ? bibleScene(storyState.story, active)
+        : null,
+    [storyState, active],
+  );
+  if (!active) return null;
+  const scene =
+    state.kind === "ready" ? state.view.scenes.get(active) : undefined;
+  if (bible?.stamp) {
+    return (
+      <p className="stamp">
+        <span className="visually-hidden">Story time: </span>
+        {bible.stamp.text}
+        {bible.stamp.inferred && (
+          <span className="stamp-inferred">inferred</span>
+        )}
+      </p>
+    );
+  }
+  if (!bible && !scene) return null;
+  if (!scene?.time) {
     return (
       <p className="stamp stamp-undated">
         <span className="visually-hidden">Story time: </span>Not yet placed in

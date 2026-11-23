@@ -9,6 +9,7 @@ import { createGeneration } from "./generation";
 import type { AppServices } from "./hooks";
 import type { LayerSource } from "./layers";
 import { createAppManuscript } from "./manuscript";
+import { createStoryBible } from "./story";
 import { createAppWorldStore, createWorldIndex } from "./world";
 
 export interface AppServicesInput {
@@ -29,18 +30,26 @@ export async function createAppServices(
   const world = createAppWorldStore(workspace);
   const worldIndex = createWorldIndex(world);
   const manuscript = createAppManuscript(workspace, world);
-  await Promise.all([worldIndex.refresh(), manuscript.refresh()]);
+  const story = createStoryBible(
+    createConnectedStorage(workspace.connection, workspace.readOnly),
+  );
+  await Promise.all([
+    worldIndex.refresh(),
+    manuscript.refresh(),
+    story.refresh(),
+  ]);
   return {
     workspace,
     world,
     worldIndex,
     manuscript,
+    story,
     layers: createLayerStore(keyValue, workspace.worldId),
     layerSource: input.layerSource,
     environment: input.environment,
     generation: createGeneration({
       workspace,
-      storage: createConnectedStorage(workspace.connection, workspace.readOnly),
+      storage: story.storage,
       world,
       manuscript,
       profile: createProfileStore(keyValue, workspace.worldId),
