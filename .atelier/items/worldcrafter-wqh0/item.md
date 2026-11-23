@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-wqh0
 title: Bible inspector views in Night Edition rail (Cast, Drives, Open Questions, Timeline, Counts, Reader-Order, Contradictions)
-status: in_review
+status: changes_requested
 mission: worldcrafter-mtkn
 labels:
 - ui
