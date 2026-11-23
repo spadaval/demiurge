@@ -110,6 +110,7 @@ export const emptyWorld: WorldRecords = {
   outlines: [],
   timelines: [],
   storyRecords: [],
+  agentRecords: [],
 };
 
 async function value<T>(result: ResultAsync<T, StorageError>): Promise<T> {
@@ -295,6 +296,40 @@ export function describeStorageContract(
       const loaded = await value(storage.documents.load("doc1"));
       expect(loaded).toEqual(document);
       expect(loaded.content).toStrictEqual(contentFixture);
+    });
+
+    describeCollection(
+      "agentRecords",
+      () => storage.agentRecords,
+      (id, version) => ({
+        id,
+        sessionId: "s1",
+        kind: "step",
+        data: { request: { messages: [] }, version },
+        updatedAt: version,
+      }),
+    );
+
+    test("agent records can be listed for one session", async () => {
+      const record = (id: string, sessionId: string) => ({
+        id: `${sessionId}/${id}`,
+        sessionId,
+        kind: "step",
+        data: { id },
+        updatedAt: 1,
+      });
+      await value(storage.agentRecords.save(record("step/2", "s1")));
+      await value(storage.agentRecords.save(record("session", "s2")));
+      await value(storage.agentRecords.save(record("session", "s1")));
+      await value(storage.agentRecords.save(record("step/1", "s1")));
+      expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
+        record("session", "s1"),
+        record("step/1", "s1"),
+        record("step/2", "s1"),
+      ]);
+      expect(await value(storage.agentRecords.listForSession("none"))).toEqual(
+        [],
+      );
     });
 
     test("stored records are not shared with the caller", async () => {
@@ -525,6 +560,47 @@ export function describeStorageContract(
         ]);
       });
 
+      test("saves agent records together, or none of them", async () => {
+        const agentRecord = (id: string, data: JsonValue) => ({
+          id: `s1/${id}`,
+          sessionId: "s1",
+          kind: id,
+          data,
+          updatedAt: 4,
+        });
+        await value(
+          storage.batch([
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("session", { steps: 1 }),
+            },
+            { kind: "saveAgentRecord", record: agentRecord("step", { n: 1 }) },
+          ]),
+        );
+        const failure = await error(
+          storage.batch([
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("session", { steps: 2 }),
+            },
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("step", unstorable),
+            },
+          ]),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "save",
+          collection: "agentRecords",
+          id: "s1/session",
+        });
+        expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
+          agentRecord("session", { steps: 1 }),
+          agentRecord("step", { n: 1 }),
+        ]);
+      });
+
       test("an empty batch succeeds", async () => {
         expect(await value(storage.batch([]))).toEqual([]);
       });
@@ -596,6 +672,15 @@ export function describeStorageContract(
             updatedAt: 1,
           },
           { id: "story", kind: "story", data: { premise: "p" }, updatedAt: 1 },
+        ],
+        agentRecords: [
+          {
+            id: "s1/session",
+            sessionId: "s1",
+            kind: "session",
+            data: { role: "plan" },
+            updatedAt: 10,
+          },
         ],
       };
 
@@ -669,6 +754,7 @@ export function describeStorageContract(
         await error(storage.documents.load("d")),
         await error(storage.worldEntries.list()),
         await error(storage.annotations.listForDocument("d")),
+        await error(storage.agentRecords.listForSession("s")),
         await error(storage.requests.delete("d")),
         await error(storage.dump()),
         await error(storage.restore({ ...emptyWorld, documents: [document] })),

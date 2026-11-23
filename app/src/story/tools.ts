@@ -25,7 +25,14 @@
  * prose couldn't be read.
  */
 
-import { errAsync, err as fail, ok, okAsync, type Result } from "neverthrow";
+import {
+  errAsync,
+  err as fail,
+  ok,
+  okAsync,
+  type Result,
+  type ResultAsync,
+} from "neverthrow";
 import { parseToolArguments } from "../llm/parse";
 import type {
   JsonValue,
@@ -56,7 +63,12 @@ import {
 } from "./queries";
 import { formatRef } from "./refs";
 import { RENDER_SECTION_NAMES } from "./render";
-import { executeStoryCommand, loadStory, type StoryStoreError } from "./store";
+import {
+  executeStoryCommand,
+  loadStory,
+  type StoryRecordChange,
+  type StoryStoreError,
+} from "./store";
 import {
   type ProseNotRead,
   type StoredProse,
@@ -1072,6 +1084,15 @@ const invalidArguments = (tool: string, issues: Issue[]) =>
     issues,
   });
 
+/** A tool's result, and the story records it changed (none for a query). */
+export type StoryToolRun = {
+  result: StoryToolResult;
+  changes: readonly StoryRecordChange[];
+};
+
+const answered = (result: StoryToolResult) =>
+  okAsync<StoryToolRun, StoryStoreError>({ result, changes: [] });
+
 /**
  * Runs the story tool `name` with `args` against the world in `storage`.
  * A mutation is saved before this resolves; `now` stamps what it wrote.
@@ -1081,10 +1102,20 @@ export function executeStoryTool(
   name: string,
   args: unknown,
   now: number = Date.now(),
-) {
+): ResultAsync<StoryToolResult, StoryStoreError> {
+  return runStoryTool(storage, name, args, now).map(({ result }) => result);
+}
+
+/** `executeStoryTool`, with the records a mutation changed. */
+export function runStoryTool(
+  storage: StorageAdapter,
+  name: string,
+  args: unknown,
+  now: number = Date.now(),
+): ResultAsync<StoryToolRun, StoryStoreError> {
   const tool = BY_NAME.get(name);
   if (tool === undefined) {
-    return okAsync<StoryToolResult, StoryStoreError>(
+    return answered(
       refusal(name, {
         kind: "unknown_tool",
         message: `There is no story tool ${name}. The tools are ${STORY_TOOLS.map((t) => t.name).join(", ")}.`,
@@ -1092,11 +1123,7 @@ export function executeStoryTool(
     );
   }
   const parsed = tool.parameters.parse(args, "");
-  if (parsed.isErr()) {
-    return okAsync<StoryToolResult, StoryStoreError>(
-      invalidArguments(name, parsed.error),
-    );
-  }
+  if (parsed.isErr()) return answered(invalidArguments(name, parsed.error));
   const { command, run } = tool;
   if (command !== undefined) {
     return runMutation(storage, name, command(parsed.value), now);
@@ -1108,21 +1135,28 @@ export function executeStoryTool(
     (tool.readsProse
       ? storedProse(storage, story).map((prose) => prose)
       : okAsync(undefined)
-    ).map((prose): StoryToolResult => {
+    ).map((prose): StoryToolRun => {
       const answer = run({ story, prose }, parsed.value);
       if (answer.isErr()) {
         const { kind, message } = answer.error;
-        return kind === "invalid"
-          ? invalidArguments(name, [{ path: "", message }])
-          : refusal(name, { kind: "refused", message });
+        return {
+          result:
+            kind === "invalid"
+              ? invalidArguments(name, [{ path: "", message }])
+              : refusal(name, { kind: "refused", message }),
+          changes: [],
+        };
       }
       return {
-        ok: true,
-        tool: name,
-        kind: "query",
-        lines: answer.value.lines,
-        data: toJson(answer.value.data),
-        ...notRead(prose),
+        result: {
+          ok: true,
+          tool: name,
+          kind: "query",
+          lines: answer.value.lines,
+          data: toJson(answer.value.data),
+          ...notRead(prose),
+        },
+        changes: [],
       };
     }),
   );
@@ -1135,38 +1169,42 @@ function runMutation(
   now: number,
 ) {
   return executeStoryCommand(storage, command, now)
-    .andThen(({ before, story: after, problems }) =>
-      storedProse(storage, after).map((prose): StoryToolResult => {
+    .andThen(({ before, story: after, problems, changes }) =>
+      storedProse(storage, after).map((prose): StoryToolRun => {
         const report = editReport(before, after, command, {
           problems,
           prose: prose.prose,
         });
         return {
-          ok: true,
-          tool: name,
-          kind: "mutation",
-          lines: editReportLines(after, report, { source: prose }),
-          warnings: warningsData(report, prose),
-          ...notRead(prose),
+          result: {
+            ok: true,
+            tool: name,
+            kind: "mutation",
+            lines: editReportLines(after, report, { source: prose }),
+            warnings: warningsData(report, prose),
+            ...notRead(prose),
+          },
+          changes,
         };
       }),
     )
     .orElse((error) =>
       isRefusal(error)
-        ? okAsync<StoryToolResult, StoryStoreError>(
+        ? answered(
             refusal(name, {
               kind: "refused",
               code: error.kind,
               message: error.message,
             }),
           )
-        : errAsync<StoryToolResult, StoryStoreError>(error),
+        : errAsync<StoryToolRun, StoryStoreError>(error),
     );
 }
 
 /**
- * Runs a model's tool call and gives the tool turn answering it. Arguments
- * that aren't a JSON object are refused as `invalid_arguments`.
+ * Runs a model's tool call and gives the tool turn answering it, and the
+ * story records it changed. Arguments that aren't a JSON object are refused
+ * as `invalid_arguments`.
  */
 export function executeStoryToolCall(
   storage: StorageAdapter,
@@ -1175,18 +1213,19 @@ export function executeStoryToolCall(
 ) {
   const name = call.function.name;
   const args = parseToolArguments(call);
-  const result = args.isErr()
-    ? okAsync<StoryToolResult, StoryStoreError>(
+  const run = args.isErr()
+    ? answered(
         invalidArguments(name, [{ path: "", message: args.error.message }]),
       )
-    : executeStoryTool(storage, name, args.value, now);
-  return result.map(
-    (done): { result: StoryToolResult; message: ToolResultMessage } => ({
-      result: done,
+    : runStoryTool(storage, name, args.value, now);
+  return run.map(
+    ({ result, changes }): StoryToolRun & { message: ToolResultMessage } => ({
+      result,
+      changes,
       message: {
         role: "tool",
         tool_call_id: call.id,
-        content: storyToolResultContent(done),
+        content: storyToolResultContent(result),
       },
     }),
   );

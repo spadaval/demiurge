@@ -282,6 +282,54 @@ describe("IndexedDB persistence", () => {
     reopened.close();
   });
 
+  test("upgrading from version 2 keeps story records and adds agent records", async () => {
+    const factory = new IDBFactory();
+    const record = {
+      id: "actor/mara",
+      kind: "actor",
+      data: { id: "mara", name: "Mara" },
+      updatedAt: 2,
+    };
+    // The database as a version 2 release left it, written without the adapter.
+    await new Promise<void>((resolve, reject) => {
+      const request2 = factory.open("worldcrafter", 2);
+      request2.onupgradeneeded = (event) =>
+        upgrade(request2.result, event.oldVersion, 2);
+      request2.onsuccess = () => {
+        const db = request2.result;
+        expect([...db.objectStoreNames]).not.toContain("agentRecords");
+        const tx = db.transaction(["storyRecords"], "readwrite");
+        tx.objectStore("storyRecords").put(record);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onabort = () => reject(tx.error);
+      };
+      request2.onerror = () => reject(request2.error);
+    });
+
+    const upgraded = await open(factory);
+    expect((await upgraded.storyRecords.list())._unsafeUnwrap()).toEqual([
+      record,
+    ]);
+    const step = {
+      id: "s1/step/000001",
+      sessionId: "s1",
+      kind: "step",
+      data: { request: { messages: [] } },
+      updatedAt: 3,
+    };
+    (await upgraded.agentRecords.save(step))._unsafeUnwrap();
+    upgraded.close();
+
+    const reopened = await open(factory);
+    expect(
+      (await reopened.agentRecords.listForSession("s1"))._unsafeUnwrap(),
+    ).toEqual([step]);
+    reopened.close();
+  });
+
   test("opening a database from a newer schema fails as a Result", async () => {
     const factory = new IDBFactory();
     await new Promise<void>((resolve, reject) => {

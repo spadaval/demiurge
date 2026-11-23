@@ -323,9 +323,22 @@ function inTellingOrder(
 }
 
 /** What a save wrote: the IDs of the records it saved and deleted. */
+/**
+ * A record a save changed, as storage held it before (null: it is new) and
+ * holds it after (null: it was deleted).
+ */
+export type StoryRecordChange = {
+  readonly id: string;
+  readonly kind: string;
+  readonly before: JsonValue | null;
+  readonly after: JsonValue | null;
+};
+
 export interface StorySaved {
   readonly saved: readonly string[];
   readonly deleted: readonly string[];
+  /** Each record written or deleted, in the order of the writes. */
+  readonly changes: readonly StoryRecordChange[];
 }
 
 /**
@@ -377,16 +390,35 @@ function saveNow(storage: StorageAdapter, story: Story, now: number) {
     .asyncAndThen((next) =>
       storage.storyRecords
         .list()
-        .map((stored) => storyWrites(stored, next, now)),
+        .map((stored) => ({ stored, writes: storyWrites(stored, next, now) })),
     )
-    .andThen((writes) => {
+    .andThen(({ stored, writes }) => {
       const saved = writes.flatMap((write) =>
         write.kind === "saveStoryRecord" ? [write.record.id] : [],
       );
       const deleted = writes.flatMap((write) =>
         write.kind === "deleteStoryRecord" ? [write.id] : [],
       );
-      const done: StorySaved = { saved, deleted };
+      const old = new Map(stored.map((record) => [record.id, record]));
+      const changes = writes.flatMap((write): StoryRecordChange[] => {
+        if (write.kind === "saveStoryRecord") {
+          const { id, kind, data } = write.record;
+          return [{ id, kind, before: old.get(id)?.data ?? null, after: data }];
+        }
+        if (write.kind === "deleteStoryRecord") {
+          const was = old.get(write.id);
+          return [
+            {
+              id: write.id,
+              kind: was?.kind ?? "",
+              before: was?.data ?? null,
+              after: null,
+            },
+          ];
+        }
+        return [];
+      });
+      const done: StorySaved = { saved, deleted, changes };
       return writes.length === 0
         ? okAsync(done)
         : storage.batch(writes).map(() => done);
@@ -411,8 +443,14 @@ export function saveStory(
   return serialised(storage, () => saveNow(storage, story, now), onThrow);
 }
 
-/** A command's change, with the bible as it was before it. */
-export type StoryExecuted = StoryChange & { before: Story };
+/**
+ * A command's change, with the bible as it was before it and the records the
+ * save changed.
+ */
+export type StoryExecuted = StoryChange & {
+  before: Story;
+  changes: readonly StoryRecordChange[];
+};
 
 /**
  * Applies `command` to the stored bible and saves the result, as one step
@@ -445,7 +483,11 @@ function saveAfter(
     return errAsync<StoryExecuted, StoryStoreError>(change.error);
   }
   return saveNow(storage, change.value.story, now).map(
-    (): StoryExecuted => ({ ...change.value, before: story }),
+    ({ changes }): StoryExecuted => ({
+      ...change.value,
+      before: story,
+      changes,
+    }),
   );
 }
 

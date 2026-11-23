@@ -7,6 +7,7 @@ import {
   restoreContext,
 } from "./internal";
 import {
+  type AgentRecordCollection,
   type AnnotationCollection,
   type AnnotationRecord,
   COLLECTION_NAMES,
@@ -17,6 +18,7 @@ import {
   type SnapshotInfo,
   type StorageAdapter,
   type StorageError,
+  type StoredAgentRecord,
   type WorldRecords,
 } from "./types";
 
@@ -25,11 +27,13 @@ import {
  * moves version N-1 data forward. Never edit an existing step.
  *
  * 1: documents, world entries, annotations, requests, snapshots, outlines,
- *    timelines. 2: story-bible records (`storyRecords`).
+ *    timelines. 2: story-bible records (`storyRecords`). 3: story agent
+ *    sessions (`agentRecords`).
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 const DOCUMENT_INDEX = "byDocument";
+const SESSION_INDEX = "bySession";
 
 /**
  * Snapshot content lives apart from snapshot metadata so listing history
@@ -78,6 +82,12 @@ export function upgrade(
   }
   if (step(2)) {
     db.createObjectStore("storyRecords", { keyPath: "id" });
+  }
+  if (step(3)) {
+    db.createObjectStore("agentRecords", { keyPath: "id" }).createIndex(
+      SESSION_INDEX,
+      "sessionId",
+    );
   }
 }
 
@@ -255,6 +265,17 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
       ),
   };
 
+  const agentRecords: AgentRecordCollection = {
+    ...keyed<StoredAgentRecord>("agentRecords", (record) => record.id),
+    // The index orders equal session IDs by primary key, so this is by ID.
+    listForSession: (sessionId) =>
+      run<StoredAgentRecord[]>(
+        { operation: "list", collection: "agentRecords", id: sessionId },
+        "readonly",
+        (store) => store.index(SESSION_INDEX).getAll(sessionId),
+      ),
+  };
+
   const snapshots: SnapshotCollection = {
     save: (input) => {
       const info: Omit<SnapshotInfo, "id"> = {
@@ -337,6 +358,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
     outlines: keyed("outlines", (record) => record.id),
     timelines: keyed("timelines", (record) => record.id),
     storyRecords: keyed("storyRecords", (record) => record.id),
+    agentRecords,
     batch: (writes) => {
       const stores = new Set<StoreName>();
       for (const write of writes) {
@@ -352,6 +374,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         ) {
           stores.add("storyRecords");
         }
+        if (write.kind === "saveAgentRecord") stores.add("agentRecords");
       }
       // A transaction needs at least one store.
       if (stores.size === 0) return okAsync([]);
@@ -393,6 +416,9 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
               case "deleteStoryRecord":
                 tx.objectStore("storyRecords").delete(write.id);
                 break;
+              case "saveAgentRecord":
+                tx.objectStore("agentRecords").put(write.record);
+                break;
             }
           }
           return () =>
@@ -417,6 +443,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
             outlines: all("outlines"),
             timelines: all("timelines"),
             storyRecords: all("storyRecords"),
+            agentRecords: all("agentRecords"),
           };
           return () => {
             const read = <T>(request: IDBRequest) => request.result as T[];
@@ -429,6 +456,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
                 outlines: read(requests.outlines),
                 timelines: read(requests.timelines),
                 storyRecords: read(requests.storyRecords),
+                agentRecords: read(requests.agentRecords),
               } as Omit<WorldRecords, "snapshots">,
               infos: read<SnapshotInfo>(requests.snapshots),
               contents: read<SnapshotContentRecord>(requests.snapshotContent),
@@ -471,6 +499,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
           putAll("outlines", records.outlines);
           putAll("timelines", records.timelines);
           putAll("storyRecords", records.storyRecords);
+          putAll("agentRecords", records.agentRecords);
           // An explicit key above the key generator's moves it past that
           // key, so later snapshot saves get higher IDs.
           for (const { content, ...info } of records.snapshots) {

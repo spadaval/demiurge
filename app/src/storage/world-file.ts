@@ -8,8 +8,8 @@
  *
  *     {
  *       "format": "demiurge-world",
- *       "version": 1,
- *       "records": { "documents": [...], ..., "storyRecords": [...] }
+ *       "version": 2,
+ *       "records": { "documents": [...], ..., "agentRecords": [...] }
  *     }
  *
  * `records` has one array per collection (`COLLECTION_NAMES`), in the shape
@@ -40,6 +40,7 @@ import {
   type SnapshotReason,
   type StorageAdapter,
   type StorageError,
+  type StoredAgentRecord,
   type StoredDocument,
   type StoredOutline,
   type StoredRequest,
@@ -50,7 +51,17 @@ import {
 } from "./types";
 
 export const WORLD_FILE_FORMAT = "demiurge-world";
-export const WORLD_FILE_VERSION = 1;
+/**
+ * 1: every collection up to `storyRecords`. 2: adds `agentRecords`; a version
+ * 1 file reads as having none.
+ */
+export const WORLD_FILE_VERSION = 2;
+
+/** The collections a file of each version holds. */
+const VERSION_COLLECTIONS: Record<number, readonly CollectionName[]> = {
+  1: COLLECTION_NAMES.filter((name) => name !== "agentRecords"),
+  2: COLLECTION_NAMES,
+};
 
 /** A world file that can't be read: `path` locates the problem, e.g. `records.documents[2].title`. */
 export type WorldFileError =
@@ -119,12 +130,16 @@ export function parseWorldFile(
   if (!isRecord(value) || value.format !== WORLD_FILE_FORMAT) {
     return invalid("format", `expected "${WORLD_FILE_FORMAT}"`);
   }
-  if (value.version !== WORLD_FILE_VERSION) {
+  const names =
+    typeof value.version === "number"
+      ? VERSION_COLLECTIONS[value.version]
+      : undefined;
+  if (names === undefined) {
     return err({ kind: "unsupported_world_version", version: value.version });
   }
   const keys = checkKeys(value, ["format", "version", "records"], "");
   if (keys.isErr()) return err(keys.error);
-  return checkRecords(value.records);
+  return checkRecords(value.records, names);
 }
 
 // ------------------------------------------------------------------ checks
@@ -311,6 +326,16 @@ const COLLECTIONS: {
     }),
     key: (record) => record.id,
   },
+  agentRecords: {
+    check: shape<StoredAgentRecord>({
+      id: string,
+      sessionId: string,
+      kind: string,
+      data: json,
+      updatedAt: time,
+    }),
+    key: (record) => record.id,
+  },
 };
 
 function checkCollection<Name extends CollectionName>(
@@ -335,12 +360,20 @@ function checkCollection<Name extends CollectionName>(
   return records;
 }
 
-function checkRecords(value: unknown): Check<WorldRecords> {
+/** The records of a file holding the collections `names`; the rest are empty. */
+function checkRecords(
+  value: unknown,
+  names: readonly CollectionName[],
+): Check<WorldRecords> {
   if (!isRecord(value)) return invalid("records", "expected an object");
-  const keys = checkKeys(value, COLLECTION_NAMES, "records");
+  const keys = checkKeys(value, names, "records");
   if (keys.isErr()) return err(keys.error);
   const records: Partial<Record<CollectionName, unknown[]>> = {};
   for (const name of COLLECTION_NAMES) {
+    if (!names.includes(name)) {
+      records[name] = [];
+      continue;
+    }
     const checked = checkCollection(name, value[name]);
     if (checked.isErr()) return err(checked.error);
     records[name] = checked.value;
