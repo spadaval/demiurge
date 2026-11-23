@@ -1693,6 +1693,437 @@ a {
   }
 }
 
+/* ── World inspector ──────────────────────────────────────────────────── */
+/* DESIGN.md, World Inspector, Ledger and References: the story bible as
+   ledgers in hairlines, all apparatus, no fills and no cards. */
+
+.inspect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inspect-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 20px;
+  font-size: 14px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.inspect-row:hover,
+.inspect-row[aria-current="page"] {
+  color: var(--ink);
+}
+
+.inspect-row:focus-visible {
+  outline-offset: -3px;
+}
+
+.inspect-row[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--ink);
+}
+
+.inspect-count {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.time {
+  color: var(--time);
+}
+
+/* An `ink-3` phrase where the bible has nothing yet: not an error. */
+.gap {
+  color: var(--ink-3);
+}
+
+.ref {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.ref:hover {
+  text-decoration-color: var(--ink);
+}
+
+.ref-removed {
+  color: var(--ink-3);
+}
+
+.inspector-head {
+  margin-bottom: 8px;
+}
+
+.inspector-kind {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.inspector-authority {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sheet-title {
+  margin: 0;
+  font: 500 21px / 1.25 var(--font-apparatus);
+  color: var(--ink);
+}
+
+.inspector-lede {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* Ledger: rows between hairlines across the prose, gutter and gloss
+   columns; each row's number hangs in the left margin. */
+.ledger {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  max-width: 1000px;
+}
+
+.ledger-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.ledger-label h2 {
+  margin: 0;
+  font: inherit;
+}
+
+.ledger-group {
+  margin-top: 22px;
+}
+
+.ledger-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ledger-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.ledger-rows > .ledger-row:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.ledger-row[data-sub] {
+  padding-left: 20px;
+}
+
+.ledger-row:has(a):hover {
+  border-top-color: var(--rule-strong);
+}
+
+.ledger-body {
+  min-width: 0;
+}
+
+.ledger-lead,
+.ledger-kind {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.ledger-kind {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Hangs right-aligned in the margin, 22px clear, as a scene number does. */
+.ledger-number {
+  position: absolute;
+  right: calc(100% + 22px);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.ledger-number.time {
+  color: var(--time);
+}
+
+.ledger-line {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.ledger-meta {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+
+.ledger-meta .ref {
+  color: var(--ink-3);
+}
+
+.ledger-meta .ref:hover {
+  color: var(--ink);
+}
+
+.ledger-chosen {
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.ledger-row[data-candidate="live"] .ledger-lead .ref {
+  color: var(--ink-2);
+}
+
+.ledger-row[data-candidate="rejected"] .ledger-lead .ref,
+.ledger-row[data-candidate="rejected"] .ledger-line {
+  color: var(--ink-3);
+}
+
+.count-value {
+  color: var(--ink);
+}
+
+.ledger-empty {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+/* The superseded answers fold under one line, like a slip part. */
+.ledger-fold {
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.ledger-fold summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-3);
+}
+
+.ledger-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.ledger-fold summary:hover {
+  color: var(--ink);
+}
+
+.ledger-fold ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.ledger-fold li + li {
+  margin-top: 4px;
+}
+
+.ledger-meta-inline {
+  color: var(--ink-3);
+}
+
+/* Reader-Order: the scenes in the prose column, the spark beside them in
+   the gutter and gloss column, one point per 32px row. */
+.reader-order {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;
+}
+
+.reader-order > .ledger-group:first-child,
+.reader-order > .ledger-empty {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.reader-questions {
+  grid-column: 1 / -1;
+}
+
+.scene-ledger-row {
+  height: 32px;
+  min-height: 0;
+  padding-block: 0;
+  align-items: center;
+}
+
+.scene-ledger-row .ledger-lead {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-spark {
+  grid-column: 3;
+  grid-row: 1;
+  width: 100%;
+  overflow: visible;
+}
+
+.sheet-spark .spark-line {
+  fill: none;
+  stroke: var(--time);
+  stroke-width: 1.5;
+}
+
+/* Record detail: fields in the prose column, touches in the gloss column. */
+.record-fields {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.record-group {
+  margin: 0;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.record-group + .record-group {
+  margin-top: 14px;
+}
+
+.record-field {
+  margin-bottom: 12px;
+}
+
+.record-field dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.record-field dd {
+  max-width: 60ch;
+  margin: 3px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.record-actions {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.record-touches {
+  grid-column: 4;
+  grid-row: 2;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.touch-section + .touch-section {
+  margin-top: 26px;
+}
+
+.touch-title {
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.touch-kind {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.touch-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.touch-group li + li {
+  margin-top: 6px;
+}
+
+.touch-how {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 /* ── Narrower screens ─────────────────────────────────────────────────── */
 
 @media (max-width: 1380px) {
@@ -1898,5 +2329,50 @@ a {
 
   .page-empty {
     padding: 40px 20px;
+  }
+
+  /* Inspector: one column. Margin numbers move inline before the lead,
+     metadata drops under the row, the spark hides, and a record's touches
+     follow its fields under a hairline. */
+  .ledger,
+  .record-fields,
+  .record-touches {
+    grid-column: 1;
+  }
+
+  .reader-order {
+    display: block;
+  }
+
+  .sheet-spark {
+    display: none;
+  }
+
+  .ledger-row {
+    flex-wrap: wrap;
+    gap: 2px 16px;
+  }
+
+  .ledger-number,
+  .ledger-number.time {
+    position: static;
+    margin-right: 6px;
+    color: var(--ink-3);
+  }
+
+  .ledger-meta {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .scene-ledger-row {
+    flex-wrap: nowrap;
+  }
+
+  .record-touches {
+    grid-row: 3;
+    margin-top: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
   }
 }

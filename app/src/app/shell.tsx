@@ -1,4 +1,10 @@
-import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+  useRouterState,
+} from "@tanstack/react-router";
 import {
   type Dispatch,
   type SetStateAction,
@@ -19,6 +25,8 @@ import type { CommandError } from "~/workspace/workspace";
 import { KIND_DEFINITIONS } from "~/world/kinds";
 import { describeCommandError, describeReadOnly } from "./environment";
 import { useEnvironment, useServices, useStore, useWorkspace } from "./hooks";
+import { worldTabTitle } from "./inspector";
+import { parseAt } from "./inspector-model";
 import { formatStoryTime } from "./manuscript";
 import { Rail } from "./rail";
 import { entryNames } from "./world";
@@ -176,7 +184,7 @@ function TabStrip({
   };
 
   return (
-    <nav className="tab-strip" aria-label="Open documents">
+    <nav className="tab-strip" aria-label="Open tabs">
       {tabs.open.map((id) => {
         const scene = sceneOf(id);
         const isActive = id === active;
@@ -210,7 +218,53 @@ function TabStrip({
           </div>
         );
       })}
+      <WorldTabItem />
     </nav>
+  );
+}
+
+/**
+ * The World tab (DESIGN.md, Sheets): every inspector view and bible record
+ * shows in this one tab, after the document tabs. It opens when a view or
+ * record is shown and stays until closed.
+ */
+function WorldTabItem() {
+  const { worldTab, bible } = useServices();
+  const tab = useStore(worldTab);
+  const state = useStore(bible.state);
+  const onWorld = useRouterState({
+    select: (router) => router.location.pathname === "/world",
+  });
+  const navigate = useNavigate();
+  if (!tab.open) return null;
+  const title = worldTabTitle(
+    state.kind === "ready" ? state.story : null,
+    parseAt(tab.at),
+  );
+  const close = async () => {
+    // Home returns to the last active document, if any.
+    if (onWorld) await navigate({ to: "/" });
+    worldTab.set({ ...worldTab.get(), open: false });
+  };
+  return (
+    <div className="tab" data-active={onWorld}>
+      <Link
+        to="/world"
+        search={{ at: tab.at }}
+        aria-current={onWorld ? "page" : undefined}
+      >
+        {onWorld && <span className="crumb">World › </span>}
+        <span className="tab-title">{title}</span>
+      </Link>
+      <button
+        type="button"
+        className="tab-close"
+        aria-label={`Close ${title}`}
+        onClick={() => void close()}
+      >
+        <CloseIcon />
+      </button>
+    </div>
   );
 }
 

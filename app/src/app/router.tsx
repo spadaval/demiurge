@@ -7,6 +7,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import type { Workspace } from "~/workspace/workspace";
+import { WorldPage } from "./inspector";
 import { ModelSettingsPage } from "./model-settings";
 import { DocumentPage, HomePage } from "./pages";
 import { Shell } from "./shell";
@@ -49,7 +50,24 @@ const modelRoute = createRoute({
   component: ModelSettingsPage,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, documentRoute, modelRoute]);
+/**
+ * The World tab: an inspector view or a bible record, named by `at` (a
+ * view's ID, such as `cast`, or a ref, such as `drive:keep-light`).
+ */
+export const worldRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/world",
+  validateSearch: (search: Record<string, unknown>): { at?: string } =>
+    typeof search.at === "string" ? { at: search.at } : {},
+  component: WorldPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  homeRoute,
+  documentRoute,
+  modelRoute,
+  worldRoute,
+]);
 
 export function createAppRouter(
   workspace: Workspace,
