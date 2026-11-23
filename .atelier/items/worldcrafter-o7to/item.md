@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-o7to
 title: Direct-manipulation controls for high-frequency bible edits
-status: changes_requested
+status: in_review
 mission: worldcrafter-3z9j
 labels:
 - ui
@@ -60,4 +60,9 @@ Not done, and why:
 - Story-wide gaps (ref null) have no control, because no sheet lists them.
 - Cast & Drives rows still show "no origin" as text. The drive's detail has the control.
 - I didn't check the styling in a browser, since a dev server isn't allowed here. It follows DESIGN.md's tokens: text actions like the rail's, and fields in the slip's setting.
+
+### Responses
+
+1-mhpc.1: fixed in cae9adb: the cause was in the shared runner. `runMutation` now keeps a saved edit as a mutation result when the prose read after it fails, listing each linked scene in `proseNotRead` as `unreadable`, so the agent is no longer told it failed either. Covered by a tools test and an inspector test that both check the stored edit.
+1-mhpc.2: fixed in cae9adb: the saved outcome carries `proseNotRead`, and the report lists those scenes as "Not traced" with the reason. Component tests cover a missing document, invalid content and a failed read.
 
