@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-aq1r
 title: Feed unified story bible context into the scene prose Context Viewer
-status: open
+status: building
 mission: worldcrafter-3z9j
 labels:
 - context
@@ -14,7 +14,8 @@ blocked_by:
 - worldcrafter-667u
 - worldcrafter-w4mr
 - worldcrafter-wknl
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3Ae73897d3-5d5f-4e72-a7aa-575ebc1de207%3Adelegate-task%3Af3dd5620-e4d9-4577-a969-3e88fc0d4461
 ready: null
 trivial: null
 caused_by: null
