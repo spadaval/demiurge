@@ -1,6 +1,6 @@
 # Entity Pipeline
 
-Status: proposal (2026-10-17). Replaces the distilbert-NER approach (`src/lib/entity-detection.ts`, `docs/NER_OVERHAUL.md`). Depends on `data-model-boundaries.md`.
+Status: proposal (2026-10-17). Replaces the old app's distilbert-NER approach (`src/lib/entity-detection.ts` and `docs/NER_OVERHAUL.md`, both removed with the old app in `worldcrafter-2x5z`; see Git history). Depends on `data-model-boundaries.md`.
 
 ## Goal
 
@@ -85,7 +85,7 @@ type DiscoveryResult = {
 - **Inline:** a subtle underline. Clicking it offers:
   - **Create entry** (prefilled with kind, short summary, aliases)
   - **Alias of…**
-  - **Dismiss** (remembered; reuse the `entity-suppression.ts` idea, keyed by world + normalised surface)
+  - **Dismiss** (remembered; reuse `app/src/world/entity-suppression.ts`, keyed by world + normalised surface)
 - **World inbox:** a batched review of everything proposed (new entities, facts, relations, possible contradictions). Inbox items are posted to the relevant **talk page** (see `talk-pages.md`). The inbox is the aggregate view of open AI-started talk topics.
 
 ## Manual path (still first-class)
@@ -101,7 +101,9 @@ type DiscoveryResult = {
 
 ## What to salvage from the old code
 
-- `entity-suppression.ts` (concept and tests)
+The old code was removed in `worldcrafter-2x5z`; it is in Git history.
+
+- `entity-suppression.ts` (concept and tests), ported to `app/src/world/entity-suppression.ts`
 - the dirty-paragraph scheduling idea from `entity-kit.tsx` (rewrite it around decorations instead of marks)
 
 Everything else in `entity-*.ts` goes.

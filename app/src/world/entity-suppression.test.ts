@@ -4,49 +4,27 @@ import {
   createParagraphSuppressionKey,
   createSuppressionSignature,
   isSuppressed,
+  type KeyValueStore,
   pruneSuppressionStore,
   recordSuppression,
-} from "~/lib/entity-suppression";
+  SUPPRESSION_STORAGE_KEY,
+} from "./entity-suppression";
 
-const STORAGE_KEY = "entitySuppressionStore";
-
-type LocalStorageLike = {
-  clear: () => void;
-  getItem: (key: string) => string | null;
-  removeItem: (key: string) => void;
-  setItem: (key: string, value: string) => void;
-};
-
-function createMockLocalStorage(): LocalStorageLike {
-  const store = new Map<string, string>();
+function memoryStore(): KeyValueStore {
+  const items = new Map<string, string>();
   return {
-    clear: () => {
-      store.clear();
-    },
-    getItem: (key: string) => store.get(key) ?? null,
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => {
+      items.set(key, value);
     },
   };
 }
 
-function installWindow(): LocalStorageLike {
-  const localStorage = createMockLocalStorage();
-  (
-    globalThis as unknown as {
-      window: { localStorage: LocalStorageLike };
-    }
-  ).window = { localStorage };
-  return localStorage;
-}
-
 describe("entity-suppression", () => {
+  let store: KeyValueStore;
+
   beforeEach(() => {
-    const localStorage = installWindow();
-    localStorage.clear();
+    store = memoryStore();
   });
 
   it("records and reads suppression entries", () => {
@@ -58,14 +36,44 @@ describe("entity-suppression", () => {
     );
     const signature = createSuppressionSignature({
       end: 4,
-      entityType: "person",
+      kind: "person",
       spanText: "Aria",
       start: 0,
     });
 
-    recordSuppression(docId, paragraphKey, signature);
+    recordSuppression(store, docId, paragraphKey, signature);
 
-    expect(isSuppressed(docId, paragraphKey, signature)).toBe(true);
+    expect(isSuppressed(store, docId, paragraphKey, signature)).toBe(true);
+  });
+
+  it("matches the span case- and whitespace-insensitively", () => {
+    const paragraphKey = createParagraphSuppressionKey("doc-1", [0], "Sol");
+    recordSuppression(
+      store,
+      "doc-1",
+      paragraphKey,
+      createSuppressionSignature({
+        end: 3,
+        kind: "place",
+        spanText: "Sol",
+        start: 0,
+      }),
+    );
+
+    const same = createSuppressionSignature({
+      end: 3,
+      kind: "place",
+      spanText: " SOL ",
+      start: 0,
+    });
+    const otherKind = createSuppressionSignature({
+      end: 3,
+      kind: "person",
+      spanText: "Sol",
+      start: 0,
+    });
+    expect(isSuppressed(store, "doc-1", paragraphKey, same)).toBe(true);
+    expect(isSuppressed(store, "doc-1", paragraphKey, otherKind)).toBe(false);
   });
 
   it("invalidates suppression when paragraph text hash changes", () => {
@@ -82,14 +90,14 @@ describe("entity-suppression", () => {
     );
     const signature = createSuppressionSignature({
       end: 4,
-      entityType: "person",
+      kind: "person",
       spanText: "Aria",
       start: 0,
     });
 
-    recordSuppression(docId, oldKey, signature);
+    recordSuppression(store, docId, oldKey, signature);
 
-    expect(isSuppressed(docId, newKey, signature)).toBe(false);
+    expect(isSuppressed(store, docId, newKey, signature)).toBe(false);
   });
 
   it("clears suppression entries for a paragraph key", () => {
@@ -101,24 +109,23 @@ describe("entity-suppression", () => {
     );
     const signature = createSuppressionSignature({
       end: 16,
-      entityType: "organization",
+      kind: "organization",
       spanText: "House Ravenfall",
       start: 0,
     });
 
-    recordSuppression(docId, paragraphKey, signature);
-    clearParagraphSuppressions(docId, paragraphKey);
+    recordSuppression(store, docId, paragraphKey, signature);
+    clearParagraphSuppressions(store, docId, paragraphKey);
 
-    expect(isSuppressed(docId, paragraphKey, signature)).toBe(false);
+    expect(isSuppressed(store, docId, paragraphKey, signature)).toBe(false);
   });
 
   it("prunes expired entries", () => {
-    const localStorage = installWindow();
     const now = Date.now();
     const expiredAgeMs = 8 * 24 * 60 * 60 * 1000;
 
-    localStorage.setItem(
-      STORAGE_KEY,
+    store.setItem(
+      SUPPRESSION_STORAGE_KEY,
       JSON.stringify({
         "doc-expired": [
           {
@@ -128,7 +135,7 @@ describe("entity-suppression", () => {
             recordedAt: now - expiredAgeMs,
             signature: {
               end: 4,
-              entityType: "person",
+              kind: "person",
               normalizedSpanText: "aria",
               start: 0,
             },
@@ -137,13 +144,25 @@ describe("entity-suppression", () => {
       }),
     );
 
-    pruneSuppressionStore();
+    pruneSuppressionStore(store);
 
-    expect(localStorage.getItem(STORAGE_KEY)).toBe("{}");
+    expect(store.getItem(SUPPRESSION_STORAGE_KEY)).toBe("{}");
+  });
+
+  it("treats unreadable stored data as no suppressions", () => {
+    store.setItem(SUPPRESSION_STORAGE_KEY, "not json");
+    const paragraphKey = createParagraphSuppressionKey("doc", [0], "Aria");
+    const signature = createSuppressionSignature({
+      end: 4,
+      kind: "person",
+      spanText: "Aria",
+      start: 0,
+    });
+
+    expect(isSuppressed(store, "doc", paragraphKey, signature)).toBe(false);
   });
 
   it("caps document entries at 1000", () => {
-    const localStorage = installWindow();
     const docId = "doc-cap";
     for (let i = 0; i < 1005; i += 1) {
       const paragraphKey = createParagraphSuppressionKey(
@@ -152,21 +171,22 @@ describe("entity-suppression", () => {
         `Name ${i}`,
       );
       recordSuppression(
+        store,
         docId,
         paragraphKey,
         createSuppressionSignature({
           end: i + 1,
-          entityType: "person",
+          kind: "person",
           spanText: `Name ${i}`,
           start: i,
         }),
       );
     }
 
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = store.getItem(SUPPRESSION_STORAGE_KEY);
     expect(raw).not.toBeNull();
 
     const parsed = JSON.parse(raw ?? "{}") as Record<string, unknown[]>;
-    expect((parsed[docId] ?? []).length).toBeLessThanOrEqual(1000);
+    expect(parsed[docId]?.length).toBe(1000);
   });
 });

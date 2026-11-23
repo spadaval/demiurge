@@ -1,7 +1,7 @@
 # Agent Guidelines for Demiurge
 
 ## ⚠️ CRITICAL WARNING
-**DO NOT RUN THE DEV SERVER!** `bun dev` is a watch command that never terminates. The dev server is always running - starting it will duplicate the server _and_ cause you to wait indefinitely.
+**Don't start a dev server or any other watch command** (`vite`, `bun --watch`). It never exits, so you would wait on it indefinitely. The app has no dev script on purpose.
 
 ## Work Tracking
 
@@ -36,21 +36,23 @@ The product is Demiurge (decision `worldcrafter-cogw`), and `worldcrafter` stays
 - The Cloudflare Worker in `app/wrangler.jsonc`, until the domain is settled (`worldcrafter-v61k`).
 
 ## Commands
-Use bun for all commands.
-- **Build**: `bun run build` | **Start**: `bun run start`
-- **Format**: `bun run format` | - **Lint**: `bun run lint --fix` (run after all changes)
-- The lines above are the old app's, at the root. The rebuild in `app/` has its own, run from `app/` after a `bun install` there: `bun run check` runs the type check, lint and tests, `bun test` runs the tests alone, and `bun run build` builds it. It has no launch script: the web app is static, so `bun run build` writes `dist/` for any static server, and the story CLI runs with `bun scripts/story.ts --help`.
+The application is `app/`, and its commands run from there with bun, after a `bun install` in `app/`. The repository root has no `package.json`.
+- `bun run check` runs the type check (`tsc`), lint (Biome) and tests. Run it before you submit.
+- `bun test` runs the tests alone. `bun run format` formats, and `bun run lint` lints.
+- `bun run build` type-checks and writes the static web app to `app/dist/` for any static server.
+- `bun scripts/story.ts --help` runs the story CLI.
 
 ## Architecture
-- **State**: `@legendapp/state` for persistent/shared state, `useState` only for ephemeral UI state (reference `docs/legend-state.md`)
-- **Error Handling**: `neverthrow` for functional errors, try/catch for async operations (reference `docs/neverthrow.md`)
-- **Tech Stack**: Tanstack Start (React + Vite), tailwindcss (styling), trpc (API replacement)
-- **Editor**: `platejs` - highly configurable and flexible react-based editor. Based on the `slate` editor. See `/src/components/editor` and `/docs/editor`.
+- **Stack**: React 19 and TypeScript, built with Vite, routed with TanStack Router (`app/src/app/router.tsx`). Styling is plain CSS in `app/src/app/styles.css`; the design system is in `DESIGN.md`.
+- **Editor**: Plate (`platejs`, on Slate), configured in `app/src/editor/`. The content schema and its Markdown projection are in `app/src/content/`.
+- **Storage**: everything persistent goes through the `StorageAdapter` in `app/src/storage/` (IndexedDB in the browser, in-memory in tests). Biome refuses `indexedDB` anywhere else. Small per-world UI state uses a key-value store passed in (localStorage in the browser), as `app/src/workspace/tabs.ts` does.
+- **Errors**: `neverthrow` `Result`s for expected failures; a thrown error means a bug.
+- **Tests**: `bun test`, with happy-dom and fake-indexeddb for browser APIs (`app/src/test/`). Tests sit next to the code as `*.test.ts(x)`.
 
 ## File Structure
-Top-level has app/config/docs files (package.json, vite.config.ts, tailwind.config.mjs, README.md, AGENTS.md) plus generated/output dirs like dist/, .output/.
-Core source code is under src/, organized by feature/type: routes/ (pages), components/ (UI), lib/ (logic), utils/ (helpers), plus hooks/, styles/, and llamacpp-client/.
-Static assets live in public/, and project docs/reference material are in docs/
+- `app/`: the application. `app/src/` is organised by area: `app/` (shell, routes, pages), `editor/`, `content/`, `storage/`, `world/` (entries, kinds, names, facts), `story/`, `time/`, `outline/`, `layers/`, `context/` and `generate/` (model context and generation), `llm/`, `workspace/`. `app/scripts/` holds the story CLI and measurement scripts.
+- `docs/`: `rebuild/` holds the design of the current app, `rounds/`, `strategies/` and `verdicts/` hold the story-model trial rounds and their results, and `philosophy.md` the product's principles.
+- `PRODUCT.md`, `DESIGN.md` and `README.md` describe the product and its design. `.atelier/` holds work tracking and `.impeccable/` design-system metadata.
 
 ## Rules
 Avoid using `any` type. Use `unknown` type instead. 
