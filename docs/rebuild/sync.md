@@ -16,6 +16,8 @@ instead of vanishing (`worldcrafter-ji5d`).
 - `app/src/sync/client.ts`: `syncWorld`, one pull-then-push run over a
   `StorageAdapter`. `transport.ts` reaches the Worker with `fetch`;
   `state.ts` keeps the device ID and per-record sync state in localStorage.
+- `app/src/worker/proxy.ts` and `app/src/llm/proxy.ts`: the optional
+  inference proxy, below.
 
 ## What syncs
 
@@ -92,6 +94,48 @@ Nothing here has been deployed. To turn it on:
 2. Set `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` in `app/wrangler.jsonc`.
 3. `cd app && bun run build && bunx wrangler deploy`. The first deploy
    creates the `SyncWorld` Durable Object namespace (migration `v1`).
+
+## Inference proxy
+
+The same Worker can carry model requests (`worldcrafter-gs9g`), so a phone
+can reach OpenRouter, featherless or a home llama.cpp server without CORS
+failures and without a provider key in the browser.
+
+- **Client.** A backend profile set to "Through this app's server"
+  (`proxied` in `llm/types.ts`) sends to `/api/llm/chat/completions` or
+  `/api/llm/completions` on the app's own origin, naming the server's base
+  URL in `X-Demiurge-Upstream` (`llm/proxy.ts`). It sends no key, and the
+  settings form keeps none. The request it stores still names the real
+  server's URL, so provenance, `retarget` and regenerating don't depend on
+  the route.
+- **Worker** (`worker/proxy.ts`). Behind the same Access check as sync, it
+  forwards only to the base URLs `LLM_UPSTREAMS` lists, adding each one's
+  credentials from Worker secrets: a bearer key, or a Cloudflare Access
+  service token for a server that is itself behind Access. The body passes
+  through untouched (tools, XTC, DRY, logprobs, any sampler key) and so does
+  the response, streamed or not. Only `Accept`, `X-Title` and
+  `HTTP-Referer` are forwarded from the browser: never its cookies, Access
+  token or `Authorization`. It doesn't follow redirects, which could carry a
+  key elsewhere, and takes secret values out of error bodies it passes back.
+- **Cancel.** The Worker passes `request.signal` to the upstream fetch, and
+  a streamed response is piped straight through, so a writer pressing Stop
+  ends generation upstream. `enable_request_signal` in `wrangler.jsonc`
+  turns the signal on for the current compatibility date.
+
+To turn it on (Sumeet), after the sync steps above:
+
+1. For each provider, `bunx wrangler secret put OPENROUTER_API_KEY` (any
+   name), and list it in `LLM_UPSTREAMS` in `app/wrangler.jsonc`:
+   `{ "baseUrl": "https://openrouter.ai/api/v1", "apiKeySecret":
+   "OPENROUTER_API_KEY" }`. Base URLs must be `https://`.
+2. For a home llama.cpp server: expose it with a Cloudflare Tunnel, put an
+   Access application in front of the tunnel's hostname that allows a
+   service token, store the token's ID and secret as two Worker secrets, and
+   list `{ "baseUrl": "https://<tunnel host>/v1", "accessClientIdSecret":
+   "...", "accessClientSecretSecret": "..." }`. If llama.cpp runs with
+   `--api-key`, add `apiKeySecret` too.
+3. Deploy, then in the app's model settings set the profile's base URL to
+   the listed one and choose "Through this app's server".
 
 ## Not done yet
 

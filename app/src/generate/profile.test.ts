@@ -107,4 +107,27 @@ describe("backend profile", () => {
       sampler: { temperature: 0.8, max_tokens: 400 },
     });
   });
+
+  test("a proxied profile keeps no key and needs an https server", () => {
+    const form = { ...formOf(null), apiKey: "sk-secret", proxied: true };
+    expect(profileFromForm(form, null)._unsafeUnwrapErr()).toContain(
+      "https://",
+    );
+    const profile = profileFromForm(
+      { ...form, baseUrl: "https://llm.example.net/v1" },
+      null,
+      () => "p3",
+    )._unsafeUnwrap();
+    expect(profile).toEqual({
+      name: "p3",
+      label: form.name,
+      kind: form.kind,
+      baseUrl: "https://llm.example.net/v1",
+      sampler: { temperature: 0.8, max_tokens: 400 },
+      proxied: true,
+    });
+    expect(parseProfile(JSON.parse(JSON.stringify(profile)))).toEqual(profile);
+    expect(formOf(profile)).toMatchObject({ proxied: true, apiKey: "" });
+    expect(parseProfile({ ...profile, proxied: "yes" })).toBeNull();
+  });
 });

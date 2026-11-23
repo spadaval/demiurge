@@ -8,9 +8,13 @@
  * token (`access.ts`). `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` name the Access
  * application; while either is unset the API refuses every request.
  *
+ * Under `/api/llm/` it is also an optional inference proxy (`proxy.ts`) to
+ * the model servers `LLM_UPSTREAMS` lists, behind the same Access check.
+ *
  * Imports here are relative: Wrangler bundles this file on its own.
  */
 
+import { LLM_PROXY_PREFIX } from "../llm/proxy";
 import {
   checkPullRequest,
   checkPushRequest,
@@ -20,6 +24,7 @@ import {
 } from "../sync/protocol";
 import { type AccessVerifier, createAccessVerifier } from "./access";
 import { type Ledger, openLedger, type SqlRunner } from "./ledger";
+import { handleLlmProxy, type UpstreamFetch } from "./proxy";
 
 /** The parts of the Workers runtime types this Worker uses. */
 export interface Fetcher {
@@ -43,6 +48,12 @@ export interface Env {
   readonly SYNC_WORLDS: DurableObjectNamespace;
   readonly ACCESS_TEAM_DOMAIN?: string;
   readonly ACCESS_AUD?: string;
+  /**
+   * The model servers the inference proxy forwards to (`proxy.ts`): a JSON
+   * list of `Upstream`s. Their credentials are Worker secrets, read from
+   * the environment by the names the list gives.
+   */
+  readonly LLM_UPSTREAMS?: unknown;
 }
 
 type Operation = "pull" | "push";
@@ -70,24 +81,34 @@ export function parseSyncPath(
 }
 
 /**
- * Routes one request: static assets, or a sync call checked against Access
- * and handed to its world's Durable Object.
+ * Routes one request: static assets, or an API call checked against Access:
+ * a sync call is handed to its world's Durable Object, and an inference call
+ * to the proxy, which sends it on with `fetchUpstream`.
  */
 export async function handleRequest(
   request: Request,
   env: Env,
   verify: AccessVerifier | null,
+  fetchUpstream: UpstreamFetch = (upstream) => fetch(upstream),
 ): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(request);
   if (verify === null) {
     return refuse(
       503,
-      "sync is not configured: set ACCESS_TEAM_DOMAIN and ACCESS_AUD",
+      "the API is not configured: set ACCESS_TEAM_DOMAIN and ACCESS_AUD",
     );
   }
   const access = await verify(request);
   if (!access.ok) return refuse(403, access.reason);
+  if (url.pathname.startsWith(LLM_PROXY_PREFIX)) {
+    return handleLlmProxy(
+      request,
+      env.LLM_UPSTREAMS,
+      (name): unknown => Reflect.get(env, name),
+      fetchUpstream,
+    );
+  }
   const route = parseSyncPath(url.pathname);
   if (route === null) return refuse(404, "no such sync route");
   if (request.method !== "POST") return refuse(405, "use POST");

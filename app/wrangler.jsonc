@@ -4,6 +4,10 @@
   // wiring, so it waits for the domain (worldcrafter-v61k).
   "name": "worldcrafter",
   "compatibility_date": "2026-10-19",
+  // A client that disconnects aborts `request.signal`, which the inference
+  // proxy passes on so an abandoned generation stops upstream. Default from
+  // the 2026-11-17 compatibility date on.
+  "compatibility_flags": ["enable_request_signal"],
   // The Worker answers the sync API (src/sync/protocol.ts); everything else
   // is the static app from ./dist (`bun run build`), which routes via the
   // URL hash.
@@ -21,8 +25,19 @@
   // The Cloudflare Access application in front of the whole hostname. The
   // sync API refuses every request until both are set: the team domain
   // (`<team>.cloudflareaccess.com`) and the application's AUD tag.
+  //
+  // LLM_UPSTREAMS lists the model servers the inference proxy under
+  // /api/llm/ forwards to (src/worker/proxy.ts), each naming the Worker
+  // secrets that hold its credentials, never the values. For example:
+  //   [{ "baseUrl": "https://openrouter.ai/api/v1",
+  //      "apiKeySecret": "OPENROUTER_API_KEY" },
+  //    { "baseUrl": "https://llama.example.net/v1",
+  //      "accessClientIdSecret": "HOME_LLAMA_ACCESS_ID",
+  //      "accessClientSecretSecret": "HOME_LLAMA_ACCESS_SECRET" }]
+  // Empty, the proxy forwards nowhere.
   "vars": {
     "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_AUD": ""
+    "ACCESS_AUD": "",
+    "LLM_UPSTREAMS": []
   }
 }
