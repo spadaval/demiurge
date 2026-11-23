@@ -26,8 +26,10 @@ Could not check live OpenRouter, featherless, or llama.cpp `--jinja`; IndexedDB 
 
 ## Finding 1: A story edit and the step that records it are two writes
 Recommendation: defer
+Taken: worldcrafter-a8dl by mcp:fc568ec9-7676-4101-b8d0-b66d173f335e
 `executeStoryToolCall` saves the bible inside `executeStoryCommand` (`tools.ts:1171`), then the runner appends the tool result and calls `saveSession` (`runner.ts:630-645`). Those are separate `storage.batch` calls. If the process stops between them, `session.next` is still `tools`, the call is still unanswered, and `resume` runs it again. `story-agent.md:31` and the Report say this; `story-agent.md:23` still says a crash resumes where the session was. Adds of an existing id refuse the retry; `moveScene` to the same index is idempotent. A later item can put the story writes and the agent records in one batch.
 
 ## Finding 2: "Busy" is per runner object, not per stored session
 Recommendation: defer
+Dropped by mcp:fc568ec9-7676-4101-b8d0-b66d173f335e: Taken into worldcrafter-a8dl with finding 1 of the same review; both are about concurrent or interrupted runs of one agent session.
 `exclusive` (`runner.ts:286-301`) keeps a `Set` on that `createAgentRunner` instance. Two runners on the same adapter can `send` the same session at once, both load, both run tools, and last write wins. The test (`runner.test.ts:285-294`) only covers one instance. Fine for this headless API; the UI and Worker items need one runner per world, or a lock in storage.
