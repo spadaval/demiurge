@@ -3,14 +3,15 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-if6h
 title: Amend DESIGN.md for Night Edition bible inspector, Topics talk surface, and agent prompt/tool-trace slip
-status: open
+status: building
 mission: worldcrafter-mtkn
 labels:
 - design
 - night-edition
 priority: high
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A704c8a40-0c58-48f8-a155-75a1af3b85bf%3Adelegate-task%3Acecd828b-ea0d-41b5-bd57-b72a18262df3
 ready: null
 trivial: null
 caused_by: null
