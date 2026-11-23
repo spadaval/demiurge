@@ -8,6 +8,7 @@ A session has a role, a scope and a system prompt, fixed when it starts.
 
 - **Role.** `plan` is structural work and talk: outlining, reworking, weighing open questions. It offers every story tool by default. `prose` is drafting a scene, and offers no tools by default. Each role is bound to its own backend profile and sampler (`ProfileBindings` in `profiles.ts`), so planning can go to a reasoning model and drafting to a finetune or a local model. A binding can narrow or widen its tools (`all`, `queries`, `none`) and can stream. Bindings are browser configuration like the backend profile: the runner is given them, and a session records only its role, so no API key is stored.
 - **Scope.** The whole story, one scene, or one bible record (`drive:keep-light`). A scope the bible doesn't have is refused when the session starts.
+- **History.** A session can start with a conversation already under way (`history`: writer and model turns without packets), as a talk page that the model raised does.
 - **System prompt.** Editable per session. The default for `plan` is `.agents/skills/story-sketch/craft.md` word for word, then that skill's mechanics rewritten for the tools; a test fails when craft.md changes and the copy in `prompt.ts` doesn't. The default for `prose` is drafting guidance drawn from the skill's "Writing a scene".
 
 ## The context packet

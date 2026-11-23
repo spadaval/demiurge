@@ -659,6 +659,7 @@ function demoTopics(now: number): [Topic, TalkMessage[]][] {
     startedBy,
     session: null,
     messages,
+    answered: 0,
     createdAt: now,
     updatedAt: now,
     closedAt: null,

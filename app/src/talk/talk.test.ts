@@ -355,6 +355,182 @@ describe("a topic with the model", () => {
   });
 });
 
+describe("review round 1", () => {
+  const author: ModelAuthor = {
+    kind: "model",
+    profile: "Planner",
+    model: "reasoner",
+    session: null,
+    requestId: null,
+    trace: [],
+  };
+
+  test("replying to a raised topic gives the model its opening message", async () => {
+    const t = talk();
+    await value(
+      t.raise({
+        id: "r1",
+        title: "A claim",
+        scope: { kind: "world" },
+        body: "The UNIQUE-CLAIM is wrong. Can you explain it?",
+        author,
+      }),
+    );
+    stub.script(reply("It contradicts the log."));
+    const outcome = await value(t.send("r1", "What exactly is wrong?"));
+    const sent = messages(stub.received[0] ?? {});
+    expect(sent.map((m) => m.role)).toEqual(["system", "assistant", "user"]);
+    expect(sent[1]?.content).toBe(
+      "The UNIQUE-CLAIM is wrong. Can you explain it?",
+    );
+    expect(outcome.log.messages.map((m) => m.body)).toEqual([
+      "The UNIQUE-CLAIM is wrong. Can you explain it?",
+      "What exactly is wrong?",
+      "It contradicts the log.",
+    ]);
+  });
+
+  test("a rename while a turn runs is kept when the turn ends", async () => {
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let asked = () => {};
+    const waiting = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    stub.script(async (body) => {
+      asked();
+      await held;
+      return reply("Done.")(body);
+    });
+    const t = talk();
+    const turn = t.start({
+      id: "t1",
+      title: "Lamp",
+      scope: { kind: "world" },
+      message: "Who lit it?",
+    });
+    await waiting;
+    expect((await value(t.rename("t1", "New title"))).title).toBe("New title");
+    release();
+    const outcome = await value(turn);
+    expect(outcome.log.topic.title).toBe("New title");
+    expect(outcome.log.messages).toHaveLength(2);
+    expect((await value(t.load("t1"))).topic.title).toBe("New title");
+  });
+
+  test("an answer whose save failed is recorded once, from its stored run", async () => {
+    // Storage refuses the first write of a model-authored message.
+    const real = storage;
+    let refusals = 1;
+    storage = Object.assign(Object.create(real), {
+      batch: (writes: Parameters<StorageAdapter["batch"]>[0]) => {
+        const answer = writes.some(
+          (w) =>
+            w.kind === "saveTalkRecord" &&
+            w.record.kind === "message" &&
+            JSON.stringify(w.record.data).includes('"kind":"model"'),
+        );
+        if (answer && refusals > 0) {
+          refusals -= 1;
+          return errAsync({
+            kind: "failure" as const,
+            operation: "save" as const,
+            message: "disk full",
+            cause: null,
+          });
+        }
+        return real.batch(writes);
+      },
+    });
+    stub.script(
+      toolCalls({ name: "show", args: { ref: "scene:arrival" } }),
+      reply("Mara arrives."),
+    );
+    const t = talk();
+    expect(
+      await failed(
+        t.start({
+          id: "t1",
+          title: "Arrival",
+          scope: { kind: "world" },
+          message: "Who arrives?",
+        }),
+      ),
+    ).toMatchObject({ kind: "failure" });
+
+    // Reopening records it, signed with the stored run, without a model call.
+    const reopened = await value(talk().load("t1"));
+    const session = topicSessionId("t1");
+    expect(reopened.messages.map((m) => m.body)).toEqual([
+      "Who arrives?",
+      "Mara arrives.",
+    ]);
+    expect(reopened.messages[1]?.author).toEqual({
+      kind: "model",
+      profile: "Planner",
+      model: "reasoner",
+      session,
+      requestId: stepRecordId(session, 2),
+      trace: [stepRecordId(session, 1), stepRecordId(session, 2)],
+    });
+    expect(reopened.messages[1]?.calls.map((c) => c.name)).toEqual(["show"]);
+    expect(reopened.topic.answered).toBe(1);
+    expect(stub.received).toHaveLength(2);
+
+    // Loading, resuming and sending again record nothing twice.
+    await value(t.load("t1"));
+    expect((await value(t.resume("t1"))).log.messages).toHaveLength(2);
+    stub.script(reply("Yes."));
+    const next = await value(t.send("t1", "Alone?"));
+    expect(next.log.messages.map((m) => m.body)).toEqual([
+      "Who arrives?",
+      "Mara arrives.",
+      "Alone?",
+      "Yes.",
+    ]);
+  });
+
+  test("try again records an answer whose save failed", async () => {
+    const real = storage;
+    let refusals = 1;
+    storage = Object.assign(Object.create(real), {
+      batch: (writes: Parameters<StorageAdapter["batch"]>[0]) => {
+        const answer = writes.some(
+          (w) =>
+            w.kind === "saveTalkRecord" &&
+            JSON.stringify(w.record.data).includes('"kind":"model"'),
+        );
+        if (answer && refusals > 0) {
+          refusals -= 1;
+          return errAsync({
+            kind: "failure" as const,
+            operation: "save" as const,
+            message: "disk full",
+            cause: null,
+          });
+        }
+        return real.batch(writes);
+      },
+    });
+    stub.script(reply("Mara."));
+    const t = talk();
+    await failed(
+      t.start({
+        id: "t1",
+        title: "Who",
+        scope: { kind: "world" },
+        message: "Who?",
+      }),
+    );
+    const again = await value(t.resume("t1"));
+    expect(again.status).toBe("done");
+    expect(again.log.messages.map((m) => m.body)).toEqual(["Who?", "Mara."]);
+    expect(stub.received).toHaveLength(1);
+  });
+});
+
 describe("a topic's status", () => {
   async function started() {
     stub.script(reply("Noted."));
@@ -490,6 +666,7 @@ describe("stored talk records", () => {
       startedBy: { kind: "human" },
       session: null,
       messages: 0,
+      answered: 0,
       createdAt: 1,
       updatedAt: 1,
       closedAt: null,

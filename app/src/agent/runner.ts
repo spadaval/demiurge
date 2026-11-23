@@ -112,6 +112,13 @@ export type SessionSpec = {
   approveMutations?: boolean;
   /** Defaults to one from `newId`. */
   id?: string;
+  /**
+   * A conversation the session takes up, after the system prompt: what was
+   * said before it started (a talk page's earlier turns, say). Writer
+   * messages are `user` turns and the model's are `assistant` turns; they
+   * carry no context packet.
+   */
+  history?: readonly ChatMessage[];
 };
 
 /** What a run reports as it goes. `onEvent` must not throw. */
@@ -329,7 +336,10 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
       systemPrompt,
       maxSteps: spec.maxSteps ?? DEFAULT_MAX_STEPS,
       approveMutations: spec.approveMutations ?? false,
-      messages: [{ role: "system", content: systemPrompt }],
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...(spec.history ?? []),
+      ],
       runs: [],
       next: "user",
       stopped: null,

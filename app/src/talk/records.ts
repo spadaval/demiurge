@@ -13,7 +13,14 @@
  * and the steps of the run that made it (its tool-call trace).
  */
 
-import { err, ok, type Result, type ResultAsync } from "neverthrow";
+import {
+  err,
+  errAsync,
+  ok,
+  okAsync,
+  type Result,
+  type ResultAsync,
+} from "neverthrow";
 import type {
   JsonValue,
   StorageAdapter,
@@ -91,6 +98,12 @@ export type Topic = {
   session: string | null;
   /** How many messages it holds; the next message's index is one more. */
   messages: number;
+  /**
+   * The last agent run (writer message, from 1) whose answer is recorded as
+   * a message; 0 before any. A finished run above it still needs its answer
+   * recorded, which `talk.ts` does from the run's stored steps.
+   */
+  answered: number;
   createdAt: number;
   updatedAt: number;
   /** When it was resolved or archived; null while open. */
@@ -231,11 +244,12 @@ export function readTopic(
   if (
     !(data.session === null || isString(data.session)) ||
     typeof data.messages !== "number" ||
+    typeof data.answered !== "number" ||
     typeof data.createdAt !== "number" ||
     typeof data.updatedAt !== "number" ||
     !(data.closedAt === null || typeof data.closedAt === "number")
   ) {
-    return invalid("no session, message count or times");
+    return invalid("no session, message or answer count, or times");
   }
   // The fields the app reads were checked above.
   return ok(data as unknown as Topic);
@@ -283,6 +297,21 @@ export function readMessage(
   }
   // The fields the app reads were checked above.
   return ok(data as unknown as TalkMessage);
+}
+
+/** The stored topic `id` without its messages, or null when there is none. */
+export function loadTopicRecord(
+  storage: StorageAdapter,
+  id: string,
+): ResultAsync<Topic | null, StorageError | TalkRecordError> {
+  return storage.talkRecords
+    .load(topicRecordId(id))
+    .map((record): StoredTalkRecord | null => record)
+    .orElse((error) =>
+      error.kind === "not_found" ? okAsync(null) : errAsync(error),
+    )
+    .mapErr((error): StorageError | TalkRecordError => error)
+    .andThen((record) => (record === null ? ok(null) : readTopic(record)));
 }
 
 /** Every stored topic, newest first. */

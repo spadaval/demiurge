@@ -10,12 +10,20 @@
  * and tests call the same commands.
  */
 
-import { err, ok, type Result, ResultAsync } from "neverthrow";
+import {
+  err,
+  errAsync,
+  ok,
+  okAsync,
+  type Result,
+  ResultAsync,
+} from "neverthrow";
 import type { ScopeError } from "../agent/context";
 import type { ModelBinding } from "../agent/profiles";
 import { defaultSystemPrompt } from "../agent/prompt";
 import {
   type AgentRecordError,
+  type AgentSession,
   type AgentStep,
   readSession,
   readStep,
@@ -31,13 +39,14 @@ import {
   createAgentRunner,
   type RunOutcome,
 } from "../agent/runner";
-import type { Fetch } from "../llm/types";
+import type { ChatMessage, Fetch } from "../llm/types";
 import type { StorageAdapter, StorageError } from "../storage/types";
 import { loadStory, type StoryStoreError } from "../story/store";
 import {
   type LoadTopicError,
   listTopics,
   loadTopic,
+  loadTopicRecord,
   type ModelAuthor,
   messageRecordId,
   saveTalk,
@@ -251,139 +260,260 @@ export function createTalk(options: TalkOptions): Talk {
     return ok({ reason: stopped, error });
   }
 
+  const queues = new Map<string, Promise<unknown>>();
+
   /**
-   * Every step of the writer message `run` that ended in `outcome`: the ones
-   * this run made, after the ones earlier runs of it made before stopping.
+   * Runs `work` after every earlier write of topic `id` has finished, so two
+   * read-modify-writes of a topic (a turn's bookkeeping and a rename, say)
+   * never overwrite each other.
    */
+  function serial<T>(id: string, work: () => Promise<T>): Promise<T> {
+    const before = queues.get(id) ?? Promise.resolve();
+    const next = before.then(work, work);
+    const tail = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    queues.set(id, tail);
+    void tail.then(() => {
+      if (queues.get(id) === tail) queues.delete(id);
+    });
+    return next;
+  }
+
+  /**
+   * Reads topic `id` as stored (null when it isn't), applies `change`, and
+   * saves the topic with the messages it adds, as one write, after every
+   * earlier write of the topic. `change` returning null writes nothing.
+   */
+  function commit(
+    id: string,
+    change: (
+      stored: Topic | null,
+    ) => Result<{ topic: Topic; messages: TalkMessage[] } | null, TalkError>,
+  ): Promise<Result<Topic | null, TalkError>> {
+    return serial(id, async () => {
+      const stored = await loadTopicRecord(storage, id);
+      if (stored.isErr()) return err(stored.error);
+      const changed = change(stored.value);
+      if (changed.isErr()) return err(changed.error);
+      if (changed.value === null) return ok(stored.value);
+      const { topic, messages } = changed.value;
+      const saved = await saveTalk(storage, topic, messages);
+      return saved.isErr() ? err(saved.error) : ok(topic);
+    });
+  }
+
+  /** Every stored step of the session's writer message `run`, in order. */
   async function runSteps(
-    session: string,
+    session: AgentSession,
     run: number,
-    made: readonly AgentStep[],
   ): Promise<Result<AgentStep[], TalkError>> {
-    const steps = [...made].sort((a, b) => a.index - b.index);
-    let index = (steps[0]?.index ?? 1) - 1;
-    while (index > 0) {
+    const steps: AgentStep[] = [];
+    for (let index = session.steps; index > 0; index -= 1) {
       const loaded = await storage.agentRecords.load(
-        stepRecordId(session, index),
+        stepRecordId(session.id, index),
       );
       if (loaded.isErr()) return err(loaded.error);
       const step = readStep(loaded.value);
       if (step.isErr()) return err(step.error);
-      if (step.value.run !== run) break;
-      steps.unshift(step.value);
-      index -= 1;
+      if (step.value.run < run) break;
+      if (step.value.run === run) steps.unshift(step.value);
     }
     return ok(steps);
   }
 
+  /**
+   * Records the model's answer to the session's last writer message as the
+   * topic's next message, if that run finished with an answer and the topic
+   * hasn't recorded it yet. The answer, its calls and its trace come from
+   * the run's stored steps, so this can run again after a failed save, from
+   * any later command, and records the answer exactly once.
+   */
+  async function recordAnswer(
+    topicId: string,
+    sessionId: string,
+    model: TalkModel | null,
+  ): Promise<Result<void, TalkError>> {
+    const record = await storage.agentRecords.load(sessionRecordId(sessionId));
+    if (record.isErr()) {
+      return record.error.kind === "not_found"
+        ? ok(undefined)
+        : err(record.error);
+    }
+    const read = readSession(record.value);
+    if (read.isErr()) return err(read.error);
+    const session = read.value;
+    const run = session.runs.length;
+    const last = session.messages.at(-1);
+    // A run the writer cancelled, or one still going, has no answer.
+    if (
+      session.next !== "user" ||
+      run === 0 ||
+      last?.role !== "assistant" ||
+      "tool_calls" in last
+    ) {
+      return ok(undefined);
+    }
+    const stored = await loadTopicRecord(storage, topicId);
+    if (stored.isErr()) return err(stored.error);
+    if (stored.value === null || stored.value.answered >= run) {
+      return ok(undefined);
+    }
+    const steps = await runSteps(session, run);
+    if (steps.isErr()) return err(steps.error);
+    const final = steps.value.at(-1);
+    const request = final?.request;
+    const sameProfile =
+      model !== null && request?.profile === model.binding.profile.name;
+    const sentModel = request?.body.model;
+    const author: ModelAuthor = {
+      kind: "model",
+      profile: sameProfile ? model.label : (request?.profile ?? ""),
+      model: typeof sentModel === "string" ? sentModel : "",
+      session: session.id,
+      requestId:
+        final === undefined ? null : stepRecordId(session.id, final.index),
+      trace: steps.value.map((step) => stepRecordId(session.id, step.index)),
+    };
+    const at = now();
+    const done = await commit(topicId, (topic) => {
+      // Recorded meanwhile, by another command.
+      if (topic === null || topic.answered >= run) return ok(null);
+      const index = topic.messages + 1;
+      const message: TalkMessage = {
+        version: TALK_RECORD_VERSION,
+        id: messageRecordId(topicId, index),
+        topic: topicId,
+        index,
+        author,
+        body: runText(steps.value),
+        calls: steps.value.flatMap((step) => step.calls.map(turnCall)),
+        createdAt: at,
+      };
+      return ok({
+        topic: { ...topic, messages: index, answered: run, updatedAt: at },
+        messages: [message],
+      });
+    });
+    return done.map(() => undefined);
+  }
+
+  /** Records an answer left unrecorded, if the topic has a session. */
+  async function reconcile(
+    topic: Topic,
+    model: TalkModel | null,
+  ): Promise<Result<void, TalkError>> {
+    return topic.session === null
+      ? ok(undefined)
+      : recordAnswer(topic.id, topic.session, model);
+  }
+
+  async function view(id: string): Promise<Result<TopicView, TalkError>> {
+    const log = await loadTopic(storage, id);
+    if (log.isErr()) return err(log.error);
+    const stop = await sessionStop(log.value.topic);
+    if (stop.isErr()) return err(stop.error);
+    return ok({ ...log.value, stop: stop.value });
+  }
+
   /** Records the model's answer when the run is done, and reports the turn. */
   async function finish(
-    topic: Topic,
+    topicId: string,
     model: TalkModel,
     outcome: RunOutcome,
   ): Promise<Result<TurnOutcome, TalkError>> {
-    const { session } = outcome;
-    if (outcome.status !== "done") {
-      const stop = await sessionStop(topic);
-      if (stop.isErr()) return err(stop.error);
-      const log = await loadTopic(storage, topic.id);
-      if (log.isErr()) return err(log.error);
-      return ok({ log: log.value, status: outcome.status, stop: stop.value });
+    if (outcome.status === "done") {
+      const recorded = await recordAnswer(topicId, outcome.session.id, model);
+      if (recorded.isErr()) return err(recorded.error);
     }
-    const steps = await runSteps(
-      session.id,
-      session.runs.length,
-      outcome.steps,
-    );
-    if (steps.isErr()) return err(steps.error);
-    const last = steps.value.at(-1);
-    const at = now();
-    const author: ModelAuthor = {
-      kind: "model",
-      profile: model.label,
-      model: model.binding.profile.model ?? "",
-      session: session.id,
-      requestId:
-        last === undefined ? null : stepRecordId(session.id, last.index),
-      trace: steps.value.map((step) => stepRecordId(session.id, step.index)),
-    };
-    const index = topic.messages + 1;
-    const message: TalkMessage = {
-      version: TALK_RECORD_VERSION,
-      id: messageRecordId(topic.id, index),
-      topic: topic.id,
-      index,
-      author,
-      body: runText(steps.value),
-      calls: steps.value.flatMap((step) => step.calls.map(turnCall)),
-      createdAt: at,
-    };
-    const next: Topic = { ...topic, messages: index, updatedAt: at };
-    const saved = await saveTalk(storage, next, [message]);
-    if (saved.isErr()) return err(saved.error);
-    const log = await loadTopic(storage, topic.id);
-    if (log.isErr()) return err(log.error);
-    return ok({ log: log.value, status: "done", stop: null });
+    const shown = await view(topicId);
+    if (shown.isErr()) return err(shown.error);
+    const { stop, ...log } = shown.value;
+    return ok({ log, status: outcome.status, stop });
   }
+
+  /** The topic's turns so far, as the conversation a new session takes up. */
+  const history = (messages: readonly TalkMessage[]): ChatMessage[] =>
+    messages.map((message) =>
+      message.author.kind === "human"
+        ? { role: "user", content: message.body }
+        : { role: "assistant", content: message.body },
+    );
 
   /**
    * Stores the writer's message (and the topic, with its session) and runs
-   * the model's turn. `fresh` is a topic not stored yet.
+   * the model's turn. `fresh` is the topic to store when none is stored yet.
    */
   async function take(
-    topic: Topic,
+    fresh: Topic,
     text: string,
     model: TalkModel,
     run: TurnOptions,
   ): Promise<Result<TurnOutcome, TalkError>> {
     const agent = runner(model);
-    let current = topic;
-    if (current.session === null) {
-      const id = topicSessionId(current.id);
+    const id = fresh.id;
+    let session = fresh.session;
+    if (session === null) {
+      const sessionId = topicSessionId(id);
       // A session left by a first turn whose topic failed to save is reused:
       // it holds no message yet, since the session starts before the save.
-      const left = await storage.agentRecords.load(sessionRecordId(id));
+      const left = await storage.agentRecords.load(sessionRecordId(sessionId));
       if (left.isOk()) {
-        current = { ...current, session: id };
+        session = sessionId;
       } else if (left.error.kind !== "not_found") {
         return err(left.error);
       }
     }
-    if (current.session === null) {
+    if (session === null) {
       const story = await loadStory(storage);
       if (story.isErr()) return err(story.error);
-      const id = topicSessionId(current.id);
+      // What was said before the first turn (a raised topic's opening).
+      const earlier = await loadTopic(storage, id);
+      const said = earlier.isOk()
+        ? earlier.value.messages
+        : earlier.error.kind === "no_topic"
+          ? []
+          : null;
+      if (said === null && earlier.isErr()) return err(earlier.error);
+      const sessionId = topicSessionId(id);
       const started = await agent.start({
-        id,
+        id: sessionId,
         role: "plan",
-        scope: agentScope(current.scope),
+        scope: agentScope(fresh.scope),
         systemPrompt: [
           defaultSystemPrompt("plan"),
-          topicPrompt(story.value, current.title, current.scope),
+          topicPrompt(story.value, fresh.title, fresh.scope),
         ].join("\n\n"),
+        history: history(said ?? []),
       });
       if (started.isErr()) return err(started.error);
-      current = { ...current, session: id };
+      session = sessionId;
     }
+    const sessionId = session;
     const at = now();
-    const index = current.messages + 1;
-    const message: TalkMessage = {
-      version: TALK_RECORD_VERSION,
-      id: messageRecordId(current.id, index),
-      topic: current.id,
-      index,
-      author: { kind: "human" },
-      body: text,
-      calls: [],
-      createdAt: at,
-    };
-    current = { ...current, messages: index, updatedAt: at };
-    const saved = await saveTalk(storage, current, [message]);
+    const saved = await commit(id, (stored) => {
+      const base = stored ?? fresh;
+      const index = base.messages + 1;
+      const message: TalkMessage = {
+        version: TALK_RECORD_VERSION,
+        id: messageRecordId(id, index),
+        topic: id,
+        index,
+        author: { kind: "human" },
+        body: text,
+        calls: [],
+        createdAt: at,
+      };
+      return ok({
+        topic: { ...base, session: sessionId, messages: index, updatedAt: at },
+        messages: [message],
+      });
+    });
     if (saved.isErr()) return err(saved.error);
-    const session = current.session ?? topicSessionId(current.id);
-    const outcome = await agent.send(session, text, run);
+    const outcome = await agent.send(sessionId, text, run);
     if (outcome.isErr()) return err(outcome.error);
-    return finish(current, model, outcome.value);
+    return finish(id, model, outcome.value);
   }
 
   const modelNow = (): Result<TalkModel, TalkError> => {
@@ -391,36 +521,40 @@ export function createTalk(options: TalkOptions): Talk {
     return model === null ? err({ kind: "no_model" }) : ok(model);
   };
 
-  function load(id: string): ResultAsync<TopicView, TalkError> {
-    return loadTopic(storage, id)
-      .mapErr((e): TalkError => e)
-      .andThen((log) =>
-        new ResultAsync(sessionStop(log.topic)).map((stop) => ({
-          ...log,
-          stop,
-        })),
-      );
-  }
-
-  /** Loads `id`, changes it with `change`, and saves it. */
+  /** Loads `id`, changes it with `change`, and saves it, in the topic's queue. */
   function update(
     id: string,
     change: (topic: Topic) => Result<Topic, TalkError>,
   ): ResultAsync<Topic, TalkError> {
-    return loadTopic(storage, id)
-      .mapErr((e): TalkError => e)
-      .andThen(({ topic }) => change(topic))
-      .andThen((topic) =>
-        saveTalk(storage, topic)
-          .mapErr((e): TalkError => e)
-          .map(() => topic),
-      );
+    return new ResultAsync(
+      commit(id, (stored) =>
+        stored === null
+          ? err({ kind: "no_topic", id })
+          : change(stored).map((topic) => ({ topic, messages: [] })),
+      ),
+    ).andThen((topic) =>
+      topic === null
+        ? errAsync<Topic, TalkError>({ kind: "no_topic", id })
+        : okAsync<Topic, TalkError>(topic),
+    );
   }
 
   return {
     list: () => listTopics(storage).mapErr((e): TalkError => e),
 
-    load,
+    load: (id) =>
+      new ResultAsync(
+        (async (): Promise<Result<TopicView, TalkError>> => {
+          // Best effort: a read-only tab can't record, and still reads.
+          if (!running.has(id)) {
+            const topic = await loadTopicRecord(storage, id);
+            if (topic.isOk() && topic.value !== null) {
+              await reconcile(topic.value, options.model());
+            }
+          }
+          return view(id);
+        })(),
+      ),
 
     start(spec, run = {}) {
       const id = spec.id ?? newId();
@@ -431,9 +565,9 @@ export function createTalk(options: TalkOptions): Talk {
         if (text === "") return err({ kind: "empty_message" });
         const model = modelNow();
         if (model.isErr()) return err(model.error);
-        const existing = await loadTopic(storage, id);
-        if (existing.isOk()) return err({ kind: "topic_exists", id });
-        if (existing.error.kind !== "no_topic") return err(existing.error);
+        const existing = await loadTopicRecord(storage, id);
+        if (existing.isErr()) return err(existing.error);
+        if (existing.value !== null) return err({ kind: "topic_exists", id });
         const story = await loadStory(storage);
         if (story.isErr()) return err(story.error);
         const problem = topicScopeProblem(story.value, spec.scope);
@@ -450,6 +584,7 @@ export function createTalk(options: TalkOptions): Talk {
           startedBy: { kind: "human" },
           session: null,
           messages: 0,
+          answered: 0,
           createdAt: at,
           updatedAt: at,
           closedAt: null,
@@ -462,9 +597,18 @@ export function createTalk(options: TalkOptions): Talk {
       return exclusive(id, async () => {
         const text = message.trim();
         if (text === "") return err({ kind: "empty_message" });
-        const log = await loadTopic(storage, id);
-        if (log.isErr()) return err(log.error);
-        const { topic } = log.value;
+        const model = modelNow();
+        if (model.isErr()) return err(model.error);
+        const loaded = await loadTopicRecord(storage, id);
+        if (loaded.isErr()) return err(loaded.error);
+        if (loaded.value === null) return err({ kind: "no_topic", id });
+        // An answer a failed save left out goes in before the next message.
+        const reconciled = await reconcile(loaded.value, model.value);
+        if (reconciled.isErr()) return err(reconciled.error);
+        const stored = await loadTopicRecord(storage, id);
+        if (stored.isErr()) return err(stored.error);
+        const topic = stored.value;
+        if (topic === null) return err({ kind: "no_topic", id });
         if (topic.status !== "open") {
           return err({ kind: "topic_closed", id, status: topic.status });
         }
@@ -474,28 +618,38 @@ export function createTalk(options: TalkOptions): Talk {
         if (stop.value !== null) {
           return err({ kind: "turn_stopped", id, reason: stop.value.reason });
         }
-        const model = modelNow();
-        if (model.isErr()) return err(model.error);
         return take(topic, text, model.value, run);
       });
     },
 
     resume(id, run = {}) {
       return exclusive(id, async () => {
-        const log = await loadTopic(storage, id);
-        if (log.isErr()) return err(log.error);
-        const { topic } = log.value;
+        const model = modelNow();
+        if (model.isErr()) return err(model.error);
+        const stored = await loadTopicRecord(storage, id);
+        if (stored.isErr()) return err(stored.error);
+        const topic = stored.value;
+        if (topic === null) return err({ kind: "no_topic", id });
         if (topic.status !== "open") {
           return err({ kind: "topic_closed", id, status: topic.status });
         }
-        const model = modelNow();
-        if (model.isErr()) return err(model.error);
+        const stop = await sessionStop(topic);
+        if (stop.isErr()) return err(stop.error);
+        if (stop.value === null) {
+          // Nothing to go on with: record an answer a failed save left out.
+          const reconciled = await reconcile(topic, model.value);
+          if (reconciled.isErr()) return err(reconciled.error);
+          const shown = await view(id);
+          if (shown.isErr()) return err(shown.error);
+          const { stop: none, ...log } = shown.value;
+          return ok({ log, status: "done", stop: none });
+        }
         const outcome = await runner(model.value).resume(
           topic.session ?? topicSessionId(id),
           run,
         );
         if (outcome.isErr()) return err(outcome.error);
-        return finish(topic, model.value, outcome.value);
+        return finish(id, model.value, outcome.value);
       });
     },
 
@@ -526,9 +680,6 @@ export function createTalk(options: TalkOptions): Talk {
         (async (): Promise<Result<TopicLog, TalkError>> => {
           const title = spec.title.trim();
           if (title === "") return err({ kind: "no_title" });
-          const existing = await loadTopic(storage, id);
-          if (existing.isOk()) return err({ kind: "topic_exists", id });
-          if (existing.error.kind !== "no_topic") return err(existing.error);
           const story = await loadStory(storage);
           if (story.isErr()) return err(story.error);
           const problem = topicScopeProblem(story.value, spec.scope);
@@ -546,6 +697,7 @@ export function createTalk(options: TalkOptions): Talk {
             startedBy: author,
             session: null,
             messages: 1,
+            answered: 0,
             createdAt: at,
             updatedAt: at,
             closedAt: null,
@@ -560,7 +712,11 @@ export function createTalk(options: TalkOptions): Talk {
             calls: spec.calls ?? [],
             createdAt: at,
           };
-          const saved = await saveTalk(storage, topic, [message]);
+          const saved = await commit(id, (stored) =>
+            stored === null
+              ? ok({ topic, messages: [message] })
+              : err({ kind: "topic_exists", id }),
+          );
           if (saved.isErr()) return err(saved.error);
           return ok({ topic, messages: [message] });
         })(),
