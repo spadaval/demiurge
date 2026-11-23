@@ -96,3 +96,52 @@ test("a passage whose words are no longer all there isn't found", () => {
     { blockId: "a", start: 0, end: 4 },
   ]);
 });
+
+test("a blank line inside a paragraph isn't taken for a break between paragraphs", () => {
+  const blocks = [
+    { id: "a", text: "First\n\nSecond." },
+    { id: "b", text: "Middle\n\nstill." },
+    { id: "c", text: "Third\n\nand last." },
+  ];
+  const passage = passageAt(
+    blocks,
+    { blockId: "a", offset: 0 },
+    { blockId: "c", offset: 10 },
+  );
+  expect(passage).toEqual({
+    blockId: "a",
+    quote: "First\n\nSecond.\n\nMiddle\n\nstill.\n\nThird\n\nand",
+    through: "c",
+  });
+  if (passage === null) throw new Error("no passage");
+  expect(passageSpans(blocks, passage)).toEqual([
+    { blockId: "a", start: 0, end: 14 },
+    { blockId: "b", start: 0, end: 14 },
+    { blockId: "c", start: 0, end: 10 },
+  ]);
+  // Two blocks, the break inside the first.
+  const two = passageAt(
+    blocks.slice(0, 1).concat(blocks.slice(2)),
+    { blockId: "a", offset: 7 },
+    { blockId: "c", offset: 5 },
+  );
+  expect(two).toEqual({
+    blockId: "a",
+    quote: "Second.\n\nThird",
+    through: "c",
+  });
+  if (two === null) throw new Error("no passage");
+  expect(passageSpans(blocks.slice(0, 1).concat(blocks.slice(2)), two)).toEqual(
+    [
+      { blockId: "a", start: 7, end: 14 },
+      { blockId: "c", start: 0, end: 5 },
+    ],
+  );
+  // Still stale when a block between changes.
+  expect(
+    passageSpans(
+      blocks.map((b) => (b.id === "b" ? { id: "b", text: "Middle." } : b)),
+      passage,
+    ),
+  ).toBeNull();
+});

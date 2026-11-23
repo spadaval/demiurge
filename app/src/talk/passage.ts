@@ -8,7 +8,9 @@
  * its first block's ID, which occurrence of its words there, and its last
  * block's ID when it runs on. Its words are found again only where they are
  * all still there, in those blocks in the same order: the end of the first
- * block, the whole of each block between, and the start of the last.
+ * block, the whole of each block between, and the start of the last. The
+ * quote joins the blocks' parts with a blank line, which a block's own text
+ * can hold too, so it is matched against the blocks, never split on it.
  */
 
 import { anchorAt, locate, type Span } from "../layers/model";
@@ -140,34 +142,55 @@ export function passageSpans(
       ? first
       : blocks.findIndex((b) => b.id === passage.through);
   if (last < first) return null;
-  const parts =
-    first === last ? [passage.quote] : passage.quote.split(PASSAGE_BREAK);
-  if (parts.length !== last - first + 1) return null;
-  const spans: PassageSpan[] = [];
-  for (let i = first; i <= last; i++) {
-    const block = blocks[i];
-    const part = parts[i - first];
-    if (block === undefined || part === undefined) return null;
-    if (i === first) {
-      const span = locate(block.text, {
-        blockId: block.id,
-        quote: part,
-        ...(passage.occurrence === undefined
-          ? {}
-          : { occurrence: passage.occurrence }),
-      });
-      // A passage that runs on takes the rest of its first block.
-      if (span === null || (last > first && span.end !== block.text.length)) {
-        return null;
-      }
-      spans.push({ blockId: block.id, ...span });
-    } else if (i === last) {
-      if (!block.text.startsWith(part)) return null;
-      spans.push({ blockId: block.id, start: 0, end: part.length });
-    } else {
-      if (block.text !== part) return null;
-      spans.push({ blockId: block.id, start: 0, end: part.length });
-    }
+  const firstBlock = blocks[first];
+  const lastBlock = blocks[last];
+  if (firstBlock === undefined || lastBlock === undefined) return null;
+  /** The first block's part, found at the passage's occurrence. */
+  const head = (quote: string) =>
+    locate(firstBlock.text, {
+      blockId: firstBlock.id,
+      quote,
+      ...(passage.occurrence === undefined
+        ? {}
+        : { occurrence: passage.occurrence }),
+    });
+  if (first === last) {
+    const span = head(passage.quote);
+    return span === null ? null : [{ blockId: firstBlock.id, ...span }];
   }
-  return spans;
+  // A block's own text can hold a blank line, so the quote isn't split on
+  // the breaks: the blocks between, as they are now, fix where the first
+  // block's part ends and the last's begins.
+  const middle = blocks.slice(first + 1, last);
+  const joint = ["", ...middle.map((block) => block.text), ""].join(
+    PASSAGE_BREAK,
+  );
+  const { quote } = passage;
+  for (
+    let at = quote.indexOf(joint);
+    at !== -1;
+    at = quote.indexOf(joint, at + 1)
+  ) {
+    const start = head(quote.slice(0, at));
+    const tail = quote.slice(at + joint.length);
+    // A passage that runs on takes the rest of its first block, and the
+    // start of its last.
+    if (
+      start === null ||
+      start.end !== firstBlock.text.length ||
+      !lastBlock.text.startsWith(tail)
+    ) {
+      continue;
+    }
+    return [
+      { blockId: firstBlock.id, ...start },
+      ...middle.map((block) => ({
+        blockId: block.id,
+        start: 0,
+        end: block.text.length,
+      })),
+      { blockId: lastBlock.id, start: 0, end: tail.length },
+    ];
+  }
+  return null;
 }

@@ -122,3 +122,25 @@ test("a passage over several blocks is marked in each, keyed on the last", () =>
   ]);
   expect(layers.notes[0]?.placement).toBeUndefined();
 });
+
+test("a passage whose paragraphs hold blank lines is marked, not stale", () => {
+  const layers = talkLayers(
+    talkNotes([
+      topic("a", {
+        ...passage("p1", "First\n\nSecond.\n\nThird"),
+        through: "p2",
+      }),
+    ]),
+    [
+      { id: "p1", text: "First\n\nSecond." },
+      { id: "p2", text: "Third\n\nand last." },
+    ],
+  );
+  expect(
+    layers.marks.map((m) => [m.anchor.blockId, m.anchor.quote, m.noteId]),
+  ).toEqual([
+    ["p1", "First\n\nSecond.", undefined],
+    ["p2", "Third", "talk:a"],
+  ]);
+  expect(layers.notes[0]?.placement).toBeUndefined();
+});
