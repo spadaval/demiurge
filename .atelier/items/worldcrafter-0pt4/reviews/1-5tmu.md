@@ -39,4 +39,5 @@ The second Done when line asks the Round 5 false marks to clear. These three rem
 
 ## Finding 2: `reader-order --before` flag help still describes the old mark rule
 Recommendation: defer
+Dropped by mcp:b66be996-8cb2-4d67-a57b-cacf9ea7bc65: Fixed on worldcrafter-0pt4's own branch in round 2, before it merged as de8ebda: the reader-order --before flag help in app/scripts/story.ts now gives the new mark rule, and review 2-qwg9 approved it.
 `app/scripts/story.ts` around line 1828 (`READS["reader-order"].flags.before.help`) still says the actor knows what a scene they are in "reveals or pays off, from that scene's latest event on". It does not mention groups, a revealed knowledge record telling what it is of, marks as the scene opens, or "in this scene" turns. The long `--help` paragraph (around 1967) was updated and is right. Writers who read only the flag line will miss the new contract. Update that string on a later pass; it does not change behaviour.
