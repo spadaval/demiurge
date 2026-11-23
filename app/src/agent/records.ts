@@ -21,6 +21,7 @@ import type {
   JsonValue,
   LlmError,
   LlmRequest,
+  Sampler,
   ToolCall,
 } from "../llm/types";
 import type {
@@ -58,7 +59,17 @@ export type AgentRun = {
   /** From 1. */
   index: number;
   message: string;
+  /**
+   * The packet assembled for this message: the one the writer was shown and
+   * edited, when they edited it.
+   */
   context: ContextPacket;
+  /**
+   * The packet's text as the writer edited it and as it was sent, when they
+   * edited it; absent, `packetText(context)` was sent. Never changed once
+   * stored, so the run keeps both what was assembled and what was sent.
+   */
+  editedContext?: string;
   at: number;
 };
 
@@ -68,6 +79,11 @@ export type AgentSession = {
   role: AgentRole;
   scope: AgentScope;
   systemPrompt: string;
+  /**
+   * This session's sampler, laid over its role binding's (later keys win);
+   * absent, the binding's is used as it is.
+   */
+  sampler?: Sampler;
   /** The most model calls one run (a message, or a resume) may make. */
   maxSteps: number;
   /** Stop for the writer's approval before any call that changes the bible. */
@@ -215,6 +231,9 @@ export function readSession(
   }
   if (typeof data.systemPrompt !== "string" || typeof data.steps !== "number") {
     return invalid("no system prompt or step count");
+  }
+  if (data.sampler !== undefined && !isObject(data.sampler)) {
+    return invalid("a sampler that isn't an object");
   }
   // The runner wrote it, and the fields it reads were checked above.
   return ok(data as unknown as AgentSession);

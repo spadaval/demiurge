@@ -4,13 +4,14 @@
  * the one recorded. A runner given it (`complete: replayModel(steps)`), on a
  * copy of the world as it was when the session started, sends the same
  * writer messages and so makes the same tool calls and the same edits; the
- * first request that comes out different is where the replay diverged.
+ * first request that comes out different is where the replay diverged. A run
+ * whose context the writer edited is sent with that edit (`replayOptions`).
  */
 
 import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import type { Completion, LlmError, LlmRequest } from "../llm/types";
-import type { AgentStep, StepError } from "./records";
-import type { Complete } from "./runner";
+import type { AgentRun, AgentStep, StepError } from "./records";
+import type { Complete, MessageOptions } from "./runner";
 
 /** JSON with object keys sorted, so equal values give equal text. */
 function canonical(value: unknown): string {
@@ -64,4 +65,15 @@ export function replayModel(steps: readonly AgentStep[]): Complete {
       ? okAsync(step.response.completion)
       : errAsync(llmError(step.response.error, request.url));
   };
+}
+
+/**
+ * What to send a recorded run's message with in a replay: the writer's edit
+ * of its context packet, when they made one. An unedited run gets a fresh
+ * packet from the replay's world, as it did when it was recorded.
+ */
+export function replayOptions(run: AgentRun): MessageOptions {
+  return run.editedContext === undefined
+    ? {}
+    : { context: { packet: run.context, text: run.editedContext } };
 }
