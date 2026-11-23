@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { JsonValue } from "../llm/types";
+import { createMemoryStorage } from "../storage/memory";
+import { saveStory } from "../story/store";
+import { parseStory } from "../story/story";
 import type { StoryToolResult } from "../story/tools";
+import { executeStoryToolCall } from "../story/tools";
 import { type AgentTurn, callNamed, traceSuspects, turnTrace } from "./inspect";
 import type { AgentStep, StepCall } from "./records";
 
@@ -271,5 +275,47 @@ describe("a turn's trace", () => {
       // "membership m1" isn't a ref.
       ["knowledge:k1"],
     ]);
+  });
+
+  test("names the refs real query results hold, stored as data or listed", async () => {
+    const storage = createMemoryStorage();
+    const story = parseStory(
+      await Bun.file(
+        new URL("../story/fixtures/lighthouse.story.json", import.meta.url),
+      ).text(),
+    )._unsafeUnwrap();
+    (await saveStory(storage, story, 1))._unsafeUnwrap();
+    const run = async (name: string, args: JsonValue) =>
+      (
+        await executeStoryToolCall(
+          storage,
+          {
+            id: name,
+            type: "function",
+            function: { name, arguments: JSON.stringify(args) },
+          },
+          2,
+        )
+      )._unsafeUnwrap().result;
+    const refsOf = (result: StoryToolResult) => {
+      const [only] = turnTrace(
+        turn([step(1, [answered("a", result, 1)], 1, 2)]),
+      );
+      return only === undefined
+        ? []
+        : callNamed(only).flatMap((item) =>
+            item.kind === "reference" && item.reference.kind === "record"
+              ? [item.reference.ref]
+              : [],
+          );
+    };
+    // A fact's `about` holds refs as { kind, id }.
+    expect(refsOf(await run("show", { ref: "fact:oil-runs-out" }))).toEqual(
+      expect.arrayContaining(["fact:oil-runs-out", "count:oil", "object:lamp"]),
+    );
+    // What is held back is a list of refs as text.
+    expect(
+      refsOf(await run("readerOrder", { before: "confession" })),
+    ).toContain("open-question:why-leave");
   });
 });

@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue, ToolCall } from "../llm/types";
-import { parseRef } from "../story/refs";
+import { KIND_NAMES, parseRef } from "../story/refs";
 import type { StoryRecordChange } from "../story/store";
 import type {
   StoryToolRefusal,
@@ -304,27 +304,49 @@ function changeRef(change: StoryRecordChange): string | undefined {
   return `${name}:${decodeURIComponent(parts[1] ?? "")}`;
 }
 
-/** Keys under which a query's data holds a ref (`actor:mara`). */
-const REF_KEYS = new Set(["ref", "on"]);
+/** A whole string that has a ref's form, `kind:id`, with no spaces. */
+const REF_FORM = /^[a-z][a-z-]*:\S+$/;
+
+/** A ref as stored data, `{ kind, id }`, as text, if it is one. */
+function storedRef(value: Record<string, JsonValue | undefined>) {
+  const { kind, id, questionId } = value;
+  if (typeof kind !== "string" || typeof id !== "string") return undefined;
+  if (!Object.hasOwn(KIND_NAMES, kind)) return undefined;
+  // Checked against KIND_NAMES just above.
+  const name = KIND_NAMES[kind as keyof typeof KIND_NAMES];
+  if (kind === "candidate") {
+    return typeof questionId === "string"
+      ? `${name}:${questionId}/${id}`
+      : undefined;
+  }
+  return `${name}:${id}`;
+}
 
 /**
- * The refs a query's data names: a ref under `ref` or `on` (`show`,
- * `touches`, `mentions`, `contradictions`), and a scene's ID under `scene`
- * (`scenes`, `readerOrder`), anywhere in the data, in the order they appear.
- * A value that doesn't parse as a ref is left out.
+ * The refs a query's data names, anywhere in it, in the order they appear:
+ * every string that is wholly a ref (`actor:mara`, under `ref`, `on` or in a
+ * list such as `readerOrder`'s `withheld`), every ref stored as data
+ * (`{ "kind": "count", "id": "oil" }`, as in a fact's `about`), and a scene's
+ * ID under `scene` (`scenes`, `readerOrder`). Only what parses as a ref is
+ * kept; free text is never read for refs.
  */
 function dataRefs(data: JsonValue): string[] {
   const refs: string[] = [];
+  const keep = (text: string | undefined) => {
+    if (text !== undefined && parseRef(text).isOk()) refs.push(text);
+  };
   const visit = (value: JsonValue | undefined, key: string | null) => {
-    if (typeof value === "string" && key !== null) {
-      const text =
-        key === "scene" ? `scene:${value}` : REF_KEYS.has(key) ? value : null;
-      if (text !== null && parseRef(text).isOk()) refs.push(text);
+    if (typeof value === "string") {
+      if (key === "scene" && !value.includes(":")) keep(`scene:${value}`);
+      else if (REF_FORM.test(value)) keep(value);
       return;
     }
     if (Array.isArray(value)) {
       for (const item of value) visit(item, null);
-    } else if (typeof value === "object" && value !== null) {
+      return;
+    }
+    if (typeof value === "object" && value !== null) {
+      keep(storedRef(value));
       for (const [k, item] of Object.entries(value)) visit(item, k);
     }
   };
