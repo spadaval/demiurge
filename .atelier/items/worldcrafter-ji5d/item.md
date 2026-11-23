@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ji5d
 title: Cloudflare Worker sync backend for laptop and phone
-status: changes_requested
+status: in_review
 mission: worldcrafter-3z9j
 labels:
 - sync
@@ -70,3 +70,7 @@ Laptop and phone can now sync one world through a Cloudflare Worker, and a devic
 - A local delete of a key the server never had is not pushed.
 - Pull looks up a key's tombstone by listing the collection's tombstones, once per pulled change. Fine at this app's sizes; a cache would be the fix if it shows.
 
+
+### Responses
+
+1-vant.1: fixed in 4799884
