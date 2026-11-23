@@ -135,6 +135,19 @@ export type StoryCommand =
   | { type: "setSceneActors"; id: string; actors: string[] }
   /** The actor whose eyes the scene is told through; `null` clears it. */
   | { type: "setSceneViewpoint"; id: string; actor: string | null }
+  /**
+   * Links the scene to the Plate document holding its prose; `null` unlinks
+   * it. The document isn't checked here: the bible doesn't hold documents.
+   * Two scenes never share one.
+   */
+  | { type: "setSceneDocument"; id: string; documentId: string | null }
+  /** The book and chapter the scene is packaged in; `null` clears either. */
+  | {
+      type: "setSceneChapter";
+      id: string;
+      book: string | null;
+      chapter: string | null;
+    }
   | { type: "setSceneEvents"; id: string; depicts: EventId[] }
   /** The drives the scene puts under pressure. */
   | { type: "setScenePressures"; id: string; pressures: string[] }
@@ -899,6 +912,63 @@ export function applyStoryCommand(
             })),
           }),
         );
+    }
+
+    case "setSceneDocument": {
+      const { id, documentId } = command;
+      const sharing =
+        documentId === null
+          ? undefined
+          : story.scenes.find(
+              (scene) => scene.id !== id && scene.documentId === documentId,
+            );
+      return existing("scene", story.scenes, id)
+        .andThen(() =>
+          documentId !== null && documentId.trim() === ""
+            ? refuse("invalid_command", "document ID is empty")
+            : sharing !== undefined
+              ? refuse(
+                  "duplicate_id",
+                  `document ${documentId} is already the prose of scene ${sharing.id}`,
+                )
+              : ok(null),
+        )
+        .andThen(() =>
+          kept({
+            ...story,
+            scenes: replace(
+              story.scenes,
+              id,
+              ({ documentId: _, ...scene }) => ({
+                ...scene,
+                ...(documentId === null ? {} : { documentId }),
+              }),
+            ),
+          }),
+        );
+    }
+
+    case "setSceneChapter": {
+      const { id, book, chapter } = command;
+      const blank = [book, chapter].some(
+        (name) => name !== null && name.trim() === "",
+      );
+      return existing("scene", story.scenes, id).andThen(() =>
+        blank
+          ? refuse("invalid_command", "a book or chapter name is empty")
+          : kept({
+              ...story,
+              scenes: replace(
+                story.scenes,
+                id,
+                ({ book: _book, chapter: _chapter, ...scene }) => ({
+                  ...scene,
+                  ...(book === null ? {} : { book }),
+                  ...(chapter === null ? {} : { chapter }),
+                }),
+              ),
+            }),
+      );
     }
 
     case "setSceneEvents":

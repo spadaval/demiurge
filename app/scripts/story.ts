@@ -1094,6 +1094,48 @@ export const EDITS: EditSpecs = {
       return { type: "setSceneViewpoint", id: a.arg("id"), actor };
     },
   },
+  setSceneDocument: {
+    group: "Scenes: the telling",
+    args: ["id", "document-id"],
+    summary:
+      "Link the scene to the app document that holds its prose (none unlinks it). The CLI still reads prose from scenes/<scene-id>.md.",
+    example: ["set-scene-document", "storm", "doc-storm"],
+    build: (a) => ({
+      type: "setSceneDocument",
+      id: a.arg("id"),
+      documentId: orNone(a.arg("document-id")),
+    }),
+  },
+  setSceneChapter: {
+    group: "Scenes: the telling",
+    args: ["id"],
+    flags: {
+      book: { value: "<name>", help: "the book (none clears it)" },
+      chapter: { value: "<name>", help: "the chapter (none clears it)" },
+    },
+    summary:
+      "Say which book and chapter the scene is packaged in. A flag left out clears that one; the telling order stays the scene order.",
+    example: [
+      "set-scene-chapter",
+      "storm",
+      "--book",
+      "One",
+      "--chapter",
+      "The Lamp",
+    ],
+    build: (a) => {
+      const name = (flag: string) => {
+        const value = a.text(flag);
+        return value === undefined ? null : orNone(value);
+      };
+      return {
+        type: "setSceneChapter",
+        id: a.arg("id"),
+        book: name("book"),
+        chapter: name("chapter"),
+      };
+    },
+  },
   setSceneEvents: {
     group: "Scenes: the telling",
     args: ["id", "event-id..."],
