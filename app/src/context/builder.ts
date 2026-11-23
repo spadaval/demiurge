@@ -1,9 +1,21 @@
 /**
  * The context builder (docs/rebuild/data-model-boundaries.md, Boundary 5):
  * assembles the exact request a generation sends, from a window of the
- * document's `prose` projection, cards for the world entries the window
- * mentions, the writer's pins and the instruction. It is pure: the same
- * inputs always give the same request and breakdown.
+ * document's `prose` projection, the story bible's packet for the scene the
+ * document holds, cards for the world entries the window mentions, the
+ * writer's pins and the instruction. It is pure: the same inputs always give
+ * the same request and breakdown.
+ *
+ * The story bible
+ * ---------------
+ * When a story scene links to the document, its scene context packet
+ * (`agent/context.ts`, the one the story agent reads: the scene record,
+ * what the reader has been told before it, the events it depicts and the
+ * people in it) is laid out section by section, in the packet's text form.
+ * The writer can pin a section, which gives it a claim before the window's
+ * growth, or exclude it, which leaves it out. A pin or exclusion naming a
+ * section the packet no longer has is cleared, not an error: it is listed
+ * in the breakdown as `cleared`.
  *
  * The window
  * ----------
@@ -30,18 +42,26 @@
  *
  * 1. the system text, the instruction and the window's minimum length;
  *    if these alone don't fit, the build fails with `budget_too_small`;
- * 2. pinned cards, in pin order;
- * 3. the window, from its minimum up to its preferred length;
- * 4. cards for mentioned entries, the one mentioned nearest the cursor first
+ * 2. pinned bible sections, in packet order;
+ * 3. pinned cards, in pin order;
+ * 4. the other bible sections not excluded, in packet order;
+ * 5. the window, from its minimum up to its preferred length;
+ * 6. cards for mentioned entries, the one mentioned nearest the cursor first
  *    (ties by document ID).
  *
- * Within 2 and 4, cards are dropped from the lowest priority up: the cards
- * sent are the longest run, in priority order, that fits, so a lower-priority
- * card is never sent in place of a higher one. Dropped cards stay in the
- * breakdown, marked as not included.
+ * Within each of 2, 3, 4 and 6, sections and cards are dropped from the
+ * lowest priority up: those sent are the longest run, in priority order,
+ * that fits, so a lower-priority one is never sent in place of a higher one.
+ * Dropped ones stay in the breakdown, marked as not included.
  */
 
 import { err, ok, type Result } from "neverthrow";
+import {
+  type ContextPacket,
+  type ContextSection,
+  packetText,
+  sectionText,
+} from "../agent/context";
 import {
   type BlockPosition,
   blockText,
@@ -89,6 +109,12 @@ export type BuildContextInput = {
   position: StoryPosition;
   /** Document IDs of entries the writer pinned, highest priority first. */
   pins: readonly string[];
+  /**
+   * The story bible's packet for the scene the document holds
+   * (`gatherBibleContext`), with the sections the writer pinned or
+   * excluded, by title. Absent or null: no scene links to the document.
+   */
+  bible?: BibleInput | null;
   /** The writer's own instruction, added to the default one. */
   instruction: string | null;
   profile: BackendProfile;
@@ -98,6 +124,38 @@ export type BuildContextInput = {
   budget: { limit: number; measure?: Measure };
   /** Window length in characters. Defaults to `DEFAULT_WINDOW`. */
   window?: { minimum: number; preferred: number };
+};
+
+export type SectionSelection = {
+  /** Section titles given a claim before the window's growth. */
+  pinned: readonly string[];
+  /** Section titles left out. */
+  excluded: readonly string[];
+};
+
+export const NO_SELECTION: SectionSelection = { pinned: [], excluded: [] };
+
+export type BibleInput = { packet: ContextPacket; selection: SectionSelection };
+
+/** A bible section the builder considered, in packet order. */
+export type SectionChoice = {
+  title: string;
+  /** The section as the request carries it. */
+  text: string;
+  /** Measured alone, in budget units. */
+  size: number;
+  pinned: boolean;
+  excluded: boolean;
+  /** False when excluded, or dropped to fit the budget. */
+  included: boolean;
+};
+
+export type BibleBreakdown = {
+  /** The scene the packet is for. */
+  scene: string;
+  sections: SectionChoice[];
+  /** Pinned or excluded titles the packet doesn't have; they were cleared. */
+  cleared: string[];
 };
 
 export const DEFAULT_WINDOW = { minimum: 1000, preferred: 6000 };
@@ -145,6 +203,11 @@ export type ContextBreakdown = {
   /** The instruction as sent, and the writer's part of it. */
   instruction: { text: string; writer: string | null };
   cards: CardChoice[];
+  /**
+   * The story bible sections, when a scene links to the document. Absent in
+   * requests stored before the bible fed prose requests.
+   */
+  bible?: BibleBreakdown;
   budget: { limit: number; used: number; unit: string };
 };
 
@@ -190,6 +253,12 @@ export const SCENE_NOTES =
   "don't state them as fact. Where the writer's instruction and these " +
   "notes disagree, follow the instruction.";
 
+export const BIBLE_NOTES =
+  "Story bible for this scene: the outline's record of it, what the reader " +
+  "has been told before it opens, and who and what is in it. Write the " +
+  "scene so it agrees with the bible. Where the writer's instruction and " +
+  "the bible disagree, follow the instruction.";
+
 export const NO_POSITION_NOTES =
   "World notes. This document is not a scene in the outline, so facts are " +
   "as they stand at the start of the story.";
@@ -209,14 +278,28 @@ export function buildContext(
 
   return proseBeforeCursor(documentId, input.content, input.cursor).andThen(
     ({ prose, excludedSegments }) => {
-      const render = (cards: readonly string[], length: number) =>
+      const packet = input.bible?.packet ?? null;
+      const bibleText = (sections: ContextSection[]) =>
+        packet === null || sections.length === 0
+          ? null
+          : `${BIBLE_NOTES}\n\n${packetText({ scope: packet.scope, sections })}`;
+      /** The sections sent, in packet order, whatever order they were claimed in. */
+      const inPacketOrder = (titles: readonly string[]) =>
+        (packet?.sections ?? []).filter((s) => titles.includes(s.title));
+      const render = (
+        sectionTitles: readonly string[],
+        cards: readonly string[],
+        length: number,
+      ) =>
         layoutInput(input.layout, {
+          bible: bibleText(inPacketOrder(sectionTitles)),
           notes: cards.length > 0 ? [notes, ...cards].join("\n\n") : null,
           instruction,
           window: windowText(prose, length),
         });
+      let sentSections: string[] = [];
       const sizeOf = (cards: readonly string[], length: number) =>
-        inputSize(render(cards, length), measure);
+        inputSize(render(sentSections, cards, length), measure);
       const fits = (cards: readonly string[], length: number) =>
         sizeOf(cards, length) <= budget.limit;
 
@@ -238,6 +321,51 @@ export function buildContext(
       const byId = new Map(input.entries.map((e) => [e.documentId, e]));
       const card = (entry: Entry) =>
         renderCardAt(entry, input.position, input.entries);
+      const selection = input.bible?.selection ?? NO_SELECTION;
+      const titles = new Set(packet?.sections.map((s) => s.title) ?? []);
+      const cleared = [
+        ...new Set(
+          [...selection.pinned, ...selection.excluded].filter(
+            (title) => !titles.has(title),
+          ),
+        ),
+      ];
+      const sectionChoices: SectionChoice[] = (packet?.sections ?? []).map(
+        (section) => {
+          const text = sectionText(section);
+          const excluded = selection.excluded.includes(section.title);
+          return {
+            title: section.title,
+            text,
+            size: measure.size(text),
+            // An exclusion wins over a pin of the same section.
+            pinned: !excluded && selection.pinned.includes(section.title),
+            excluded,
+            included: false,
+          };
+        },
+      );
+      const sent: string[] = [];
+      /** Claims sections in order while they fit, stopping at the first that doesn't. */
+      const claimSections = (
+        claim: readonly SectionChoice[],
+        length: number,
+      ) => {
+        for (const choice of claim) {
+          const before = sentSections;
+          sentSections = [...before, choice.title];
+          if (!fits(sent, length)) {
+            sentSections = before;
+            break;
+          }
+          choice.included = true;
+        }
+      };
+      claimSections(
+        sectionChoices.filter((c) => c.pinned),
+        minimum,
+      );
+
       const choices: CardChoice[] = [];
       const pinned = new Set<string>();
       for (const id of input.pins) {
@@ -262,12 +390,15 @@ export function buildContext(
           included: false,
         });
       }
-      const sent: string[] = [];
       for (const choice of choices) {
         if (!fits([...sent, choice.text], minimum)) break;
         choice.included = true;
         sent.push(choice.text);
       }
+      claimSections(
+        sectionChoices.filter((c) => !c.pinned && !c.excluded),
+        minimum,
+      );
 
       const length = longestFitting(minimum, preferred, (n) => fits(sent, n));
       const window = windowText(prose, length);
@@ -299,7 +430,7 @@ export function buildContext(
         sent.push(choice.text);
       }
 
-      const llmInput = render(sent, length);
+      const llmInput = render(sentSections, sent, length);
       const options = {
         stream: input.stream,
         ...(input.sampler === undefined ? {} : { sampler: input.sampler }),
@@ -329,6 +460,15 @@ export function buildContext(
           },
           instruction: { text: instruction, writer: writerPart(input) },
           cards: choices,
+          ...(packet === null || packet.scope.kind !== "scene"
+            ? {}
+            : {
+                bible: {
+                  scene: packet.scope.scene,
+                  sections: sectionChoices,
+                  cleared,
+                },
+              }),
           budget: {
             limit: budget.limit,
             used: inputSize(llmInput, measure),
@@ -346,16 +486,24 @@ function writerPart(input: BuildContextInput): string | null {
 }
 
 /**
- * The model input. Chat: the system text and world notes as the system
- * message, then the story and the instruction as the user message.
- * Completion: the notes, the instruction in brackets, then the story, so the
+ * The model input. Chat: the system text, the story bible and world notes as
+ * the system message, then the story and the instruction as the user
+ * message. Completion: the bible and notes, the instruction in brackets,
+ * then the story, so the
  * model continues straight from its last word.
  */
 function layoutInput(
   layout: Layout,
-  parts: { notes: string | null; instruction: string; window: string },
+  parts: {
+    bible: string | null;
+    notes: string | null;
+    instruction: string;
+    window: string;
+  },
 ): LlmInput {
-  const { notes, instruction, window } = parts;
+  const { instruction, window } = parts;
+  const notes =
+    [parts.bible, parts.notes].filter((p) => p !== null).join("\n\n") || null;
   if (layout === "chat") {
     const system = notes === null ? SYSTEM_TEXT : `${SYSTEM_TEXT}\n\n${notes}`;
     const story = window === "" ? "(nothing yet)" : window;

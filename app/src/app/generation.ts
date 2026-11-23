@@ -1,6 +1,10 @@
 import { ElementApi } from "platejs";
-import type { ContextBreakdown } from "~/context/builder";
-import { gatherWorldContext } from "~/context/gather";
+import {
+  type ContextBreakdown,
+  NO_SELECTION,
+  type SectionSelection,
+} from "~/context/builder";
+import { gatherBibleContext, gatherWorldContext } from "~/context/gather";
 import {
   type ContextRequest,
   createRequestStore,
@@ -61,6 +65,12 @@ export interface Slip {
    * now. Only that request is in memory; sending stores it as a revision.
    */
   readonly retargeted: boolean;
+  /**
+   * The request is being put together again with a new bible section
+   * selection (`selectSections`): it can't be sent, and its sections can't
+   * be changed, until the new one replaces it.
+   */
+  readonly assembling: boolean;
 }
 
 /**
@@ -81,6 +91,18 @@ export interface Generation {
    * shows it in the slip.
    */
   openRequest(documentId: string, after?: string | null): Promise<void>;
+  /**
+   * The story bible sections the writer pinned or excluded in a document,
+   * kept for this visit and used by each request assembled there.
+   */
+  sections(documentId: string): SectionSelection;
+  /**
+   * Pins or excludes bible sections for the slip's document and puts the
+   * slip's request together again with them. Only for a slip showing a new
+   * request (not a segment's past one) that isn't sending; edits in the
+   * slip are discarded, as with any newly assembled request.
+   */
+  selectSections(selection: SectionSelection): Promise<void>;
   /** Shows the request that made a segment; sending it regenerates the segment. */
   showSegmentRequest(documentId: string, segmentId: string): Promise<void>;
   closeSlip(): void;
@@ -96,7 +118,10 @@ export interface Generation {
 
 export interface GenerationOptions {
   readonly workspace: Workspace;
-  /** The workspace's connected storage (`createConnectedStorage`). */
+  /**
+   * The workspace's connected storage (`createConnectedStorage`); in the
+   * app, the bible's (`Bible.storage`), which the story bible is read from.
+   */
   readonly storage: StorageAdapter;
   readonly world: WorldStore;
   readonly manuscript: Manuscript;
@@ -140,6 +165,10 @@ export function createGeneration(options: GenerationOptions): Generation {
   const generators = new WeakMap<DocumentSession, Generator>();
   const slip = createStore<Slip | null>(null);
   const notice = createStore<GenerationNotice | null>(null);
+  /** Each document's bible section pins and exclusions. */
+  const selections = new Map<string, SectionSelection>();
+  /** Counts `openRequest` calls: only the latest may show its request. */
+  let assemblies = 0;
   /** Each document's send or regenerate in progress. */
   const running = new Map<string, Promise<void>>();
 
@@ -154,6 +183,7 @@ export function createGeneration(options: GenerationOptions): Generation {
         requests,
         gather: () =>
           gatherWorldContext(world, manuscript.timeline, documentId),
+        bible: () => gatherBibleContext(storage, documentId),
         profile: (name) => {
           const current = profile.get();
           return current?.name === name ? current : undefined;
@@ -256,6 +286,81 @@ export function createGeneration(options: GenerationOptions): Generation {
     if (accepted.isErr()) fail(accepted.error);
   };
 
+  const sectionsOf = (documentId: string) =>
+    selections.get(documentId) ?? NO_SELECTION;
+
+  /**
+   * Assembles a request and shows it, unless a later `openRequest` started
+   * or the slip changed meanwhile (closed, replaced, or sent): the slip
+   * shown when it started is the one it replaces, so a late result never
+   * reopens a slip, overwrites another, or undoes a newer request.
+   */
+  const openRequest = async (documentId: string, after?: string | null) => {
+    const ticket = ++assemblies;
+    const startedOver = slip.get();
+    const session = workspace.session(documentId);
+    const generator = generatorOf(documentId);
+    const current = profile.get();
+    if (!session || !generator) return;
+    if (!current) {
+      notice.set({
+        kind: "info",
+        text: "Set up the model this world generates with first.",
+      });
+      return;
+    }
+    const assembledOver = session.editor.children;
+    const selection = sectionsOf(documentId);
+    const prepared = await generator.prepare({
+      after: after === undefined ? caretBlock(session) : after,
+      profile: current.name,
+      instruction: null,
+      pins: [],
+      sections: selection,
+      layout: "chat",
+      budget: REQUEST_BUDGET,
+    });
+    if (ticket !== assemblies || slip.get() !== startedOver) return;
+    if (prepared.isErr()) {
+      if (startedOver?.assembling) {
+        slip.set({ ...startedOver, assembling: false });
+      }
+      return fail(prepared.error);
+    }
+    const record = prepared.value;
+    // A pin or exclusion of a section the bible no longer has is cleared;
+    // the breakdown names it. With no scene linked to the document now,
+    // every one is, and the notice says so.
+    const { bible } = record.breakdown;
+    const chosen = selection.pinned.length + selection.excluded.length;
+    if (selections.get(documentId) === selection && chosen > 0) {
+      if (bible === undefined) {
+        selections.delete(documentId);
+        notice.set({
+          kind: "info",
+          text: "No scene in the story bible holds this document now, so its pinned and left-out bible sections were cleared.",
+        });
+      } else if (bible.cleared.length > 0) {
+        const kept = (titles: readonly string[]) =>
+          titles.filter((t) => !bible.cleared.includes(t));
+        selections.set(documentId, {
+          pinned: kept(selection.pinned),
+          excluded: kept(selection.excluded),
+        });
+      }
+    }
+    slip.set({
+      documentId,
+      record,
+      breakdown: record.breakdown,
+      replaces: null,
+      sending: false,
+      assembledOver,
+      retargeted: false,
+      assembling: false,
+    });
+  };
+
   return {
     profile,
     slip,
@@ -263,40 +368,29 @@ export function createGeneration(options: GenerationOptions): Generation {
     dismissNotice: () => notice.set(null),
     active: (documentId) => generatorOf(documentId)?.active ?? IDLE,
 
-    async openRequest(documentId, after) {
-      const session = workspace.session(documentId);
-      const generator = generatorOf(documentId);
-      const current = profile.get();
-      if (!session || !generator) return;
-      if (!current) {
-        notice.set({
-          kind: "info",
-          text: "Set up the model this world generates with first.",
-        });
+    openRequest,
+
+    sections: sectionsOf,
+
+    async selectSections(selection) {
+      const shown = slip.get();
+      if (
+        !shown ||
+        shown.sending ||
+        shown.assembling ||
+        shown.replaces !== null
+      ) {
         return;
       }
-      const assembledOver = session.editor.children;
-      const prepared = await generator.prepare({
-        after: after === undefined ? caretBlock(session) : after,
-        profile: current.name,
-        instruction: null,
-        pins: [],
-        layout: "chat",
-        budget: REQUEST_BUDGET,
-      });
-      prepared.match(
-        (record) =>
-          slip.set({
-            documentId,
-            record,
-            breakdown: record.breakdown,
-            replaces: null,
-            sending: false,
-            assembledOver,
-            retargeted: false,
-          }),
-        fail,
-      );
+      selections.set(shown.documentId, selection);
+      const assembling: Slip = { ...shown, assembling: true };
+      slip.set(assembling);
+      const rebuilt = openRequest(shown.documentId, shown.record.after);
+      const ticket = assemblies;
+      await rebuilt;
+      // It gave up before assembling (the document closed, say), and no
+      // later request is on its way.
+      if (slip.get() === assembling && assemblies === ticket) slip.set(shown);
     },
 
     async showSegmentRequest(documentId, segmentId) {
@@ -313,6 +407,7 @@ export function createGeneration(options: GenerationOptions): Generation {
         sending: false,
         assembledOver: null,
         retargeted,
+        assembling: false,
       });
     },
 
@@ -320,7 +415,7 @@ export function createGeneration(options: GenerationOptions): Generation {
 
     async sendSlip(edited) {
       const shown = slip.get();
-      if (!shown || shown.sending) return;
+      if (!shown || shown.sending || shown.assembling) return;
       const generator = generatorOf(shown.documentId);
       if (!generator) return;
       const sending: Slip = { ...shown, sending: true };

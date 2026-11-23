@@ -1346,6 +1346,56 @@ a {
   color: var(--ink-3);
 }
 
+/* Story bible sections: hairline rows, Pin and Leave out as quiet text
+   buttons at the right. */
+.context-viewer-bible {
+  margin: 0 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.context-viewer-bible-head {
+  margin: 0;
+}
+
+.context-viewer-bible .context-viewer-note {
+  display: block;
+  margin: 4px 0 0;
+}
+
+.context-viewer-section-actions button:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.context-viewer-bible li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.context-viewer-section-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.context-viewer-section-actions button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.context-viewer-section-actions button:hover:not(:disabled),
+.context-viewer-section-actions button[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .context-viewer-fields {
   min-width: 0;
   margin: 0;

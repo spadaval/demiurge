@@ -24,6 +24,7 @@ import type {
 import type { JsonValue, StorageAdapter, StorageError } from "../storage/types";
 import type {
   AssembledRequest,
+  BibleBreakdown,
   CardChoice,
   CardReason,
   ContextBreakdown,
@@ -295,7 +296,7 @@ function parseLlmRequest(value: JsonValue | undefined): Check<LlmRequest> {
 
 function parseBreakdown(value: JsonValue | undefined): Check<ContextBreakdown> {
   if (!isRecord(value)) return err("breakdown must be an object");
-  const { layout, position, window, instruction, cards, budget } = value;
+  const { layout, position, window, instruction, cards, budget, bible } = value;
   if (!oneOf("chat", "completion")(layout)) {
     return err("breakdown.layout must be chat or completion");
   }
@@ -345,6 +346,12 @@ function parseBreakdown(value: JsonValue | undefined): Check<ContextBreakdown> {
     if (parsed === null) return err(`breakdown.cards[${i}] is malformed`);
     parsedCards.push(parsed);
   }
+  let parsedBible: BibleBreakdown | undefined;
+  if (bible !== undefined) {
+    const checked = parseBible(bible);
+    if (checked === null) return err("breakdown.bible is malformed");
+    parsedBible = checked;
+  }
   return ok({
     layout,
     position: parsedPosition,
@@ -359,8 +366,43 @@ function parseBreakdown(value: JsonValue | undefined): Check<ContextBreakdown> {
     },
     instruction: { text: instruction.text, writer: instruction.writer },
     cards: parsedCards,
+    ...(parsedBible === undefined ? {} : { bible: parsedBible }),
     budget: { limit: budget.limit, used: budget.used, unit: budget.unit },
   });
+}
+
+function parseBible(value: JsonValue): BibleBreakdown | null {
+  if (
+    !isRecord(value) ||
+    !isString(value.scene) ||
+    !Array.isArray(value.sections) ||
+    !isStringList(value.cleared)
+  ) {
+    return null;
+  }
+  const sections: BibleBreakdown["sections"] = [];
+  for (const section of value.sections) {
+    if (
+      !isRecord(section) ||
+      !isString(section.title) ||
+      !isString(section.text) ||
+      !isNumber(section.size) ||
+      !isBoolean(section.pinned) ||
+      !isBoolean(section.excluded) ||
+      !isBoolean(section.included)
+    ) {
+      return null;
+    }
+    sections.push({
+      title: section.title,
+      text: section.text,
+      size: section.size,
+      pinned: section.pinned,
+      excluded: section.excluded,
+      included: section.included,
+    });
+  }
+  return { scene: value.scene, sections, cleared: value.cleared };
 }
 
 function parseCard(value: JsonValue): CardChoice | null {

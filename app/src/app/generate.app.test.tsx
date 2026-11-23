@@ -8,7 +8,7 @@
  */
 import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { errAsync } from "neverthrow";
+import { errAsync, ResultAsync } from "neverthrow";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { canonicalize } from "~/content/canonicalize";
@@ -16,6 +16,8 @@ import { RETARGETED } from "~/generate/describe";
 import type { BackendProfile } from "~/llm/types";
 import { createMemoryStorage } from "~/storage/memory";
 import type { JsonValue, StorageAdapter } from "~/storage/types";
+import { saveStory } from "~/story/store";
+import { parseStory } from "~/story/story";
 import { createStorageConnection } from "~/workspace/connection";
 import type { KeyValueStore } from "~/workspace/tabs";
 import { createWorkspace, type Workspace } from "~/workspace/workspace";
@@ -870,4 +872,192 @@ test("after sending a retargeted slip, a later model change still applies", asyn
   expect((received[1]?.body as { model: string }).model).toBe("model-b");
   services.generation.profile.save({ ...PROFILE, model: "model-c" });
   expect(await regenerateModel("Third.")).toBe("model-c");
+});
+
+/** Saves the lighthouse bible with its arrival scene's prose held in doc1. */
+async function linkArrivalToDoc1() {
+  const story = parseStory(
+    await Bun.file(
+      new URL("../story/fixtures/lighthouse.story.json", import.meta.url),
+    ).text(),
+  )._unsafeUnwrap();
+  (
+    await saveStory(
+      storage,
+      {
+        ...story,
+        scenes: story.scenes.map((scene) =>
+          scene.id === "arrival" ? { ...scene, documentId: "doc1" } : scene,
+        ),
+      },
+      1000,
+    )
+  )._unsafeUnwrap();
+}
+
+test("the slip shows the scene's story bible sections, to pin or leave out", async () => {
+  await linkArrivalToDoc1();
+  await render(withProfile());
+  await generateNext();
+
+  const sectionList = () =>
+    [
+      ...(query(".request-slip")?.querySelectorAll(
+        "[aria-label='Story bible sections'] li",
+      ) ?? []),
+    ].map((li) => [
+      li.querySelector("span")?.textContent ?? "",
+      li.getAttribute("data-included"),
+    ]);
+  const system = () =>
+    (
+      query(".request-slip")?.querySelectorAll("textarea")[0] as
+        | HTMLTextAreaElement
+        | undefined
+    )?.value ?? "";
+  expect(query(".request-slip")?.textContent).toContain(
+    "Story bible for scene:arrival",
+  );
+  expect(sectionList().map(([text]) => (text ?? "").split(" · ")[0])).toEqual([
+    "The scene",
+    "What the reader has been told before it",
+    "Events it depicts",
+    "People in it",
+  ]);
+  expect(system()).toContain("## People in it");
+
+  // Leave out: the request is put together again without it.
+  await click(
+    query("button[aria-label='Leave out People in it']") as Element | null,
+  );
+  await until(() => !system().includes("## People in it"), "the reassembly");
+  expect(sectionList()[3]?.[1]).toBe("false");
+  expect(sectionList()[3]?.[0]).toContain("left out");
+  expect(services.generation.sections("doc1")).toEqual({
+    pinned: [],
+    excluded: ["People in it"],
+  });
+
+  // Pin one, then the scene stops holding doc1: the next request has no
+  // bible, and the pins and exclusions are cleared, with a notice.
+  await click(query("button[aria-label='Pin The scene']") as Element | null);
+  await until(
+    () => services.generation.sections("doc1").pinned.length === 1,
+    "the pin",
+  );
+  expect(query("button[aria-label='Unpin The scene']")).not.toBeNull();
+  (
+    await services.bible.execute({
+      type: "setSceneDocument",
+      id: "arrival",
+      documentId: null,
+    })
+  )._unsafeUnwrap();
+  await act(() => services.generation.openRequest("doc1"));
+  await until(
+    () => query("[aria-label='Story bible sections']") === null,
+    "a slip without the bible",
+  );
+  expect(services.generation.sections("doc1")).toEqual({
+    pinned: [],
+    excluded: [],
+  });
+  expect(query(".notices")?.textContent).toContain(
+    "pinned and left-out bible sections were cleared",
+  );
+  expect(system()).not.toContain("## The scene");
+});
+
+test("while a section change is put together, the old request can't be sent, and closing the slip drops it", async () => {
+  await linkArrivalToDoc1();
+  await render(withProfile());
+  await generateNext();
+  const first = services.generation.slip.get()?.record.id;
+
+  // Hold the next read of the bible.
+  const list = storage.storyRecords.list.bind(storage.storyRecords);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  storage.storyRecords.list = (...args) =>
+    ResultAsync.fromSafePromise(held).andThen(() => list(...args));
+
+  await click(
+    query("button[aria-label='Leave out People in it']") as Element | null,
+  );
+  await until(
+    () => services.generation.slip.get()?.assembling === true,
+    "the rebuild to start",
+  );
+  expect(query(".request-slip")?.textContent).toContain(
+    "Putting the request together again",
+  );
+  expect(button("Send", ".request-slip")?.disabled).toBe(true);
+  expect(
+    query<HTMLButtonElement>("button[aria-label='Pin The scene']")?.disabled,
+  ).toBe(true);
+
+  // Neither Send nor a second change goes through meanwhile.
+  await act(() => services.generation.sendSlip(null));
+  await act(() =>
+    services.generation.selectSections({ pinned: ["The scene"], excluded: [] }),
+  );
+  expect(received).toHaveLength(0);
+  expect(services.generation.slip.get()?.record.id).toBe(first);
+
+  // Closed before it is done, the slip stays closed.
+  await click(button("Close", ".request-slip"));
+  expect(query(".request-slip")).toBeNull();
+  release();
+  storage.storyRecords.list = list;
+  await act(() => new Promise((resolve) => setTimeout(resolve, 30)));
+  expect(services.generation.slip.get()).toBeNull();
+  expect(query(".request-slip")).toBeNull();
+  expect(received).toHaveLength(0);
+
+  // Reopened, the request has the change, and the rebuild is finished.
+  await generateNext();
+  expect(services.generation.slip.get()?.assembling).toBe(false);
+  expect(
+    (
+      query(".request-slip")?.querySelectorAll("textarea")[0] as
+        | HTMLTextAreaElement
+        | undefined
+    )?.value,
+  ).not.toContain("## People in it");
+});
+
+test("a request put together at the caret during a section change is the one shown", async () => {
+  await linkArrivalToDoc1();
+  await render(withProfile());
+  await generateNext();
+  expect(services.generation.slip.get()?.record.after).toBe("p2");
+
+  const list = storage.storyRecords.list.bind(storage.storyRecords);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  storage.storyRecords.list = (...args) =>
+    ResultAsync.fromSafePromise(held).andThen(() => list(...args));
+
+  const changed = services.generation.selectSections({
+    pinned: [],
+    excluded: ["People in it"],
+  });
+  const atCaret = services.generation.openRequest("doc1", "p1");
+  release();
+  storage.storyRecords.list = list;
+  await act(async () => {
+    await Promise.all([changed, atCaret]);
+  });
+
+  const shown = services.generation.slip.get();
+  expect(shown?.record.after).toBe("p1");
+  expect(shown?.assembling).toBe(false);
+  // The newer request was assembled with the change.
+  expect(JSON.stringify(shown?.record.request.body)).not.toContain(
+    "## People in it",
+  );
 });

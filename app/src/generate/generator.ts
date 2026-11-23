@@ -70,6 +70,7 @@ import {
   ResultAsync,
 } from "neverthrow";
 import { nanoid, type TElement } from "platejs";
+import type { ContextError, ContextPacket } from "~/agent/context";
 import { canonicalize } from "~/content/canonicalize";
 import { GeneratedTextStream } from "~/content/generated-text";
 import { blockText } from "~/content/projections";
@@ -82,6 +83,8 @@ import {
   type BuildContextError,
   type BuildContextInput,
   buildContext,
+  NO_SELECTION,
+  type SectionSelection,
 } from "~/context/builder";
 import type { WorldContext } from "~/context/gather";
 import type {
@@ -147,6 +150,8 @@ export type GenerateError =
   /** The request failed `checkRequest`; it was not sent. */
   | InvalidRequestError
   | { kind: "world_context_failed"; error: TimelineStoreError }
+  /** The story bible's packet for the document's scene couldn't be built. */
+  | { kind: "bible_context_failed"; error: ContextError }
   | { kind: "read_only"; documentId: string; reason: ReadOnlyReason }
   /** A generation is already running in this document (its segment is null while it loads). */
   | { kind: "busy"; documentId: string; segmentId: string | null }
@@ -175,8 +180,10 @@ export type GenerationTarget =
 export type PrepareInput = Pick<
   BuildContextInput,
   "pins" | "instruction" | "layout" | "budget"
-> &
-  Partial<Pick<BuildContextInput, "sampler" | "window" | "stream">> & {
+> & {
+  /** The bible sections the writer pinned or excluded; none by default. */
+  sections?: SectionSelection;
+} & Partial<Pick<BuildContextInput, "sampler" | "window" | "stream">> & {
     /** Generation continues from the end of this top-level block; `null` is the end. */
     after: string | null;
     profile: string;
@@ -291,6 +298,12 @@ export interface GeneratorOptions {
   readonly requests: RequestStore;
   /** The world entries and story position of the session's document. */
   readonly gather: () => ResultAsync<WorldContext, TimelineStoreError>;
+  /**
+   * The story bible's packet for the scene the document holds, or null when
+   * no scene links to it (`gatherBibleContext`). Without it, requests carry
+   * no bible sections.
+   */
+  readonly bible?: () => ResultAsync<ContextPacket | null, ContextError>;
   readonly profile: (name: string) => BackendProfile | undefined;
   /** Sends the requests. Defaults to the global `fetch`. */
   readonly fetch?: Fetch;
@@ -443,12 +456,19 @@ export function createGenerator(options: GeneratorOptions): Generator {
     if (document.isErr()) return errAsync(document.error);
     const cursor = cursorAfter(documentId, document.value, input.after);
     if (cursor.isErr()) return errAsync(cursor.error);
+    const bible =
+      options
+        .bible?.()
+        .mapErr(
+          (error): GenerateError => ({ kind: "bible_context_failed", error }),
+        ) ?? okAsync<ContextPacket | null, GenerateError>(null);
     return options
       .gather()
       .mapErr(
         (error): GenerateError => ({ kind: "world_context_failed", error }),
       )
-      .andThen(({ entries, position }) => {
+      .andThen((world) => bible.map((packet) => ({ ...world, packet })))
+      .andThen(({ entries, position, packet }) => {
         const built = buildContext({
           documentId,
           content: document.value,
@@ -456,6 +476,10 @@ export function createGenerator(options: GeneratorOptions): Generator {
           entries,
           position,
           pins: input.pins,
+          bible:
+            packet === null
+              ? null
+              : { packet, selection: input.sections ?? NO_SELECTION },
           instruction: input.instruction,
           profile,
           layout: input.layout,

@@ -50,10 +50,23 @@ export type ScopeError = { kind: "invalid_scope"; message: string };
 
 export type ContextError = ScopeError | StoryStoreError | StorageError;
 
+export type PacketOptions = {
+  /**
+   * Whether a scene packet ends with the scene's stored prose ("Its prose so
+   * far"). Prose generation leaves it out: its request carries the prose
+   * before the cursor from the open editor (`context/builder.ts`).
+   */
+  prose?: boolean;
+};
+
+/** The title of a scene packet's prose section. */
+export const SCENE_PROSE_SECTION = "Its prose so far";
+
 /** The packet for `scope` from the bible and prose in `storage` now. */
 export function buildContextPacket(
   storage: StorageAdapter,
   scope: AgentScope,
+  options: PacketOptions = {},
 ): ResultAsync<ContextPacket, ContextError> {
   return loadStory(storage)
     .mapErr((error): ContextError => error)
@@ -64,7 +77,12 @@ export function buildContextPacket(
         .mapErr((error): ContextError => error)
         .map((prose) => ({
           scope,
-          sections: sections(story, prose, scope),
+          sections: sections(story, prose, scope).filter(
+            (section) =>
+              options.prose !== false ||
+              scope.kind !== "scene" ||
+              section.title !== SCENE_PROSE_SECTION,
+          ),
         }));
     });
 }
@@ -97,10 +115,13 @@ export function scopeProblem(
 export function packetText(packet: ContextPacket): string {
   return [
     `# Context: ${scopeName(packet.scope)}`,
-    ...packet.sections.map(
-      ({ title, lines }) => `## ${title}\n\n${lines.join("\n")}`,
-    ),
+    ...packet.sections.map(sectionText),
   ].join("\n\n");
+}
+
+/** One section as the packet's text sets it. */
+export function sectionText({ title, lines }: ContextSection): string {
+  return `## ${title}\n\n${lines.join("\n")}`;
 }
 
 export function scopeName(scope: AgentScope): string {
@@ -194,7 +215,7 @@ function sceneSections(
       ),
     },
     {
-      title: "Its prose so far",
+      title: SCENE_PROSE_SECTION,
       lines: [
         notRead !== undefined
           ? `(could not be read: ${notRead.message})`
