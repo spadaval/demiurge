@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-aq1r
 title: Feed unified story bible context into the scene prose Context Viewer
-status: changes_requested
+status: in_review
 mission: worldcrafter-3z9j
 labels:
 - context
@@ -77,5 +77,8 @@ A prose request for a scene's document now carries that scene's story bible, bui
 
 A new app test holds `storyRecords.list` behind a gate during a Leave out. It checks that Send is disabled, that `sendSlip` and a second change send and change nothing, that closing the slip before the gate opens keeps it closed, and that the next request carries the change. `bun run check`: 1674 pass, 0 fail.
 
+**Round 3** (`f76cd26`). The finding holds. The slip object was the only identity an assembly had, so two assemblies over the same slip both passed the guard, and the first to finish shut out the newer one. `openRequest` now takes a ticket from a counter, and only the latest ticket may show its request; the slip check stays, so close and send still invalidate. `selectSections` restores its slip after a no-op rebuild only when no later request has started. A new app test holds the bible read, starts a section change and then a request at `p1`, and checks the slip shows the `p1` request, built with the change and not assembling. `bun run check`: 1675 pass, 0 fail.
+
 ### Responses
 1-9m41.1: fixed in 65b320b
+2-qhzw.2: fixed in f76cd26
