@@ -110,6 +110,8 @@ export type SessionSpec = {
   scope: AgentScope;
   /** Defaults to `defaultSystemPrompt(role)`. */
   systemPrompt?: string;
+  /** In place of the role binding's profile's model; its model by default. */
+  model?: string;
   /** Laid over the role binding's sampler; none by default. */
   sampler?: Sampler;
   /** Defaults to `DEFAULT_MAX_STEPS`. */
@@ -151,11 +153,13 @@ export type MessageOptions = RunOptions & {
 };
 
 /**
- * Changes to a session, kept on its record. `sampler: null` drops the
- * session's sampler, so the binding's is used as it is.
+ * Changes to a session, kept on its record. `model: null` and
+ * `sampler: null` drop the session's own, so the binding's are used as
+ * they are.
  */
 export type SessionChanges = {
   systemPrompt?: string;
+  model?: string | null;
   sampler?: Sampler | null;
 };
 
@@ -365,6 +369,7 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
       role: spec.role,
       scope: spec.scope,
       systemPrompt,
+      ...(spec.model === undefined ? {} : { model: spec.model }),
       ...(spec.sampler === undefined ? {} : { sampler: spec.sampler }),
       maxSteps: spec.maxSteps ?? DEFAULT_MAX_STEPS,
       approveMutations: spec.approveMutations ?? false,
@@ -474,6 +479,8 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
         session.systemPrompt = changes.systemPrompt;
         session.messages[0] = { role: "system", content: changes.systemPrompt };
       }
+      if (changes.model === null) delete session.model;
+      else if (changes.model !== undefined) session.model = changes.model;
       if (changes.sampler === null) delete session.sampler;
       else if (changes.sampler !== undefined) session.sampler = changes.sampler;
       session.updatedAt = now();
@@ -536,7 +543,14 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
         tool_call_id: call.id,
         content: storyToolResultContent(answer),
       });
-      step.calls.push({ call, result: answer, changes: [], at: now() });
+      const at = now();
+      step.calls.push({
+        call,
+        result: answer,
+        changes: [],
+        at,
+        finishedAt: at,
+      });
     }
     step.finishedAt = now();
     session.updatedAt = step.finishedAt;
@@ -550,6 +564,11 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
     runIndex: number,
   ): Promise<Result<RunOutcome, AgentError>> {
     const binding = bindings[session.role];
+    // The session's model, if it has one, goes to the binding's server.
+    const profile =
+      session.model === undefined
+        ? binding.profile
+        : { ...binding.profile, model: session.model };
     const offered = offeredTools(toolAccess(session.role, binding));
     const touched: AgentStep[] = [];
     const touch = (step: AgentStep) => {
@@ -608,7 +627,7 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
         modelCalls += 1;
         const index = session.steps + 1;
         const request = buildRequest(
-          binding.profile,
+          profile,
           {
             kind: "chat",
             // A copy: the session goes on growing, the request must not.
@@ -630,7 +649,7 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
           sendOptions.onDelta = (delta) =>
             onEvent({ kind: "delta", step: index, delta });
         }
-        const answer = await complete(binding.profile, request, sendOptions);
+        const answer = await complete(profile, request, sendOptions);
         step = {
           version: AGENT_RECORD_VERSION,
           session: session.id,
@@ -724,9 +743,10 @@ export function createAgentRunner(options: AgentRunnerOptions): AgentRunner {
           tool_call_id: call.id,
           content: storyToolResultContent(result),
         });
-        const answered: StepCall = { call, result, changes, at };
+        const finishedAt = now();
+        const answered: StepCall = { call, result, changes, at, finishedAt };
         step.calls.push(answered);
-        step.finishedAt = now();
+        step.finishedAt = finishedAt;
         if (unanswered(session.messages).length === 0) session.next = "model";
         const saved = await save();
         if (saved.isErr()) return err(saved.error);

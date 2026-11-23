@@ -148,6 +148,11 @@ const click = (element: Element | null | undefined) =>
 const field = (view: HTMLElement, label: string) =>
   view.querySelector(`textarea[aria-label="${label}"]`);
 
+const samplerField = (view: HTMLElement) =>
+  view.querySelector('[data-role="model"] textarea');
+const modelField = (view: HTMLElement) =>
+  view.querySelector('[data-role="model"] input[type="text"]');
+
 const foldLine = (view: HTMLElement, role: string) =>
   view.querySelector(`[data-role="${role}"] .context-viewer-part-size`)
     ?.textContent;
@@ -167,6 +172,8 @@ async function startSession(id: string): Promise<AgentSession> {
 async function baseFor(session: AgentSession): Promise<NextTurnBase> {
   return {
     systemPrompt: session.systemPrompt,
+    model: session.model ?? null,
+    profileModel: profile.model ?? null,
     sampler: session.sampler ?? {},
     profileSampler: profile.sampler,
     packet: await value(buildContextPacket(storage, session.scope)),
@@ -261,8 +268,10 @@ describe("the next turn's prompt and model", () => {
     ]);
     expect(view.textContent).not.toContain("every new session");
 
-    type(field(view, "Model"), '{ "temperature": 0.1 }');
-    expect(foldLine(view, "parameters")).toContain("edited · this session");
+    expect(foldLine(view, "model")).toBe("m");
+    type(modelField(view), "other-model");
+    type(samplerField(view), '{ "temperature": 0.1 }');
+    expect(foldLine(view, "model")).toBe("edited · this session · other-model");
 
     stub.script(reply("Fine."));
     await next.send();
@@ -271,18 +280,20 @@ describe("the next turn's prompt and model", () => {
       content: "Be terse.",
     });
     expect(stub.received[0]?.temperature).toBe(0.1);
+    expect(stub.received[0]?.model).toBe("other-model");
     const { session: stored } = await value(loadSessionLog(storage, "s"));
     expect(stored).toMatchObject({
       systemPrompt: "Be terse.",
+      model: "other-model",
       sampler: { temperature: 0.1 },
     });
     // The profile's defaults are untouched: a new session starts as before.
     expect(defaults.get(profile.name, "plan")).toEqual({
       systemPrompt: defaultSystemPrompt("plan"),
     });
-    expect((await startSession("t")).systemPrompt).toBe(
-      defaultSystemPrompt("plan"),
-    );
+    const fresh = await startSession("t");
+    expect(fresh.systemPrompt).toBe(defaultSystemPrompt("plan"));
+    expect(fresh.model).toBeUndefined();
   });
 
   test("a prompt edit as the profile default reaches new sessions too", async () => {
@@ -315,16 +326,60 @@ describe("the next turn's prompt and model", () => {
     );
   });
 
-  test("a sampler that isn't a JSON object can't be sent, and discarding restores it", async () => {
+  test("a model edit as the profile default is sent, and new sessions ask for it", async () => {
+    const session = await startSession("s");
+    const next = await composeNext(session, "Hello.");
+    const { view } = next;
+    type(modelField(view), "big-model");
+    click(
+      [...view.querySelectorAll("input[type=radio]")].find(
+        (input) => input.parentElement?.textContent === "Profile default",
+      ),
+    );
+    expect(view.textContent).toContain(
+      "Changes the model and sampler for every new session with this profile.",
+    );
+    stub.script(reply("Fine."), reply("Also fine."));
+    await next.send();
+    expect(stub.received[0]?.model).toBe("big-model");
+    const fresh = await startSession("t");
+    expect(fresh.model).toBe("big-model");
+    await value(runner.send("t", "Hi."));
+    expect(stub.received[1]?.model).toBe("big-model");
+
+    // Emptied, the field goes back to the profile's model, here and as default.
+    const back = await composeNext(fresh, "Again.");
+    expect((modelField(back.view) as HTMLInputElement).value).toBe("big-model");
+    type(modelField(back.view), "");
+    click(
+      [...back.view.querySelectorAll("input[type=radio]")].find(
+        (input) => input.parentElement?.textContent === "Profile default",
+      ),
+    );
+    stub.script(reply("Back."));
+    await back.send();
+    expect(stub.received[2]?.model).toBe("m");
+    expect(defaults.get(profile.name, "plan").model).toBeUndefined();
+  });
+
+  test("a sampler that isn't a JSON object, or that sets the model, can't be sent; discarding restores it", async () => {
     const session = await startSession("s");
     const { view, base } = await composeNext(session, "Hello.");
-    type(field(view, "Model"), "{ nope");
+    type(samplerField(view), "{ nope");
     expect(view.querySelector("[role=alert]")?.textContent).toContain(
       "not valid JSON",
     );
+    type(samplerField(view), '{ "model": "x" }');
+    expect(view.querySelector("[role=alert]")?.textContent).toBe(
+      "Name the model in its own field, not in the sampler.",
+    );
+    type(samplerField(view), '{ "stream": true }');
+    expect(view.querySelector("[role=alert]")?.textContent).toContain(
+      'can\'t set "stream"',
+    );
     click(view.querySelector(".context-viewer-discard"));
     expect(view.querySelector("[role=alert]")).toBeNull();
-    expect((field(view, "Model") as HTMLTextAreaElement).value).toBe(
+    expect((samplerField(view) as HTMLTextAreaElement).value).toBe(
       nextTurnDraft(base).sampler,
     );
   });
@@ -494,6 +549,27 @@ describe("a past turn", () => {
 
     // Nothing in the slip is AI prose.
     expect(view.innerHTML).not.toContain("ai-segment");
+  });
+
+  test("a query's result names its records as references to follow", async () => {
+    const turn = await multiToolTurn();
+    const opened: Reference[] = [];
+    const view = render(
+      <ContextViewer
+        kind="turn"
+        title="Turn 1"
+        turn={turn}
+        onOpen={(reference) => opened.push(reference)}
+      />,
+    );
+    const show = view.querySelectorAll(".slip-trace > li")[0];
+    click(show?.querySelector("summary"));
+    const links = [
+      ...(show?.querySelectorAll(".slip-refs .slip-reference") ?? []),
+    ];
+    expect(links.map((link) => link.textContent)).toEqual(["actor:mara"]);
+    click(links[0]);
+    expect(opened).toEqual([{ kind: "record", ref: "actor:mara" }]);
   });
 
   test("following a trace suspect opens it, and the slip stays", async () => {

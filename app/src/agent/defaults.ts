@@ -1,7 +1,7 @@
 /**
  * What a new story agent session starts with, per backend profile and role:
- * a system prompt and a sampler the writer saved as that profile's default
- * from the agent slip ("Profile default"). An edit scoped to "This session"
+ * a system prompt, a model and a sampler the writer saved as that profile's
+ * default from the agent slip ("Profile default"). An edit scoped to "This session"
  * goes on the session record instead (`AgentRunner.configure`).
  *
  * Like the profile itself (`generate/profile.ts`), this is configuration of
@@ -16,11 +16,24 @@ import { AGENT_ROLES, type AgentRole } from "./profiles";
 import { defaultSystemPrompt } from "./prompt";
 
 /** A role's saved defaults; a field that is absent was never saved. */
-export type RoleDefaults = { systemPrompt?: string; sampler?: Sampler };
+export type RoleDefaults = {
+  systemPrompt?: string;
+  model?: string;
+  sampler?: Sampler;
+};
+
+/** Changes to a role's defaults; `model: null` goes back to the profile's. */
+export type DefaultChanges = {
+  systemPrompt?: string;
+  model?: string | null;
+  sampler?: Sampler;
+};
 
 /** What a new session of `role` with a profile starts with. */
 export type SessionDefaults = {
   systemPrompt: string;
+  /** In place of the profile's model; none when nothing was saved. */
+  model?: string;
   /** Laid over the role binding's sampler; none when nothing was saved. */
   sampler?: Sampler;
 };
@@ -35,7 +48,7 @@ export interface AgentDefaultsStore {
   save(
     profile: string,
     role: AgentRole,
-    changes: RoleDefaults,
+    changes: DefaultChanges,
   ): Result<void, string>;
 }
 
@@ -50,9 +63,10 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 /** One role's stored defaults, keeping only the fields in the right shape. */
 function roleDefaults(value: unknown): RoleDefaults {
   if (!isObject(value)) return {};
-  const { systemPrompt, sampler } = value;
+  const { systemPrompt, model, sampler } = value;
   return {
     ...(typeof systemPrompt === "string" ? { systemPrompt } : {}),
+    ...(typeof model === "string" ? { model } : {}),
     // Read back from JSON, so every value is a JSON value.
     ...(isObject(sampler) ? { sampler: sampler as Sampler } : {}),
   };
@@ -89,13 +103,18 @@ export function createAgentDefaultsStore(
       const saved = parse(keyValue.getItem(key))[profile]?.[role] ?? {};
       return {
         systemPrompt: saved.systemPrompt ?? defaultSystemPrompt(role),
+        ...(saved.model === undefined ? {} : { model: saved.model }),
         ...(saved.sampler === undefined ? {} : { sampler: saved.sampler }),
       };
     },
     save(profile, role, changes) {
       const saved = parse(keyValue.getItem(key));
       const roles = saved[profile] ?? {};
-      roles[role] = { ...roles[role], ...changes };
+      const { model, ...rest } = changes;
+      const next: RoleDefaults = { ...roles[role], ...rest };
+      if (model === null) delete next.model;
+      else if (model !== undefined) next.model = model;
+      roles[role] = next;
       saved[profile] = roles;
       try {
         keyValue.setItem(key, JSON.stringify(saved));

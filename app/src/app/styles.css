@@ -1569,6 +1569,31 @@ a {
   margin: 0 0 10px;
 }
 
+.slip-field {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.agent-slip input[type="text"] {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--rail);
+  color: var(--ink);
+  caret-color: var(--ink);
+}
+
+.agent-slip input[type="text"]:hover,
+.agent-slip input[type="text"]:focus-visible {
+  border-color: var(--rule-strong);
+}
+
+.agent-slip input[type="text"]:disabled {
+  color: var(--ink-2);
+}
+
 .slip-scope {
   margin: 0 0 8px;
   padding: 0;

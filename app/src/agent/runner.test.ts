@@ -13,6 +13,7 @@ import type { StorageAdapter } from "../storage/types";
 import { loadStory, saveStory } from "../story/store";
 import { parseStory, type Story } from "../story/story";
 import { buildContextPacket, packetText } from "./context";
+import { sessionTurns, turnTrace } from "./inspect";
 import type { ProfileBindings } from "./profiles";
 import { loadSessionLog } from "./records";
 import { replayModel, replayOptions } from "./replay";
@@ -578,5 +579,33 @@ describe("editing a session", () => {
     );
     expect(outcome.status).toBe("done");
     expect(outcome.session.runs[0]?.editedContext).toBe("Only this.");
+  });
+});
+
+describe("timing", () => {
+  test("a call's duration is its own, though the writer paused before the next", async () => {
+    const r = await started({ id: "s", role: "plan", scope: world });
+    stub.script(toolCalls(show, show), reply("Done."));
+    let pause = false;
+    await value(
+      r.send("s", "Look twice.", {
+        shouldPause: () => pause,
+        onEvent: (event) => {
+          if (event.kind === "call") pause = true;
+        },
+      }),
+    );
+    const [paused] = sessionTurns(await value(loadSessionLog(storage, "s")));
+    if (paused === undefined) throw new Error("no turn");
+    const before = turnTrace(paused);
+    const ms = (trace: typeof before) =>
+      trace.map((c) => (c.state.kind === "answered" ? c.state.ms : null));
+    expect(ms(before)).toEqual([1, null]);
+
+    clock += 3_600_000;
+    await value(r.resume("s"));
+    const [turn] = sessionTurns(await value(loadSessionLog(storage, "s")));
+    if (turn === undefined) throw new Error("no turn");
+    expect(ms(turnTrace(turn))).toEqual([1, 1]);
   });
 });

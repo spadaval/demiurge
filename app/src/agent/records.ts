@@ -80,6 +80,11 @@ export type AgentSession = {
   scope: AgentScope;
   systemPrompt: string;
   /**
+   * The model this session asks for, in place of its profile's; absent, the
+   * profile's.
+   */
+  model?: string;
+  /**
    * This session's sampler, laid over its role binding's (later keys win);
    * absent, the binding's is used as it is.
    */
@@ -118,7 +123,13 @@ export type StepCall = {
   result: StoryToolResult;
   /** The story records it wrote or deleted; empty for a query or refusal. */
   changes: readonly StoryRecordChange[];
+  /** When it started running. */
   at: number;
+  /**
+   * When it was answered. Absent on calls stored before it was recorded,
+   * whose duration isn't known.
+   */
+  finishedAt?: number;
 };
 
 export type AgentStep = {
@@ -234,6 +245,9 @@ export function readSession(
   }
   if (data.sampler !== undefined && !isObject(data.sampler)) {
     return invalid("a sampler that isn't an object");
+  }
+  if (data.model !== undefined && typeof data.model !== "string") {
+    return invalid("a model that isn't a string");
   }
   // The runner wrote it, and the fields it reads were checked above.
   return ok(data as unknown as AgentSession);

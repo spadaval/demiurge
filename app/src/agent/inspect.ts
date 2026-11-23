@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue, ToolCall } from "../llm/types";
+import { parseRef } from "../story/refs";
 import type { StoryRecordChange } from "../story/store";
 import type {
   StoryToolRefusal,
@@ -64,7 +65,10 @@ export type TraceCall = {
         kind: "answered";
         result: StoryToolResult;
         changes: readonly StoryRecordChange[];
-        /** How long it ran, in milliseconds, when that is known. */
+        /**
+         * How long it ran, in milliseconds; null for a call stored before
+         * its end was recorded.
+         */
         ms: number | null;
       }
     /** Made by the model and not answered yet: running, or waiting. */
@@ -78,8 +82,7 @@ export function turnTrace(turn: AgentTurn): TraceCall[] {
     const written =
       step.response.ok === true ? step.response.completion.toolCalls : [];
     step.calls.forEach((answered, i) => {
-      const next = step.calls[i + 1];
-      const end = next?.at ?? step.finishedAt;
+      const end = answered.finishedAt;
       calls.push({
         ordinal: calls.length + 1,
         step: step.index,
@@ -88,7 +91,8 @@ export function turnTrace(turn: AgentTurn): TraceCall[] {
           kind: "answered",
           result: answered.result,
           changes: answered.changes,
-          ms: end >= answered.at ? end - answered.at : null,
+          ms:
+            end !== undefined && end >= answered.at ? end - answered.at : null,
         },
       });
     });
@@ -300,6 +304,34 @@ function changeRef(change: StoryRecordChange): string | undefined {
   return `${name}:${decodeURIComponent(parts[1] ?? "")}`;
 }
 
+/** Keys under which a query's data holds a ref (`actor:mara`). */
+const REF_KEYS = new Set(["ref", "on"]);
+
+/**
+ * The refs a query's data names: a ref under `ref` or `on` (`show`,
+ * `touches`, `mentions`, `contradictions`), and a scene's ID under `scene`
+ * (`scenes`, `readerOrder`), anywhere in the data, in the order they appear.
+ * A value that doesn't parse as a ref is left out.
+ */
+function dataRefs(data: JsonValue): string[] {
+  const refs: string[] = [];
+  const visit = (value: JsonValue | undefined, key: string | null) => {
+    if (typeof value === "string" && key !== null) {
+      const text =
+        key === "scene" ? `scene:${value}` : REF_KEYS.has(key) ? value : null;
+      if (text !== null && parseRef(text).isOk()) refs.push(text);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, null);
+    } else if (typeof value === "object" && value !== null) {
+      for (const [k, item] of Object.entries(value)) visit(item, k);
+    }
+  };
+  visit(data, null);
+  return refs;
+}
+
 /** Something a call's result names, for the slip to list above the result. */
 export type Named =
   /** A record or scene to open; `removed` when the call deleted it. */
@@ -309,7 +341,8 @@ export type Named =
 
 /**
  * What a call's result names: each story record it wrote or deleted, then
- * what it suspects may now be stale, each once.
+ * what it suspects may now be stale, then the records and scenes a query's
+ * data names, each once.
  */
 export function callNamed(call: TraceCall): Named[] {
   if (call.state.kind !== "answered") return [];
@@ -337,6 +370,19 @@ export function callNamed(call: TraceCall): Named[] {
       { kind: "reference", reference: suspect.target, removed: false },
       referenceKey(suspect.target),
     );
+  }
+  const { result } = call.state;
+  if (result.ok && result.kind === "query" && result.tool !== "trace") {
+    for (const ref of dataRefs(result.data)) {
+      add(
+        {
+          kind: "reference",
+          reference: { kind: "record", ref },
+          removed: false,
+        },
+        ref,
+      );
+    }
   }
   return named;
 }

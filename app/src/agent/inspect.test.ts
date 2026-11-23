@@ -23,7 +23,14 @@ const answered = (
   result: StoryToolResult,
   at: number,
   changes: StepCall["changes"] = [],
-): StepCall => ({ call: call(id, result.tool), result, changes, at });
+  finishedAt: number | null = at + 1,
+): StepCall => ({
+  call: call(id, result.tool),
+  result,
+  changes,
+  at,
+  ...(finishedAt === null ? {} : { finishedAt }),
+});
 
 function step(
   index: number,
@@ -74,8 +81,18 @@ describe("a turn's trace", () => {
     const first = traced([]);
     const trace = turnTrace(
       turn([
-        step(1, [answered("a", first, 10), answered("b", first, 25)], 2, 40),
-        step(2, [answered("c", first, 50)], 3, 58),
+        // Between a and b the writer paused: a's time is its own.
+        step(
+          1,
+          [
+            answered("a", first, 10, [], 14),
+            answered("b", first, 9000, [], 9015),
+          ],
+          2,
+          9015,
+        ),
+        // Stored before calls recorded their end: not known.
+        step(2, [answered("c", first, 9050, [], null)], 3, 9058),
       ]),
     );
     expect(trace.map((c) => [c.ordinal, c.step, c.state.kind])).toEqual([
@@ -87,7 +104,7 @@ describe("a turn's trace", () => {
     ]);
     expect(
       trace.map((c) => (c.state.kind === "answered" ? c.state.ms : null)),
-    ).toEqual([15, 15, 8, null, null]);
+    ).toEqual([4, 15, null, null, null]);
     // The call as the model wrote it.
     expect(trace[0]?.call.function.arguments).toBe('{"ref":"actor:mara"}');
   });
@@ -193,6 +210,66 @@ describe("a turn's trace", () => {
       },
       { kind: "record", id: "constraint/c1", removed: false },
       { kind: "record", id: "story", removed: false },
+    ]);
+  });
+
+  test("names the records and scenes a query's data holds", () => {
+    const query = (tool: string, data: JsonValue): StoryToolResult => ({
+      ok: true,
+      tool,
+      kind: "query",
+      lines: [],
+      data,
+    });
+    const named = turnTrace(
+      turn([
+        step(
+          1,
+          [
+            answered(
+              "a",
+              query("touches", {
+                ref: "actor:mara",
+                direct: [
+                  { ref: "drive:keep-light", how: ["its drive"] },
+                  { ref: "scene:arrival", how: ["a scene it's in"] },
+                ],
+              }),
+              1,
+            ),
+            answered(
+              "b",
+              query("scenes", [
+                { scene: "arrival", position: 1 },
+                { scene: "confession", position: 3 },
+              ]),
+              2,
+            ),
+            answered(
+              "c",
+              query("contradictions", [
+                { source: "membership", message: "m", on: "membership m1" },
+                { source: "knowledge", message: "k", on: "knowledge:k1" },
+              ]),
+              3,
+            ),
+          ],
+          3,
+          4,
+        ),
+      ]),
+    ).map((call) =>
+      callNamed(call).map((item) =>
+        item.kind === "reference" && item.reference.kind === "record"
+          ? item.reference.ref
+          : item,
+      ),
+    );
+    expect(named).toEqual([
+      ["actor:mara", "drive:keep-light", "scene:arrival"],
+      ["scene:arrival", "scene:confession"],
+      // "membership m1" isn't a ref.
+      ["knowledge:k1"],
     ]);
   });
 });

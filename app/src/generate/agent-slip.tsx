@@ -409,6 +409,10 @@ export function AgentTurnSlip({
 /** What the next turn would send, before the writer's edits. */
 export type NextTurnBase = {
   systemPrompt: string;
+  /** The model the session asks for in place of its profile's, or null. */
+  model: string | null;
+  /** The profile's own model, or null when it names none. */
+  profileModel: string | null;
   /** What the session lays over the profile's sampler. */
   sampler: Sampler;
   /** The profile's own sampler, which `sampler` is laid over. */
@@ -421,9 +425,12 @@ export type NextTurnBase = {
 export type NextTurnDraft = {
   systemPrompt: string;
   promptScope: EditScope;
+  /** The model's name; empty for the profile's own. */
+  model: string;
   /** The session's sampler as a JSON object. */
   sampler: string;
-  samplerScope: EditScope;
+  /** Who a model or sampler edit is for. */
+  modelScope: EditScope;
   context: string;
 };
 
@@ -434,14 +441,28 @@ export function nextTurnDraft(base: NextTurnBase): NextTurnDraft {
   return {
     systemPrompt: base.systemPrompt,
     promptScope: "session",
+    model: base.model ?? "",
     sampler: samplerText(base.sampler),
-    samplerScope: "session",
+    modelScope: "session",
     context: packetText(base.packet),
   };
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Body keys the request builder sets itself, over any sampler key of the
+ * same name: a sampler holding one would be saved and never sent.
+ */
+const BUILT_KEYS = [
+  "model",
+  "messages",
+  "prompt",
+  "tools",
+  "tool_choice",
+  "stream",
+];
 
 /**
  * The edits `draft` makes to `base`, for `sendNextTurn`; only what changed.
@@ -455,6 +476,13 @@ export function nextTurnEdits(
   const edits: NextTurnEdits = {};
   if (draft.systemPrompt !== base.systemPrompt) {
     edits.systemPrompt = { text: draft.systemPrompt, scope: draft.promptScope };
+  }
+  const model = draft.model.trim();
+  if (model !== (base.model ?? "")) {
+    edits.model = {
+      name: model === "" ? null : model,
+      scope: draft.modelScope,
+    };
   }
   if (draft.sampler !== samplerText(base.sampler)) {
     let parsed: unknown;
@@ -470,8 +498,17 @@ export function nextTurnEdits(
         'The sampler must be a JSON object, like { "temperature": 0.8 }.',
       );
     }
+    const built = BUILT_KEYS.find((key) => key in parsed);
+    if (built === "model") {
+      return err("Name the model in its own field, not in the sampler.");
+    }
+    if (built !== undefined) {
+      return err(
+        `The sampler can't set "${built}": the app sets it for every request.`,
+      );
+    }
     // JSON.parse only produces JSON values.
-    edits.sampler = { value: parsed as Sampler, scope: draft.samplerScope };
+    edits.sampler = { value: parsed as Sampler, scope: draft.modelScope };
   }
   if (draft.context !== packetText(base.packet)) {
     edits.context = { packet: base.packet, text: draft.context };
@@ -506,9 +543,11 @@ export function NextTurnSlip({
     onDraftChange({ ...draft, ...changes });
   const original = nextTurnDraft(base);
   const edits = nextTurnEdits(base, draft);
+  const modelEdited =
+    draft.model !== original.model || draft.sampler !== original.sampler;
   const edited =
     draft.systemPrompt !== original.systemPrompt ||
-    draft.sampler !== original.sampler ||
+    modelEdited ||
     draft.context !== original.context;
   return (
     <section
@@ -536,30 +575,55 @@ export function NextTurnSlip({
             />
           )}
         </Part>
-        <Part
-          label="Model"
-          kind="parameters"
-          value={draft.sampler}
-          original={original.sampler}
-          onChange={(sampler) => set({ sampler })}
-          state={scopeState(draft.samplerScope)}
-          code
-        >
+        <details className="context-viewer-part" data-role="model">
+          <summary>
+            <span className="context-viewer-part-label">Model</span>
+            <span className="context-viewer-part-size">
+              {modelEdited ? `${scopeState(draft.modelScope)} · ` : ""}
+              {draft.model.trim() ||
+                base.profileModel ||
+                "the server's default"}
+            </span>
+          </summary>
+          <label className="slip-field">
+            <span className="context-viewer-part-label">Model name</span>
+            <input
+              type="text"
+              className="context-viewer-code"
+              value={draft.model}
+              placeholder={base.profileModel ?? "the server's default"}
+              onChange={(event) => set({ model: event.target.value })}
+              spellCheck={false}
+            />
+          </label>
           <p className="context-viewer-note">
-            {target.profileLabel}. Laid over the profile's own sampler:{" "}
+            Empty uses {target.profileLabel}'s own model.
+          </p>
+          <label className="slip-field">
+            <span className="context-viewer-part-label">Sampler (JSON)</span>
+            <textarea
+              value={draft.sampler}
+              onChange={(event) => set({ sampler: event.target.value })}
+              rows={Math.min(20, draft.sampler.split("\n").length + 1)}
+              spellCheck={false}
+              className="context-viewer-code"
+            />
+          </label>
+          <p className="context-viewer-note">
+            Laid over {target.profileLabel}'s own sampler:{" "}
             <code className="context-viewer-code">
               {JSON.stringify(base.profileSampler)}
             </code>
           </p>
-          {draft.sampler === original.sampler ? null : (
+          {modelEdited ? (
             <ScopeChoice
-              label="Who the sampler edit is for"
-              scope={draft.samplerScope}
-              reach="Changes the sampler for every new session with this profile."
-              onChange={(samplerScope) => set({ samplerScope })}
+              label="Who the model edit is for"
+              scope={draft.modelScope}
+              reach="Changes the model and sampler for every new session with this profile."
+              onChange={(modelScope) => set({ modelScope })}
             />
-          )}
-        </Part>
+          ) : null}
+        </details>
         <PacketSections packet={base.packet} />
         <Part
           label="Context packet"

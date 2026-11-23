@@ -1,6 +1,6 @@
 /**
  * Sending a session's next turn with the writer's edits from the agent slip
- * (`generate/agent-slip.tsx`): its system prompt and sampler, each scoped to
+ * (`generate/agent-slip.tsx`): its system prompt, model and sampler, each scoped to
  * this session or saved as the profile's default for new sessions, and its
  * context packet, for this turn only.
  *
@@ -27,6 +27,8 @@ export type EditScope = "session" | "default";
 /** The writer's edits for the next turn; an absent part wasn't edited. */
 export type NextTurnEdits = {
   systemPrompt?: { text: string; scope: EditScope };
+  /** The model by name; null for the profile's own. */
+  model?: { name: string | null; scope: EditScope };
   sampler?: { value: Sampler; scope: EditScope };
   /** The packet the writer was shown, and the text they left it as. */
   context?: { packet: ContextPacket; text: string };
@@ -56,11 +58,12 @@ export function sendNextTurn(
   edits: NextTurnEdits,
   options: RunOptions = {},
 ): ResultAsync<RunOutcome, NextTurnError> {
-  const { systemPrompt, sampler, context } = edits;
+  const { systemPrompt, model, sampler, context } = edits;
   const asDefault = {
     ...(systemPrompt?.scope === "default"
       ? { systemPrompt: systemPrompt.text }
       : {}),
+    ...(model?.scope === "default" ? { model: model.name } : {}),
     ...(sampler?.scope === "default" ? { sampler: sampler.value } : {}),
   };
   if (Object.keys(asDefault).length > 0) {
@@ -71,6 +74,7 @@ export function sendNextTurn(
   }
   const changes: SessionChanges = {
     ...(systemPrompt === undefined ? {} : { systemPrompt: systemPrompt.text }),
+    ...(model === undefined ? {} : { model: model.name }),
     ...(sampler === undefined ? {} : { sampler: sampler.value }),
   };
   const configured: ResultAsync<unknown, NextTurnError> =
