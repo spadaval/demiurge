@@ -50,9 +50,10 @@ export function gatherWorldContext(
  * The story bible's context for one document: the scene context packet
  * (`agent/context.ts`, the one the story agent reads) of the scene whose
  * prose the document holds, without that scene's stored prose, since a
- * prose request carries the text before the cursor itself. Null when no
- * scene links to the document. Should more than one scene name it (sync
- * can make that happen), the first in telling order is taken.
+ * prose request carries the text before the cursor itself, and without what
+ * the scene touches, which is for planning. Null when no scene links to the
+ * document. Should more than one scene name it (sync can make that happen),
+ * the first in telling order is taken.
  */
 export function gatherBibleContext(
   storage: StorageAdapter,
@@ -67,7 +68,7 @@ export function gatherBibleContext(
         : buildContextPacket(
             storage,
             { kind: "scene", scene: scene.id },
-            { prose: false },
+            { prose: false, touches: false },
           );
     });
 }

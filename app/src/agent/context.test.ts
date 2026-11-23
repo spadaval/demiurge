@@ -4,7 +4,7 @@ import { createMemoryStorage } from "../storage/memory";
 import type { StorageAdapter, StoredDocument } from "../storage/types";
 import { exportWorld, importWorld } from "../storage/world-file";
 import documentsFile from "../story/fixtures/lighthouse.documents.json";
-import { readerOrderQuery } from "../story/queries";
+import { readerOrderQuery, touchesQuery } from "../story/queries";
 import { executeStoryCommand, saveStory } from "../story/store";
 import { parseStory, type Story } from "../story/story";
 import {
@@ -101,6 +101,7 @@ describe("a scene", () => {
       "What the reader has been told before it",
       "Events it depicts",
       "People in it",
+      "What it touches",
       "Its prose so far",
     ]);
     expect(section(found, "What the reader has been told before it")).toBe(
@@ -129,6 +130,32 @@ describe("a scene", () => {
     expect(section(found, "The scene")).toContain(
       'prose: document doc-storm-night "The night the light failed"',
     );
+  });
+
+  test("has what it touches, as `touches` lists it", async () => {
+    const found = await packet({ kind: "scene", scene: "storm-night" });
+    expect(section(found, "What it touches")).toBe(
+      touchesQuery(fixture, { kind: "scene", id: "storm-night" })
+        ._unsafeUnwrap()
+        .lines.join("\n"),
+    );
+    expect(section(found, "What it touches")).toContain("event:wreck");
+  });
+
+  test("leaves out its prose and touches when asked to", async () => {
+    const found = await value(
+      buildContextPacket(
+        storage,
+        { kind: "scene", scene: "storm-night" },
+        { prose: false, touches: false },
+      ),
+    );
+    expect(found.sections.map((s) => s.title)).toEqual([
+      "The scene",
+      "What the reader has been told before it",
+      "Events it depicts",
+      "People in it",
+    ]);
   });
 
   test("says when its prose isn't written or can't be read", async () => {

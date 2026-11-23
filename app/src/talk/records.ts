@@ -36,20 +36,36 @@ export type TopicScope =
   | { kind: "scene"; scene: string }
   /**
    * A passage of a scene: the block it starts in, in the scene's document,
-   * and its text when the topic was started. When the block is gone or its
-   * text has changed, the topic follows the scene.
+   * and its text when the topic was started. When its words are no longer
+   * there, the topic follows the scene.
    */
   | {
       kind: "passage";
       scene: string;
       documentId: string;
       blockId: string;
+      /**
+       * The selected words. A passage over several blocks has each block's
+       * part, joined by a blank line (`PASSAGE_BREAK`).
+       */
       quote: string;
+      /**
+       * Which occurrence of the quote (its first block's part) in the block
+       * it starts in, from 0; absent for the first.
+       */
+      occurrence?: number;
+      /** The block it ends in, when that isn't the one it starts in. */
+      through?: string;
     }
   /** A bible record by ref: `drive:keep-light`. */
   | { kind: "record"; ref: string };
 
 export type TopicScopeKind = TopicScope["kind"];
+
+export type PassageScope = Extract<TopicScope, { kind: "passage" }>;
+
+/** What joins the parts of a passage over several blocks in its quote. */
+export const PASSAGE_BREAK = "\n\n";
 
 export const TOPIC_STATUSES = ["open", "resolved", "archived"] as const;
 export type TopicStatus = (typeof TOPIC_STATUSES)[number];
@@ -189,11 +205,20 @@ function scopeProblem(value: unknown): string | undefined {
     case "scene":
       return isString(value.scene) ? undefined : "a scene scope with no scene";
     case "passage":
-      return [value.scene, value.documentId, value.blockId, value.quote].every(
-        isString,
-      )
+      if (
+        ![value.scene, value.documentId, value.blockId, value.quote].every(
+          isString,
+        )
+      ) {
+        return "a passage scope missing its scene, document, block or quote";
+      }
+      return (value.occurrence === undefined ||
+        (Number.isInteger(value.occurrence) &&
+          typeof value.occurrence === "number" &&
+          value.occurrence >= 0)) &&
+        (value.through === undefined || isString(value.through))
         ? undefined
-        : "a passage scope missing its scene, document, block or quote";
+        : "a passage scope with a bad occurrence or end block";
     case "record":
       return isString(value.ref) ? undefined : "a record scope with no ref";
     default:

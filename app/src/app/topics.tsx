@@ -34,6 +34,7 @@ import type {
 } from "~/talk/records";
 import { SCOPE_GROUPS, scopeLine, scopeName } from "~/talk/scope";
 import type { TopicView, TurnStop } from "~/talk/talk";
+import { useShowTopic } from "./anchored-talk";
 import { useServices, useStore } from "./hooks";
 import { Empty, LedgerGroup, LedgerRow, ViewLink } from "./inspector";
 import { contradictionKind } from "./inspector-model";
@@ -82,13 +83,9 @@ const aboutLine = (story: Story | null, scope: TopicScope) =>
 
 /** Opens a new world topic in a tab of its own. */
 function useNewTopic() {
-  const { talk, workspace } = useServices();
-  const navigate = useNavigate();
-  return async () => {
-    const id = talk.draft({ kind: "world" });
-    workspace.commands.openSheet(topicTab(id));
-    await navigate({ to: "/topic/$topicId", params: { topicId: id } });
-  };
+  const { talk } = useServices();
+  const show = useShowTopic();
+  return () => show(talk.draft({ kind: "world" }));
 }
 
 /** Keeps a sheet's tab open and in front while its route shows. */
@@ -518,9 +515,9 @@ function seesLine(scope: TopicScope): string {
     case "world":
       return "The model sees the premise, the scenes, the open questions and the contradictions, and this topic.";
     case "scene":
-      return "The model sees this scene, what the reader knows before it, its events and people, and this topic.";
+      return "The model sees this scene, what the reader knows before it, its events and people, what it touches, and this topic.";
     case "passage":
-      return "The model sees this passage, its scene, what the reader knows before it, and this topic.";
+      return "The model sees this passage, its scene, what the reader knows before it, what the scene touches, and this topic.";
     case "record":
       return "The model sees this record, what it touches, the scenes that touch it, and this topic.";
   }

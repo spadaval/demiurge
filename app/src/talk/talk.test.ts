@@ -29,9 +29,18 @@ import {
   type ModelAuthor,
   readMessage,
   readTopic,
+  type Topic,
+  type TopicScope,
   topicRecord,
 } from "./records";
-import { scopeLine, topicPrompt } from "./scope";
+import {
+  openTopicsOn,
+  recordTopicScope,
+  sameScope,
+  scopeLine,
+  topicPrompt,
+  topicScopeProblem,
+} from "./scope";
 import {
   createTalk,
   profilePrompt,
@@ -687,6 +696,95 @@ describe("stored talk records", () => {
       }).isErr(),
     ).toBe(true);
     expect(readMessage(record).isErr()).toBe(true);
+  });
+
+  test("a passage scope's occurrence and end block are checked when present", () => {
+    const record = (scope: Record<string, unknown>) =>
+      topicRecord({
+        version: 1,
+        id: "t1",
+        title: "T",
+        scope: {
+          kind: "passage",
+          scene: "s",
+          documentId: "d",
+          blockId: "b",
+          quote: "q",
+          ...scope,
+        } as TopicScope,
+        status: "open",
+        startedBy: { kind: "human" },
+        session: null,
+        messages: 0,
+        answered: 0,
+        createdAt: 1,
+        updatedAt: 1,
+        closedAt: null,
+      });
+    expect(readTopic(record({})).isOk()).toBe(true);
+    expect(readTopic(record({ occurrence: 2, through: "c" })).isOk()).toBe(
+      true,
+    );
+    expect(readTopic(record({ occurrence: -1 })).isErr()).toBe(true);
+    expect(readTopic(record({ occurrence: 1.5 })).isErr()).toBe(true);
+    expect(readTopic(record({ through: 3 })).isErr()).toBe(true);
+  });
+});
+
+describe("anchored scopes", () => {
+  test("a scene record's topic is about the scene; any other record's, the record", () => {
+    expect(recordTopicScope({ kind: "scene", id: "storm-night" })).toEqual({
+      kind: "scene",
+      scene: "storm-night",
+    });
+    expect(
+      recordTopicScope({ kind: "candidate", questionId: "why", id: "debt" }),
+    ).toEqual({ kind: "record", ref: "candidate:why/debt" });
+  });
+
+  test("the open topics on a scene include its passages'; a record's are its own", () => {
+    const at = (id: string, scope: TopicScope, status: Topic["status"]) =>
+      ({ id, scope, status }) as Topic;
+    const passage: TopicScope = {
+      kind: "passage",
+      scene: "storm-night",
+      documentId: "doc-storm-night",
+      blockId: "b_storm1",
+      quote: "took the shutters",
+    };
+    const topics = [
+      at("scene", { kind: "scene", scene: "storm-night" }, "open"),
+      at("passage", passage, "open"),
+      at("closed", { kind: "scene", scene: "storm-night" }, "resolved"),
+      at("other", { kind: "scene", scene: "arrival" }, "open"),
+      at("record", { kind: "record", ref: "drive:keep-light" }, "open"),
+    ];
+    expect(
+      openTopicsOn(topics, { kind: "scene", scene: "storm-night" }).map(
+        (t) => t.id,
+      ),
+    ).toEqual(["scene", "passage"]);
+    expect(
+      openTopicsOn(topics, { kind: "record", ref: "drive:keep-light" }).map(
+        (t) => t.id,
+      ),
+    ).toEqual(["record"]);
+    expect(sameScope(passage, { ...passage })).toBe(true);
+    expect(sameScope(passage, { ...passage, quote: "the shutters" })).toBe(
+      false,
+    );
+  });
+
+  test("a passage topic must quote its words", () => {
+    expect(
+      topicScopeProblem(fixture, {
+        kind: "passage",
+        scene: "storm-night",
+        documentId: "doc-storm-night",
+        blockId: "b_storm1",
+        quote: " ",
+      }),
+    ).toBe("A passage topic quotes the words it is about");
   });
 });
 
