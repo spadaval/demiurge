@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-erje
 title: Extend app/src/llm with multi-turn tool-calling and provider adapters
-status: in_review
+status: approved
 mission: worldcrafter-r7vd
 labels:
 - llm
