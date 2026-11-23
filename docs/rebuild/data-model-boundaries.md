@@ -211,6 +211,26 @@ If the record exists but is malformed, the document still opens: a sidecar probl
 - **Drafting.** Drafting into a beat with no prose inserts after the previous beat's passage, and the drafted segment takes its anchor explicitly (reasoning). This is the same in either storage option.
 - **Sync.** This design doesn't decide sync. The sidecar adds a second record per scene that must merge consistently with the content. The tree option would avoid that.
 
+## Snapshot retention
+
+Revision snapshots (`SnapshotCollection`, policy in `openDocumentSession`) make a saved select-all + delete recoverable, so they are append-only and kept after their document is deleted (decision worldcrafter-js76). They are device-local: sync doesn't carry them (worldcrafter-ji5d). The save loop adds one full copy per editing session of a changed document and at most one per five minutes of saving, about 20 copies a day for a writer who opens 20 documents and a few hundred MB a year for a heavy writer. Nothing ever removes one.
+
+### Decided: a failed snapshot on open opens the document read-only (worldcrafter-my9t, built)
+
+The snapshot taken on open is the recovery point for the editing session that follows, so editing without it isn't allowed. Before this, a failed snapshot also refused the open, so a full disk locked the writer out of their prose. Now, if the snapshot can't be written, or the snapshots can't be read to decide whether one is needed, the document opens read-only (`ReadOnlyReason` `no_snapshot`). The editor shows the content as stored, and nothing saves, repairs or renames it. The page says why, under the title: "Demiurge couldn't save a copy of it before editing", the storage error, and "Free up disk space, then close and reopen it." Reopening tries the snapshot again. A failure loading the document itself still fails the open. Generation and rename refuse with the same reason, not "open in another tab".
+
+### Proposed, waiting for Sumeet: thinning old periodic snapshots
+
+This deletes snapshots, so it isn't enabled (mission worldcrafter-3z9j's Authority). The rule is written and tested as `planSnapshotThinning` in `app/src/storage/retention.ts`, which only returns what it would remove; storage has no snapshot delete yet. Enabling it is worldcrafter-ey04.
+
+- **Always kept:** every snapshot whose reason isn't `periodic`: accepting AI text (`accepted_ai_change`), repair on load (`repaired_on_load`), and any reason added later unless the rule is changed to name it. That covers sync's pre-overwrite snapshots (worldcrafter-ji5d), which must get a reason of their own rather than reuse `periodic`. Also kept: the newest snapshot of each document, of any reason, including a deleted document's, and every snapshot under 14 days old.
+- **Thinned:** `periodic` snapshots 14 to 90 days old keep the newest one per document per UTC day; older ones keep the newest per document per week. Buckets are fixed from the epoch, so thinning again removes nothing more, and the last state of each kept day or week survives.
+- **Effect:** most of the bulk is several periodic copies a day of the documents being worked on. Those collapse to one a day after two weeks and one a week after three months, so after the first 90 days a document's history grows by about one copy a week instead of one or more a day. A writer who works on 20 documents every day keeps roughly 280 copies for the last two weeks, 1,500 for the following 76 days, and 20 a week beyond.
+- **When it runs (recommended):** in the writer tab at startup, at most once a day, in one transaction per document so a crash leaves each document either thinned or untouched. The rule never touches the last two weeks, so a mistake there is the first thing it can't reach.
+- **Seeing and reclaiming space (recommended):** a Storage section in settings that shows `navigator.storage.estimate()` usage against quota, the snapshot count and size per document (size measured when a snapshot is written and stored in its metadata, since listing doesn't read content), and a "Thin old snapshots" button that first says how many copies and how much space it would free. Deleting a document's whole history stays a separate, explicit action per deleted document, if it is wanted at all.
+
+Questions for Sumeet: are 14 days and 90 days the right windows; should thinning run automatically or only from the button; and should a deleted document's history be thinned like a live one's or kept whole.
+
 ## Open questions
 
 - Anchoring annotations within a block: offsets (fast, but fragile while typing) or quote-plus-context (robust, slower)? We could use offsets live and re-anchor by quote on load.

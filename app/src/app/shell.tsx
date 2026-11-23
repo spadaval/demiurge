@@ -12,7 +12,7 @@ import { LAYER_LABELS, LAYERS, layersForScene, mentions } from "~/layers/model";
 import { createStore } from "~/workspace/store";
 import type { CommandError } from "~/workspace/workspace";
 import { KIND_DEFINITIONS } from "~/world/kinds";
-import { describeCommandError } from "./environment";
+import { describeCommandError, describeReadOnly } from "./environment";
 import { useEnvironment, useServices, useStore, useWorkspace } from "./hooks";
 import { formatStoryTime } from "./manuscript";
 import { Rail } from "./rail";
@@ -293,8 +293,8 @@ function useOpenRequest(active: string | null) {
     /** Why it can't open now, if it can't. */
     unavailable: !session
       ? "Open a document to generate in it."
-      : session.readOnly
-        ? "This tab is read-only because Demiurge is open in another tab."
+      : session.readOnlyReason
+        ? describeReadOnly(session.readOnlyReason)
         : running
           ? "A generation is running. Stop it or let it finish first."
           : preparing
