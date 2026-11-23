@@ -3,13 +3,14 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-yxfp
 title: 'span: day counts off by one between whole-day events'
-status: open
+status: building
 mission: worldcrafter-k7uh
 labels:
 - bug
 priority: high
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A19a62698-b51c-422f-9aec-662edcca5fd6%3Adelegate-task%3A663252c0-5f30-4eb4-8d89-e62f56318ba9
 ready: null
 trivial: null
 caused_by: null
