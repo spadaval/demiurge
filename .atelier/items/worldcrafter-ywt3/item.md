@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ywt3
 title: 'Host the agent slip on topic sheets: Request, Context and the next-turn slip'
-status: in_review
+status: changes_requested
 mission: worldcrafter-mtkn
 labels:
 - ui
