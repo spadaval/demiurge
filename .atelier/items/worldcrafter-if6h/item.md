@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-if6h
 title: Amend DESIGN.md for Night Edition bible inspector, Topics talk surface, and agent prompt/tool-trace slip
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - design
@@ -58,4 +58,11 @@ Judgment calls for the reviewer:
 - Model turns are set off by a 1px `rule-strong` left rule, not a colour, so authorship reads without vermilion.
 - Inspector record names and topic titles are sans even when the writer typed them, by the margin-cue precedent. A serif title would put model-written titles in the writer's voice.
 - I also corrected the Buttons section, which said there is one primary button per masthead. The shipped slip already has a primary Send, so it now says one per surface.
+
+Round 2: the three fix-now findings are fixed in 24af764. I also did the two deferred ones there: the `ledger-row` component drops its fixed 32px height (the spacing token is now a minimum), and record-detail authority lists "suggested".
+
+### Responses
+1-dz77.1: fixed in 24af764
+1-dz77.2: fixed in 24af764
+1-dz77.3: fixed in 24af764
 
