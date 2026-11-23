@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-0pt4
 title: 'Viewpoint marks: presence rule, group presence, timing, unplaced scenes'
-status: approved
+status: in_review
 mission: worldcrafter-k7uh
 labels: []
 priority: medium
@@ -57,3 +57,5 @@ Unit tests are in `app/src/story/viewpoint.test.ts`, in a new describe block "ro
 - The reading's unplaced-scene experiment (adding `silt knows event:tender --since closing-bell` before s21) now gives "Silt doesn't know yet". Before the fix, the mark disappeared.
 
 **Left over, for the reviewer to judge against the second Done when line:** Silt's `tender` and `corvin-pact` marks (shared senses, `worldcrafter-lfyv`) stay. So does Brannoc's `event:tender` mark is still false. None of the five causes covers it: he has no record of the tender and isn't in a scene that reveals it. It is a bible gap, or part of the knowledge-reach decision in `worldcrafter-lfyv`.
+
+Round 2: commit "Describe the new viewpoint-mark rule in reader-order --before's flag help" acts on review 1-5tmu's deferred finding 2. It changes only that one help string in `app/scripts/story.ts`. The `--help` test passes.
