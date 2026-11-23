@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ji5d
 title: Cloudflare Worker sync backend for laptop and phone
-status: in_review
+status: changes_requested
 mission: worldcrafter-3z9j
 labels:
 - sync
