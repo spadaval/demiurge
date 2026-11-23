@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-0pt4
 title: 'Viewpoint marks: presence rule, group presence, timing, unplaced scenes'
-status: in_review
+status: approved
 mission: worldcrafter-k7uh
 labels: []
 priority: medium
