@@ -53,3 +53,41 @@ Out:
 Sumeet directed the Codex-style Night Edition inspector and scoped talk-page UI on 2026-11-22. Agents may choose component structure, routing, and visual layout within the amended `DESIGN.md`'s named rules. Breaking `DESIGN.md`'s core rules (paint-only layers, vermilion reserved for AI prose segments, no global chat), pushing, or deploying waits for Sumeet.
 
 ## Result
+
+The Night Edition workspace now reads and talks about the story bible. All seven
+items are merged into `master` (tip `d8ce79c`); `cd app && bun run check` passes
+with 1789 tests.
+
+- `DESIGN.md` specifies the World inspector, Topics talk pages (scoped discussion,
+  no global chat) and the agent slip (`worldcrafter-if6h`).
+- The rail's World view opens Cast & Drives, Open Questions, Timeline & Counts,
+  Reader-Order and Contradictions, and each bible record, as sheets
+  (`worldcrafter-wqh0`).
+- Open scenes show the bible's notes beside the prose and update when the agent or
+  a command changes the bible; toggling layers moves the prose 0 px
+  (`worldcrafter-hqca`).
+- Topics, the World inbox and anchored launch from a scene, a passage or a bible
+  record run through the story agent runner (`worldcrafter-lhh3`,
+  `worldcrafter-rxvy`).
+- The context viewer shows and edits an agent turn's system prompt, model, context
+  packet and tool trace (`worldcrafter-w4mr`), and topic sheets host it
+  (`worldcrafter-ywt3`, added by the lead because neither w4mr nor lhh3 hosted it).
+
+Not done, and why:
+
+- A topic anchored to a contradiction (`worldcrafter-n0kb`). A contradiction has no
+  stable ID; the lead ruled to merge `worldcrafter-rxvy` without it.
+- The inspector shows no resolved contradictions and no place a reader question
+  "progresses": the bible records neither.
+- The model cannot raise a topic itself (`worldcrafter-8jrq`), so the inbox's
+  model-raised topics come only from code today. Proposals with "Record as fact"
+  are not built (`worldcrafter-gobh`).
+- No live slip on a running turn (`worldcrafter-7vm8`), and a message stored before
+  a failed send is duplicated on resend (`worldcrafter-221a`).
+- The topic sheet's slip layout has not been seen in a browser
+  (`worldcrafter-g7go`).
+
+Departures from the process: `worldcrafter-if6h` was reviewed by Grok 4.6 because
+the Sol allowance was exhausted. The `worldcrafter-wqh0` implementer pushed `master`
+to origin at `aece208`, against the planner's no-push instruction; nothing after
+that was pushed. The rulings are in `notes.md`.
