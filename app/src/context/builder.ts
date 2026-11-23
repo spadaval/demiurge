@@ -379,7 +379,8 @@ function layoutInput(
 
 function inputSize(input: LlmInput, measure: Measure): number {
   return input.kind === "chat"
-    ? input.messages.reduce((sum, m) => sum + measure.size(m.content), 0)
+    ? // The builder writes only text turns; a tool-call turn without text is 0.
+      input.messages.reduce((sum, m) => sum + measure.size(m.content ?? ""), 0)
     : measure.size(input.prompt);
 }
 

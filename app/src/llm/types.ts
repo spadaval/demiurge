@@ -62,13 +62,66 @@ export type BackendProfile = {
   sampler: Sampler;
 };
 
-export type ChatMessage = {
+/** A tool the model may call, in the OpenAI `tools` shape every backend reads. */
+export type ToolDefinition = {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    /** JSON Schema for the arguments object. */
+    parameters?: JsonObject;
+    strict?: boolean;
+  };
+};
+
+/** `auto` lets the model choose; `required` makes it call one; or name one. */
+export type ToolChoice =
+  | "auto"
+  | "none"
+  | "required"
+  | { type: "function"; function: { name: string } };
+
+/**
+ * A call the model made. `arguments` is the JSON text exactly as the model
+ * wrote it, which may not parse: read it with `parseToolArguments`, and send
+ * it back unchanged in the assistant turn.
+ */
+export type ToolCall = {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+};
+
+/** A plain text turn. */
+export type TextMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
+/** The model's turn when it called tools; `content` is null when it wrote none. */
+export type ToolCallMessage = {
+  role: "assistant";
+  content: string | null;
+  tool_calls: ToolCall[];
+};
+
+/** The result of one call, answering the `ToolCall` whose id it names. */
+export type ToolResultMessage = {
+  role: "tool";
+  tool_call_id: string;
+  content: string;
+};
+
+export type ChatMessage = TextMessage | ToolCallMessage | ToolResultMessage;
+
 export type LlmInput =
-  | { kind: "chat"; messages: ChatMessage[] }
+  | {
+      kind: "chat";
+      messages: ChatMessage[];
+      /** Omitted from the request when empty, which some servers refuse. */
+      tools?: ToolDefinition[];
+      toolChoice?: ToolChoice;
+    }
   | { kind: "completion"; prompt: string };
 
 /** The exact request that is (or will be) sent; safe to store and display. */
@@ -97,17 +150,41 @@ export type TokenLogprob = TokenAlternative & {
   top: TokenAlternative[];
 };
 
+/** A streamed piece of a tool call. */
+export type ToolCallDelta = {
+  /** The call's position in `Completion.toolCalls`. */
+  index: number;
+  /** Sent with the call's first piece. */
+  id?: string;
+  name?: string;
+  /** The next piece of the arguments text; may be empty. */
+  arguments: string;
+};
+
 export type StreamDelta = {
   text: string;
   logprobs: TokenLogprob[];
+  toolCalls: ToolCallDelta[];
 };
 
 export type Completion = {
   text: string;
   /** `null` when the server sent no logprobs. */
   logprobs: TokenLogprob[] | null;
+  /** In the order the model made them; empty when it called none. */
+  toolCalls: ToolCall[];
   finishReason: string | null;
   model: string | null;
+};
+
+/**
+ * A tool call whose arguments are not a JSON object. The model made the
+ * mistake, so `message` is written to be sent back to it as the call's result.
+ */
+export type ToolArgumentsError = {
+  kind: "invalid_arguments";
+  call: ToolCall;
+  message: string;
 };
 
 /**
