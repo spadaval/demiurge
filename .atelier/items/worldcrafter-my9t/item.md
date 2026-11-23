@@ -3,12 +3,13 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-my9t
 title: Snapshot retention policy
-status: open
+status: building
 mission: worldcrafter-3z9j
 labels: []
 priority: medium
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A6d73f777-f6d1-4f6c-b6f0-9f634b2c4463%3Adelegate-task%3A8cbaf9e1-b5f0-41ca-a880-ad8e43deaf11
 ready: null
 trivial: null
 caused_by: null
