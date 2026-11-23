@@ -11,6 +11,7 @@ priority: medium
 blocked_by: []
 implementers:
 - thread:delegated-task:command%3Amcp%3A1e4a355d-d905-4146-a4d8-89e6984f49f1%3Adelegate-task%3Ab29105d4-8c56-489f-a6cd-28e7c5b20d49
+- mcp:b66be996-8cb2-4d67-a57b-cacf9ea7bc65
 ready:
   by: sumeet, through mission atelier-295u
   at: 2026-11-11T18:21:43.422627572Z
