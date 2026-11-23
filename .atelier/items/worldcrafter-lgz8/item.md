@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-lgz8
 title: Persist unified story bible in StorageAdapter and link scenes to Plate documents
-status: building
+status: in_review
 mission: worldcrafter-r7vd
 labels:
 - storage
