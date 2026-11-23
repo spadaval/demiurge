@@ -87,6 +87,8 @@ export interface Generation {
   /** Sends the slip's request: as shown when `edited` is null, else the edit, stored as a revision first. */
   sendSlip(edited: LlmRequest | null): Promise<void>;
   accept(documentId: string, segmentId: string): Promise<void>;
+  /** Accepts the ready AI segment holding the caret; says so if there is none. */
+  acceptAtCaret(documentId: string): Promise<void>;
   regenerate(documentId: string, segmentId: string): Promise<void>;
   /** Stops a document's generation, keeping what arrived, and waits for it to end. */
   stop(documentId: string): Promise<void>;
@@ -114,6 +116,20 @@ function caretBlock(session: DocumentSession): string | null {
   const index = editor.selection?.focus.path[0];
   const node = index === undefined ? undefined : editor.children[index];
   return node && ElementApi.isElement(node) && typeof node.id === "string"
+    ? node.id
+    : null;
+}
+
+/** The ready AI segment holding the caret, if there is one. */
+function caretSegment(session: DocumentSession): string | null {
+  const { editor } = session;
+  const index = editor.selection?.focus.path[0];
+  const node = index === undefined ? undefined : editor.children[index];
+  return node &&
+    ElementApi.isElement(node) &&
+    node.type === "ai_segment" &&
+    node.status !== "generating" &&
+    typeof node.id === "string"
     ? node.id
     : null;
 }
@@ -231,6 +247,15 @@ export function createGeneration(options: GenerationOptions): Generation {
     });
   };
 
+  const accept = async (documentId: string, segmentId: string) => {
+    const generator = generatorOf(documentId);
+    if (!generator) return;
+    // A slip showing this segment's request would now be stale.
+    if (slip.get()?.replaces === segmentId) slip.set(null);
+    const accepted = await generator.accept(segmentId);
+    if (accepted.isErr()) fail(accepted.error);
+  };
+
   return {
     profile,
     slip,
@@ -323,13 +348,20 @@ export function createGeneration(options: GenerationOptions): Generation {
       );
     },
 
-    async accept(documentId, segmentId) {
-      const generator = generatorOf(documentId);
-      if (!generator) return;
-      // A slip showing this segment's request would now be stale.
-      if (slip.get()?.replaces === segmentId) slip.set(null);
-      const accepted = await generator.accept(segmentId);
-      if (accepted.isErr()) fail(accepted.error);
+    accept,
+
+    async acceptAtCaret(documentId) {
+      const session = workspace.session(documentId);
+      if (!session) return;
+      const segmentId = caretSegment(session);
+      if (segmentId === null) {
+        notice.set({
+          kind: "info",
+          text: "Put the caret in the AI text to accept it.",
+        });
+        return;
+      }
+      await accept(documentId, segmentId);
     },
 
     async regenerate(documentId, segmentId) {

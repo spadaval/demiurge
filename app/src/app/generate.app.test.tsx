@@ -438,6 +438,93 @@ test("when the text a request continues from is gone, the slip offers to put it 
   expect(prose.indexOf(plates()[0] as HTMLElement)).toBe(2);
 });
 
+/** Presses a key in the document text, as the writer would. */
+const pressKey = async (
+  key: string,
+  mods: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {},
+  target: Element | null = query(".prose"),
+) => {
+  if (!target) throw new Error("nothing to press keys in");
+  await act(async () => {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+        ...mods,
+      }),
+    );
+  });
+};
+
+test("shortcuts: Mod+Enter twice generates, Escape stops, Mod+Shift+Enter accepts at the caret", async () => {
+  await render(withProfile());
+  const editor = workspace.session("doc1")?.editor;
+  if (!editor) throw new Error("expected the session");
+  await act(async () =>
+    editor.tf.select({ path: [2, 0], offset: "Night fell.".length }),
+  );
+  expect(
+    button("Generate next", ".masthead")?.getAttribute("aria-keyshortcuts"),
+  ).toBe("Control+Enter Meta+Enter");
+
+  // Mod+Enter in the text opens the request; again (focus in the slip
+  // now) sends it.
+  await pressKey("Enter", { ctrlKey: true });
+  await until(() => query(".request-slip") !== null, "the request slip");
+  expect(received).toHaveLength(0);
+  scripts.push(stream("Half of a sentence that never ends", { hold: true }));
+  await pressKey("Enter", { metaKey: true }, query(".request-slip"));
+  await until(
+    () => plateText(plates()[0]) === "Half of a sentence that never ends",
+    "the streamed text",
+  );
+  expect(received).toHaveLength(1);
+
+  // Escape stops it, keeping the text.
+  await pressKey("Escape");
+  await until(() => plates()[0]?.dataset.status === "ready", "the stop");
+  expect(plateText(plates()[0])).toBe("Half of a sentence that never ends");
+
+  // Accept wants the caret in the AI text.
+  await pressKey("Enter", { ctrlKey: true, shiftKey: true });
+  expect(query(".notices")?.textContent).toContain(
+    "Put the caret in the AI text to accept it.",
+  );
+  expect(plates()).toHaveLength(1);
+  await act(async () => editor.tf.select({ path: [3, 0, 0], offset: 2 }));
+  await pressKey("Enter", { ctrlKey: true, shiftKey: true });
+  await until(() => plates().length === 0, "the plate to go");
+  const paragraphs = [...(query(".prose")?.querySelectorAll("p") ?? [])].map(
+    (p) => p.textContent,
+  );
+  expect(paragraphs.at(-1)).toBe("Half of a sentence that never ends");
+});
+
+test("with a slip open, Mod+Enter from the text sends it, edits included", async () => {
+  await render(withProfile());
+  await generateNext();
+  const user = query<HTMLTextAreaElement>(
+    ".request-slip [data-role=user] textarea",
+  ) as HTMLTextAreaElement;
+  await type(user, `${user.value}\n\nKeep it short.`);
+  scripts.push(stream("Short."));
+  await pressKey("Enter", { ctrlKey: true });
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  expect(
+    (received[0]?.body as { messages: { content: string }[] }).messages[1]
+      ?.content,
+  ).toEndWith("Keep it short.");
+});
+
+test("Escape in the slip closes it and stops nothing", async () => {
+  await render(withProfile());
+  await generateNext();
+  await pressKey("Escape", {}, query(".request-slip"));
+  await until(() => query(".request-slip") === null, "the slip to close");
+  expect(query(".notices")?.textContent ?? "").not.toContain("Stopped");
+});
+
 test("stop keeps the partial text", async () => {
   await render(withProfile());
   await generateNext();

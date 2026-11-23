@@ -90,7 +90,11 @@ export function RequestSlip({
         const inField =
           event.target instanceof HTMLTextAreaElement ||
           event.target instanceof HTMLInputElement;
-        if (event.key === "Escape" && !slip.sending && !inField) onClose();
+        if (event.key === "Escape" && !slip.sending && !inField) {
+          // Closing is what Escape did here; it stops nothing else.
+          event.preventDefault();
+          onClose();
+        }
       }}
     >
       <header className="request-slip-head">

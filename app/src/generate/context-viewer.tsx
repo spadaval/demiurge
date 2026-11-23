@@ -3,6 +3,7 @@ import type { ContextBreakdown } from "~/context/builder";
 import type { ContextRequest } from "~/context/requests";
 import type { LlmRequest } from "~/llm/types";
 import { draftOf, type RequestDraft, requestFromDraft } from "./draft";
+import { ARIA_SHORTCUTS, shortcutLabel } from "./shortcuts";
 
 export interface ContextViewerProps {
   /** The stored request to show: assembled, or a revision. */
@@ -159,6 +160,8 @@ export function ContextViewer({
                 type="button"
                 className="context-viewer-stop"
                 onClick={onStop}
+                aria-keyshortcuts={ARIA_SHORTCUTS.stop}
+                title={shortcutLabel("stop")}
               >
                 Stop
               </button>
@@ -168,6 +171,8 @@ export function ContextViewer({
               type="submit"
               className="context-viewer-send"
               disabled={disabled || problem !== null}
+              aria-keyshortcuts={ARIA_SHORTCUTS.generate}
+              title={shortcutLabel("generate")}
             >
               {edited ? "Send edited request" : "Send"}
             </button>
