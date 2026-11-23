@@ -1104,7 +1104,7 @@ describe("story CLI", () => {
     expect(ok("reader-order", "--before", "post")).toBe(
       [
         'Before 2. scene:post ("The post"), through the eyes of Mara, at event:letter ("The letter") at 20 October 1954 (the latest event it shows), the reader has been told:',
-        '- event:wreck ("The wreck") at 12 October 1954, 7 days before: shown in 1; Mara doesn\'t know, believes version:fog ("The fog took her")',
+        '- event:wreck ("The wreck") at 12 October 1954, 8 days before: shown in 1; Mara doesn\'t know, believes version:fog ("The fog took her")',
         '- fact:cold ("The sea is cold"): revealed in 1',
         "",
       ].join("\n"),
