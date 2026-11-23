@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-w4mr
 title: 'Agent session and prompt inspector: view and edit system prompt, context packet, tool trace, and trace diffs'
-status: in_review
+status: approved
 mission: worldcrafter-mtkn
 labels:
 - ui
