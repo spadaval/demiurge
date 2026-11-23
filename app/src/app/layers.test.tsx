@@ -103,7 +103,7 @@ async function renderDemo(
   for (let i = 0; i < 40 && !container.querySelector(".prose .lm-say"); i++) {
     await settle();
   }
-  return { view: container, services };
+  return { view: container, services, router };
 }
 
 test("the demo scene renders its marks, cues and keyed notes", async () => {
@@ -334,6 +334,50 @@ test("the apparatus follows the bible when the agent changes it", async () => {
   for (let i = 0; i < 10 && noteText(view, "Irony") !== undefined; i++) {
     await settle();
   }
+  // Kesh sold the secret himself: through his eyes there is no irony in it.
+  expect(noteText(view, "Irony")).toBeUndefined();
+});
+
+test("the apparatus follows a viewpoint set in the World inspector", async () => {
+  const { view, router, services } = await renderDemo(true);
+  await settle();
+  expect(noteText(view, "Irony")).toContain("Ardelia Vane doesn't know it yet");
+  await act(() =>
+    router.navigate({ to: "/world", search: { at: "scene:scene-4-2" } }),
+  );
+  for (let i = 0; i < 20 && !view.querySelector(".inspector-sheet"); i++) {
+    await settle();
+  }
+  const select = [...view.querySelectorAll("select")].find((s) =>
+    s.getAttribute("aria-label")?.startsWith("Viewpoint of"),
+  );
+  if (!select) throw new Error("no viewpoint control");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )?.set?.call(select, "kesh");
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  for (let i = 0; i < 20 && !view.querySelector(".edit-report"); i++) {
+    await settle();
+  }
+  expect(view.querySelector(".edit-report")?.textContent).toContain("through");
+  const state = services.bible.state.get();
+  expect(
+    state.kind === "ready" &&
+      state.story.scenes.find((s) => s.id === "scene-4-2")?.viewpoint,
+  ).toBe("kesh");
+  await act(() =>
+    router.navigate({
+      to: "/doc/$documentId",
+      params: { documentId: DEMO_SCENE },
+    }),
+  );
+  for (let i = 0; i < 40 && !view.querySelector(".prose .lm-say"); i++) {
+    await settle();
+  }
+  expect(view.querySelector(".prose .lm-say")).not.toBeNull();
   // Kesh sold the secret himself: through his eyes there is no irony in it.
   expect(noteText(view, "Irony")).toBeUndefined();
 });

@@ -2395,6 +2395,158 @@ a.topic-row:hover .topic-title {
   font-size: 14px;
 }
 
+/*
+ * Direct edits (DESIGN.md, World Inspector, Direct edits): text actions in
+ * `ink-2` that underline on hover, inline fields in the slip's setting, and
+ * the last edit's report under the sheet head.
+ */
+.edit-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.edit-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.edit-action:hover:not(:disabled) {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.edit-action:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.edit-form input,
+.edit-select {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--rail);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  caret-color: var(--ink);
+}
+
+.edit-form input[type="text"] {
+  flex: 1 1 16ch;
+}
+
+.edit-number {
+  width: 9ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.edit-form input:hover,
+.edit-form input:focus-visible,
+.edit-select:hover,
+.edit-select:focus-visible {
+  border-color: var(--rule-strong);
+}
+
+.edit-select {
+  margin-left: 10px;
+}
+
+.edit-label .edit-select {
+  margin-left: 4px;
+}
+
+.record-edit,
+.record-gaps {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.record-gaps-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.edit-report {
+  margin: 14px 0 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.edit-report[data-error] {
+  padding: 8px 12px;
+  border-color: transparent;
+  background: var(--raised);
+  color: var(--ink);
+}
+
+.edit-report-head {
+  margin: 0;
+  color: var(--ink);
+}
+
+.edit-report-lines {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.edit-report-lines li + li {
+  margin-top: 2px;
+}
+
+.edit-report-suspects {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 20px;
+}
+
+.edit-report-suspects li + li {
+  margin-top: 4px;
+}
+
+.edit-report-quote {
+  color: var(--ink-2);
+}
+
+.edit-report-unread {
+  margin-top: 6px;
+}
+
+.edit-report-more {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-3);
+}
+
 .record-touches {
   grid-column: 4;
   grid-row: 2;
