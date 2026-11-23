@@ -58,6 +58,7 @@ interface LayerLeafProps {
   wcEntity?: true;
   wcSuggest?: true;
   wcRecord?: true;
+  wcTalk?: true;
   wcTime?: true;
   wcSub?: true;
   wcNote?: true;
@@ -155,6 +156,7 @@ function LayerLeaf(props: PlateLeafProps) {
   if (leaf.wcEntity) classes.push("lm-entity");
   if (leaf.wcSuggest) classes.push("lm-suggest");
   if (leaf.wcRecord) classes.push("lm-record");
+  if (leaf.wcTalk) classes.push("lm-talk");
   if (leaf.wcTime) classes.push("lm-time");
   if (leaf.wcSub) classes.push("lm-sub");
   if (leaf.wcNote) classes.push("lm-note");
@@ -261,6 +263,8 @@ function markProps(
       return { wcSuggest: true };
     case "record":
       return { wcRecord: true };
+    case "talk":
+      return { wcTalk: true };
   }
 }
 

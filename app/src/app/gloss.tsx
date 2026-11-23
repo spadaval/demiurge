@@ -41,7 +41,10 @@ import {
   type NoteAction,
   stackNotes,
 } from "~/layers/model";
+import { sameTalkLayers, talkLayers, talkNotes } from "~/layers/talk";
+import { openTopicsOn } from "~/talk/scope";
 import type { DocumentSession } from "~/workspace/document-session";
+import { useShowTopic } from "./anchored-talk";
 import type { Slip } from "./generation";
 import { RequestSlip, SegmentActions } from "./generation-ui";
 import { useServices, useStore } from "./hooks";
@@ -91,6 +94,7 @@ export function Sheet({
     manuscript,
     bible,
     generation,
+    talk,
   } = useServices();
   const editor = useEditorRef();
   const state = useStore(layers);
@@ -98,6 +102,7 @@ export function Sheet({
   const entries = useStore(worldIndex.entries);
   const documents = useStore(workspace.documents);
   const storyState = useStore(bible.state);
+  const topics = useStore(talk.topics);
   const documentId = session.documentId;
   const on = layersForScene(state.on, state.subtextScenes, documentId);
 
@@ -118,9 +123,31 @@ export function Sheet({
     [bibleNotes, fromSource],
     { equalityFn: sameBibleLayers },
   );
+  // The scene's open talk topics: Talk notes on the Notes layer, a
+  // passage's beside its words, kept off the places other keys hold.
+  const sceneId =
+    storyState.kind === "ready"
+      ? bibleScene(storyState.story, documentId)?.sceneId
+      : undefined;
+  const topicNotes = useMemo(
+    () =>
+      sceneId === undefined
+        ? []
+        : talkNotes(openTopicsOn(topics, { kind: "scene", scene: sceneId })),
+    [topics, sceneId],
+  );
+  const fromTalk = useEditorSelector(
+    (current) =>
+      talkLayers(topicNotes, textBlocks(current.children), [
+        ...fromSource.marks,
+        ...fromBible.marks,
+      ]),
+    [topicNotes, fromSource, fromBible],
+    { equalityFn: sameTalkLayers },
+  );
   const sceneLayers = useMemo(
-    () => mergeLayers(fromSource, fromBible),
-    [fromSource, fromBible],
+    () => mergeLayers(mergeLayers(fromSource, fromBible), fromTalk),
+    [fromSource, fromBible, fromTalk],
   );
 
   const names = useMemo(
@@ -563,8 +590,14 @@ function Note({
   ref: (element: HTMLElement | null) => void;
 }) {
   const confirmed = resolution === "confirmed";
+  const showTopic = useShowTopic();
   const act = (action: NoteAction) => {
-    if (action.unavailable || action.resolves === "none") return;
+    if (action.unavailable) return;
+    if (action.topic !== undefined) {
+      void showTopic(action.topic);
+      return;
+    }
+    if (action.resolves === "none") return;
     onResolve(
       note.id,
       action.resolves === "confirm" ? "confirmed" : "dismissed",

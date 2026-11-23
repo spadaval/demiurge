@@ -153,13 +153,16 @@ const messagesOf = (body: unknown) =>
   (body as { messages: Message[] }).messages;
 const systemOf = (body: unknown) => messagesOf(body)[0]?.content ?? "";
 
-/** The arrival scene's packet as the story agent would read it, less its prose. */
+/**
+ * The arrival scene's packet as the story agent would read it, less its prose
+ * and what it touches.
+ */
 const arrivalPacket = () =>
   value(
     buildContextPacket(
       storage,
       { kind: "scene", scene: "arrival" },
-      { prose: false },
+      { prose: false, touches: false },
     ),
   );
 
@@ -169,7 +172,7 @@ describe("a scene's prose request carries its story bible sections", () => {
     const packet = await arrivalPacket();
 
     // The same builder as the story agent's, minus the stored prose, which
-    // the window from the open editor replaces.
+    // the window from the open editor replaces, and what the scene touches.
     expect(packet.sections.map((s) => s.title)).toEqual([
       "The scene",
       "What the reader has been told before it",

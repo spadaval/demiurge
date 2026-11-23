@@ -5,10 +5,10 @@
 
 import type { AgentScope } from "../agent/context";
 import type { JsonValue } from "../storage/types";
-import { parseRef } from "../story/refs";
+import { formatRef, parseRef } from "../story/refs";
 import { type Ref, refExists, type Story } from "../story/story";
 import { refLabel } from "../story/touches";
-import type { TopicScope, TopicScopeKind } from "./records";
+import type { Topic, TopicScope, TopicScopeKind } from "./records";
 
 /**
  * The agent scope a topic's turns run in. A passage topic's model sees its
@@ -110,6 +110,9 @@ export function topicScopeProblem(
       return undefined;
     case "scene":
     case "passage":
+      if (scope.kind === "passage" && scope.quote.trim() === "") {
+        return "A passage topic quotes the words it is about";
+      }
       return story.scenes.some((s) => s.id === scope.scene)
         ? undefined
         : `The story has no scene ${scope.scene}`;
@@ -179,4 +182,60 @@ export function passageStale(
 ): boolean {
   const text = blockText(content, scope.blockId);
   return text === undefined || !text.includes(scope.quote);
+}
+
+/** Whether two scopes are about the same thing, a passage's words included. */
+export function sameScope(a: TopicScope, b: TopicScope): boolean {
+  switch (a.kind) {
+    case "world":
+      return b.kind === "world";
+    case "scene":
+      return b.kind === "scene" && a.scene === b.scene;
+    case "passage":
+      return (
+        b.kind === "passage" &&
+        a.scene === b.scene &&
+        a.documentId === b.documentId &&
+        a.blockId === b.blockId &&
+        a.quote === b.quote
+      );
+    case "record":
+      return b.kind === "record" && a.ref === b.ref;
+  }
+}
+
+/**
+ * The scope of a topic about the bible record `ref`. A scene record's topic
+ * is about the scene, as one started from its prose is, so the model sees
+ * the scene's packet and the topic is listed with the scene's.
+ */
+export function recordTopicScope(ref: Ref): TopicScope {
+  return ref.kind === "scene"
+    ? { kind: "scene", scene: ref.id }
+    : { kind: "record", ref: formatRef(ref) };
+}
+
+/** What anchored topics are listed on: a scene sheet, or a record's detail. */
+export type TopicTarget =
+  | { kind: "scene"; scene: string }
+  | { kind: "record"; ref: string };
+
+/**
+ * The open topics on `target`, in the order given: a scene's own and its
+ * passages', or a record's.
+ */
+export function openTopicsOn(
+  topics: readonly Topic[],
+  target: TopicTarget,
+): Topic[] {
+  return topics.filter(({ status, scope }) => {
+    if (status !== "open") return false;
+    if (target.kind === "record") {
+      return scope.kind === "record" && scope.ref === target.ref;
+    }
+    return (
+      (scope.kind === "scene" || scope.kind === "passage") &&
+      scope.scene === target.scene
+    );
+  });
 }

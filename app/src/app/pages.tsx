@@ -1,8 +1,10 @@
 import { useParams } from "@tanstack/react-router";
 import { Plate } from "platejs/react";
 import { useEffect, useState } from "react";
+import { bibleScene } from "~/layers/bible";
 import type { DocumentSession, SaveStatus } from "~/workspace/document-session";
 import type { CommandError } from "~/workspace/workspace";
+import { SceneTalkAction } from "./anchored-talk";
 import { describeCommandError, describeSaveStatus } from "./environment";
 import { Sheet } from "./gloss";
 import { useServices, useStore, useWorkspace } from "./hooks";
@@ -59,8 +61,14 @@ export function DocumentPage() {
 }
 
 function DocumentView({ session }: { session: DocumentSession }) {
-  const { manuscript } = useServices();
+  const { manuscript, bible } = useServices();
   const state = useStore(manuscript.state);
+  const story = useStore(bible.state);
+  // The bible scene whose prose this is, which talk about it is anchored to.
+  const bibleSceneId =
+    story.kind === "ready"
+      ? bibleScene(story.story, session.documentId)?.sceneId
+      : undefined;
   const scene =
     state.kind === "ready"
       ? state.view.scenes.get(session.documentId)
@@ -80,6 +88,12 @@ function DocumentView({ session }: { session: DocumentSession }) {
               <SaveStatusLine session={session} />
             </div>
             <TitleField session={session} />
+            {bibleSceneId !== undefined && (
+              <SceneTalkAction
+                scene={bibleSceneId}
+                documentId={session.documentId}
+              />
+            )}
             <SaveProblem session={session} />
           </div>
         }

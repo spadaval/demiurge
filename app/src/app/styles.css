@@ -1006,6 +1006,15 @@ a.topic-row:hover .topic-title {
   --band-w: 100%;
 }
 
+/* A passage a talk topic is about: the Notes layer's hairline, in ink-3. */
+.lm-talk {
+  --line: linear-gradient(var(--ink-3), var(--ink-3));
+}
+
+[data-layer-notes] .lm-talk {
+  --line-w: 100%;
+}
+
 [data-layer-speakers] .lm-say[data-say="0"] {
   color: var(--say-0);
 }
@@ -1044,9 +1053,14 @@ a.topic-row:hover .topic-title {
   color: var(--subtext);
 }
 
+.lm-key[data-key-layer="notes"]::after {
+  color: var(--ink-3);
+}
+
 [data-layer-time] .lm-key[data-key-layer="time"]::after,
 [data-layer-subtext] .lm-key[data-key-layer="subtext"]::after,
-[data-layer-world] .lm-key[data-key-layer="world"]::after {
+[data-layer-world] .lm-key[data-key-layer="world"]::after,
+[data-layer-notes] .lm-key[data-key-layer="notes"]::after {
   opacity: 1;
 }
 
@@ -1210,6 +1224,11 @@ a.topic-row:hover .topic-title {
 
 .gloss-note[data-layer="subtext"] .gloss-head {
   color: var(--subtext);
+}
+
+/* Talk notes: the Notes layer adds no hue. */
+.gloss-note[data-layer="notes"] .gloss-head {
+  color: var(--ink-3);
 }
 
 .gloss-authority {
@@ -2443,6 +2462,25 @@ a.topic-row:hover .topic-title {
   padding-top: 14px;
   border-top: 1px solid var(--rule);
   font-size: 14px;
+}
+
+/* A record's open topics, then the action that talks about it. */
+.record-talk {
+  margin-top: 14px;
+}
+
+.record-talk .record-list {
+  margin-bottom: 8px;
+}
+
+/* A scene sheet's talk action, under the title. */
+.scene-talk {
+  margin: 6px 0 0;
+}
+
+.scene-talk .text-action {
+  font-size: 12.5px;
+  color: var(--ink-3);
 }
 
 /*
