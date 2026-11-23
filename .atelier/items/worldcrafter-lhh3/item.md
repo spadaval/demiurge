@@ -100,7 +100,7 @@ view, New topic through two turns, discarding an unsent topic, resolve,
 reopen and archive with the closed ledger, the inbox sheet, Try again, and
 Send with no model. Storage contract, IndexedDB upgrade (4 to 5), world
 file and connected-storage tests cover the collection. `cd app && bun run
-check`: 1648 pass, 0 fail, no warnings.
+check`: 1654 pass, 0 fail, no warnings (after round 1's fixes).
 
 Where it departs from DESIGN.md's Topics section, and why:
 - **Not built, other items' scope**: the "Request" action on a model turn,
@@ -123,3 +123,9 @@ Where it departs from DESIGN.md's Topics section, and why:
   margin and prose columns without a grid gloss column, since nothing goes
   there until w4mr's slip.
 
+### Responses
+
+1-jkqn.1: fixed in f8ae145
+1-jkqn.2: fixed in f8ae145
+1-jkqn.3: fixed in f8ae145
+1-jkqn.4: fixed in 7f136cc
