@@ -778,3 +778,75 @@ test("a request shown retargeted in the slip is stored once, when sent", async (
   expect((received[1]?.body as { model: string }).model).toBe("other-model");
   expect(await storedRequests()).toBe(before + 1);
 });
+
+/** Generates once, then changes the profile to `next`. */
+async function generateThenChange(next: BackendProfile) {
+  await render(withProfile());
+  await generateNext();
+  scripts.push(stream("First."));
+  await click(button("Send", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  services.generation.profile.save(next);
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).toContain(
+    "The model settings have changed",
+  );
+}
+
+/** Regenerates from the caption and returns the model it sent. */
+async function regenerateModel(text: string) {
+  scripts.push(stream(text));
+  await click(button("Regenerate", "section[data-ai-segment]"));
+  await until(
+    () =>
+      plateText(plates()[0]) === text &&
+      plates()[0]?.dataset.status === "ready",
+    `the output ${text}`,
+  );
+  return (received.at(-1)?.body as { model: string }).model;
+}
+
+test("a model edited in a retargeted slip stays, as the profile hasn't changed again", async () => {
+  await generateThenChange({
+    ...PROFILE,
+    baseUrl: `http://127.0.0.1:${server.port}/v1`,
+    model: "model-b",
+  });
+  const parameters = query<HTMLTextAreaElement>(
+    ".request-slip [data-role=parameters] textarea",
+  ) as HTMLTextAreaElement;
+  await type(parameters, parameters.value.replace('"model-b"', '"mine"'));
+  scripts.push(stream("Second."));
+  await click(button("Send edited request", ".request-slip"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the second output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe("mine");
+
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).not.toContain(
+    "The model settings have changed",
+  );
+  await click(button("Close", ".request-slip"));
+  expect(await regenerateModel("Third.")).toBe("mine");
+});
+
+test("after sending a retargeted slip, a later model change still applies", async () => {
+  await generateThenChange({ ...PROFILE, model: "model-b" });
+  scripts.push(stream("Second."));
+  await click(button("Send", ".request-slip"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the second output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe("model-b");
+  services.generation.profile.save({ ...PROFILE, model: "model-c" });
+  expect(await regenerateModel("Third.")).toBe("model-c");
+});

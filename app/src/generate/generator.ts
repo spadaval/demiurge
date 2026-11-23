@@ -111,6 +111,7 @@ import type {
   InvalidRequestError,
   LlmError,
   LlmRequest,
+  ProfileTarget,
   TokenLogprob,
 } from "~/llm/types";
 import type {
@@ -258,12 +259,16 @@ export interface Generator {
   ): ResultAsync<GenerationResult, GenerateError>;
   /**
    * Stores the writer's edit of request `parentId` as a revision and sends
-   * it, as `send` does; busy (and stoppable) from the call on.
+   * it, as `send` does; busy (and stoppable) from the call on. `madeFor` is
+   * the profile target the edit was made over, when it isn't the parent's:
+   * the edit of a request shown retargeted (`segmentRequest`) was made
+   * over the profile as it is now.
    */
   sendEdited(
     parentId: string,
     request: LlmRequest,
     target?: GenerationTarget,
+    madeFor?: ProfileTarget,
   ): ResultAsync<GenerationResult, GenerateError>;
   /**
    * The stored request that made a segment's output, as it would be sent
@@ -799,11 +804,11 @@ export function createGenerator(options: GeneratorOptions): Generator {
         target,
         requestId,
       ),
-    sendEdited: (parentId, request, target) =>
+    sendEdited: (parentId, request, target, madeFor) =>
       sendWith(
         () =>
           requests
-            .revise(parentId, request)
+            .revise(parentId, request, madeFor)
             .mapErr((e): GenerateError => e)
             .map((record) => ({ record, retargeted: false })),
         target,

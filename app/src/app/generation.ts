@@ -327,9 +327,11 @@ export function createGeneration(options: GenerationOptions): Generation {
       slip.set(sending);
       const { replaces } = shown;
       const id = shown.record.id;
-      // A retargeted request isn't stored yet: send it as a revision.
+      // A retargeted request isn't stored yet: send it as a revision, made
+      // for the profile as it is now, edited or not.
       const request =
         edited ?? (shown.retargeted ? shown.record.request : null);
+      const madeFor = shown.retargeted ? shown.record.madeFor : undefined;
       const target = replaces
         ? { kind: "replace" as const, segmentId: replaces }
         : undefined;
@@ -340,7 +342,7 @@ export function createGeneration(options: GenerationOptions): Generation {
         generator,
         () =>
           request
-            ? generator.sendEdited(id, request, target)
+            ? generator.sendEdited(id, request, target, madeFor)
             : replaces
               ? generator.regenerate(replaces, id)
               : generator.send(id),
