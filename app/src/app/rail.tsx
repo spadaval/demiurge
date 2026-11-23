@@ -1,10 +1,17 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useRouterState,
+  useSearch,
+} from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { labelOf } from "~/generate/profile";
 import { speakerTints } from "~/layers/model";
+import { storyContradictions } from "~/story/contradictions";
 import type { CommandError } from "~/workspace/workspace";
 import { KIND_DEFINITIONS } from "~/world/kinds";
 import { useServices, useStore } from "./hooks";
+import { INSPECTOR_VIEWS, inspectorCounts, parseAt } from "./inspector-model";
 import type { ManuscriptBook, SceneRow } from "./manuscript";
 
 type RailView = "manuscript" | "world" | "topics";
@@ -27,7 +34,11 @@ export function Rail({
 }) {
   const { environment, layerSource, generation } = useServices();
   const profile = useStore(generation.profile);
-  const [view, setView] = useState<RailView>("manuscript");
+  const onWorld = useRouterState({
+    select: (router) => router.location.pathname === "/world",
+  });
+  // Opened on the World tab, the rail opens on the World view.
+  const [view, setView] = useState<RailView>(onWorld ? "world" : "manuscript");
   const topics = layerSource.topics;
   return (
     <nav className="rail" aria-label="Manuscript and world">
@@ -383,7 +394,66 @@ function SpeakersPanel({ scene }: { scene: string }) {
   );
 }
 
+/**
+ * The inspector's five views (DESIGN.md, World Inspector), each with its
+ * count: actors, undecided questions, events placed in time, scenes, and
+ * contradictions kept. The view showing in the World tab is current.
+ */
+function InspectSection() {
+  const { bible } = useServices();
+  const state = useStore(bible.state);
+  const onWorld = useRouterState({
+    select: (router) => router.location.pathname === "/world",
+  });
+  const { at } = useSearch({ strict: false });
+  const showing = onWorld ? parseAt(at) : null;
+  // The rail's counts follow the bible as it is now.
+  useEffect(() => {
+    void bible.refresh();
+  }, [bible]);
+  const story = state.kind === "ready" ? state.story : null;
+  const counts = useMemo(
+    () => (story ? inspectorCounts(story, storyContradictions(story)) : null),
+    [story],
+  );
+  return (
+    <section className="rail-section" aria-labelledby="rail-inspect">
+      <div className="rail-label">
+        <h2 id="rail-inspect">Inspect</h2>
+      </div>
+      <ul className="inspect-list">
+        {INSPECTOR_VIEWS.map(({ id, title }) => (
+          <li key={id}>
+            <Link
+              to="/world"
+              search={{ at: id }}
+              className="inspect-row"
+              aria-current={
+                showing?.kind === "view" && showing.view === id
+                  ? "page"
+                  : undefined
+              }
+            >
+              <span>{title}</span>
+              {counts && <span className="inspect-count">{counts[id]}</span>}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function WorldPanel({ active }: { active: string | null }) {
+  return (
+    <>
+      <InspectSection />
+      <WorldEntries active={active} />
+    </>
+  );
+}
+
+function WorldEntries({ active }: { active: string | null }) {
   const { worldIndex, workspace } = useServices();
   const entries = useStore(worldIndex.entries);
   const documents = useStore(workspace.documents);
