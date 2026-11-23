@@ -63,7 +63,8 @@ Items 1, 3, 4 and 5 are built with tests. Item 2 is dropped: the stale pin it de
 
 **Round 2.** Each stored request now records the profile's server, kind and model it was made for (`madeFor`, an optional field in `app/src/context/requests.ts`). Retargeting compares that record with the profile as it is now, not with the editable request body. With the profile unchanged, nothing is retargeted, so the writer's model and parameters stay. A new server takes the profile's URL and model. A new model at the same server replaces the model only where the writer didn't choose one. A new kind drops the old kind's own parameters. Requests stored before this change have no `madeFor` and fall back to the round 1 guess.
 
+**Round 3.** When the slip shows a request retargeted to the profile as it is now, Send stores the revision with that profile's `madeFor`, whether or not the writer edited it. Before, the revision kept its parent's, older `madeFor`. `sendEdited` takes the `madeFor` to store.
+
 ### Responses
 
-1-7x1e.1: fixed in 9e5bb39
-
+2-udn0.2: fixed in f023da5
