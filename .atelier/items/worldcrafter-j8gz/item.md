@@ -3,14 +3,15 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-j8gz
 title: Update PRODUCT.md and README.md for unified typed-store and app-owned agent direction
-status: open
+status: building
 mission: worldcrafter-k7uh
 labels:
 - docs
 priority: medium
 blocked_by:
 - worldcrafter-2x5z
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A19a62698-b51c-422f-9aec-662edcca5fd6%3Adelegate-task%3A6a269f68-df28-44df-98ca-437ff5d03132
 ready: null
 trivial: null
 caused_by: null
