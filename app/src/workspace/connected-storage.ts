@@ -1,6 +1,7 @@
 import { errAsync, type ResultAsync } from "neverthrow";
 import { batchContext, restoreContext } from "~/storage/internal";
 import type {
+  AgentRecordCollection,
   AnnotationCollection,
   Collection,
   CollectionName,
@@ -70,6 +71,16 @@ export function createConnectedStorage(
       run((storage) => storage.annotations.listForDocument(documentId)),
   };
 
+  const agentRecords: AgentRecordCollection = {
+    ...keyed(
+      "agentRecords",
+      (storage) => storage.agentRecords,
+      (r) => r.id,
+    ),
+    listForSession: (sessionId) =>
+      run((storage) => storage.agentRecords.listForSession(sessionId)),
+  };
+
   const snapshots: SnapshotCollection = {
     save: (snapshot) =>
       write(
@@ -113,6 +124,7 @@ export function createConnectedStorage(
       (storage) => storage.storyRecords,
       (r) => r.id,
     ),
+    agentRecords,
     batch: (writes) => {
       const { collection = "documents", id, operation } = batchContext(writes);
       return write(

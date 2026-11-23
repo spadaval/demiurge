@@ -8,6 +8,7 @@ import {
   snapshotInfo,
 } from "./internal";
 import type {
+  AgentRecordCollection,
   AnnotationCollection,
   AnnotationRecord,
   Collection,
@@ -21,6 +22,7 @@ import type {
   StoredDocument,
   StoredOutline,
   StoredRequest,
+  StoredAgentRecord,
   StoredStoryRecord,
   StoredTimeline,
   WorldEntry,
@@ -91,6 +93,19 @@ export function createMemoryStorage(): StorageAdapter {
   const outlineRecords = new Map<string, StoredOutline>();
   const timelineRecords = new Map<string, StoredTimeline>();
   const storyRecords = new Map<string, StoredStoryRecord>();
+  const agentRecordMap = new Map<string, StoredAgentRecord>();
+  const agentStore = keyed<StoredAgentRecord>(
+    "agentRecords",
+    (record) => record.id,
+    agentRecordMap,
+  );
+  const agentRecords: AgentRecordCollection = {
+    ...agentStore,
+    listForSession: (sessionId) =>
+      agentStore
+        .list()
+        .map((all) => all.filter((record) => record.sessionId === sessionId)),
+  };
   const annotationRecords = new Map<string, AnnotationRecord>();
   const annotationStore = keyed<AnnotationRecord>(
     "annotations",
@@ -157,6 +172,7 @@ export function createMemoryStorage(): StorageAdapter {
     outlines: keyed("outlines", (record) => record.id, outlineRecords),
     timelines: keyed("timelines", (record) => record.id, timelineRecords),
     storyRecords: keyed("storyRecords", (record) => record.id, storyRecords),
+    agentRecords,
     batch: (writes) =>
       run(batchContext(writes), () => {
         // Copy every value before changing anything, so a value that can't
@@ -195,6 +211,7 @@ export function createMemoryStorage(): StorageAdapter {
           outlines: sorted(outlineRecords),
           timelines: sorted(timelineRecords),
           storyRecords: sorted(storyRecords),
+          agentRecords: sorted(agentRecordMap),
         } satisfies WorldRecords),
       ),
     restore: (records) =>
@@ -220,6 +237,7 @@ export function createMemoryStorage(): StorageAdapter {
         put(outlineRecords, copy.outlines, (record) => record.id);
         put(timelineRecords, copy.timelines, (record) => record.id);
         put(storyRecords, copy.storyRecords, (record) => record.id);
+        put(agentRecordMap, copy.agentRecords, (record) => record.id);
         for (const snapshot of copy.snapshots) {
           snapshotRecords.set(snapshot.id, snapshot);
           nextSnapshotId = Math.max(nextSnapshotId, snapshot.id + 1);

@@ -40,6 +40,7 @@ async function contents(storage: StorageAdapter) {
     outlines: (await storage.outlines.list())._unsafeUnwrap(),
     timelines: (await storage.timelines.list())._unsafeUnwrap(),
     storyRecords: (await storage.storyRecords.list())._unsafeUnwrap(),
+    agentRecords: (await storage.agentRecords.list())._unsafeUnwrap(),
   };
 }
 
@@ -131,6 +132,20 @@ test("a read-only tab's writes are refused before they reach storage; reads work
     [
       storage.storyRecords.delete("actor/mara"),
       { operation: "delete", collection: "storyRecords", id: "actor/mara" },
+    ],
+    [
+      storage.agentRecords.save({
+        id: "s1/session",
+        sessionId: "s1",
+        kind: "session",
+        data: {},
+        updatedAt: 1,
+      }),
+      { operation: "save", collection: "agentRecords", id: "s1/session" },
+    ],
+    [
+      storage.agentRecords.delete("s1/session"),
+      { operation: "delete", collection: "agentRecords", id: "s1/session" },
     ],
     [
       storage.batch([{ kind: "deleteStoryRecord", id: "actor/mara" }]),

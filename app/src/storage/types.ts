@@ -27,6 +27,7 @@ export const COLLECTION_NAMES = [
   "outlines",
   "timelines",
   "storyRecords",
+  "agentRecords",
 ] as const;
 
 /** Names a collection, for errors and for the world dump. */
@@ -147,6 +148,22 @@ export interface StoredStoryRecord {
   readonly updatedAt: number;
 }
 
+/**
+ * One record of a story agent session: the session itself, or one step of it
+ * (the request sent, what the model answered, the tool calls it made and what
+ * they did). The agent module (`src/agent/`) owns the kinds, how `id` is
+ * built, and the shape of `data`; storage keeps `data` as JSON.
+ */
+export interface StoredAgentRecord {
+  /** `<sessionId>/<part>/...`; see `src/agent/records.ts`. */
+  readonly id: string;
+  readonly sessionId: string;
+  readonly kind: string;
+  readonly data: JsonValue;
+  /** Epoch milliseconds, set by the caller when the record last changed. */
+  readonly updatedAt: number;
+}
+
 /** An assembled LLM request, kept so it can be viewed and debugged. */
 export interface StoredRequest {
   readonly id: string;
@@ -204,6 +221,13 @@ export interface AnnotationCollection extends Collection<AnnotationRecord> {
   ): ResultAsync<AnnotationRecord[], StorageError>;
 }
 
+export interface AgentRecordCollection extends Collection<StoredAgentRecord> {
+  /** The records of one session, ascending by ID. */
+  listForSession(
+    sessionId: string,
+  ): ResultAsync<StoredAgentRecord[], StorageError>;
+}
+
 /**
  * Revision history of documents. Snapshots are append-only and kept on
  * purpose, including after their document is deleted, so it can be recovered.
@@ -238,6 +262,7 @@ export interface CollectionRecords {
   readonly outlines: StoredOutline;
   readonly timelines: StoredTimeline;
   readonly storyRecords: StoredStoryRecord;
+  readonly agentRecords: StoredAgentRecord;
 }
 
 /**
@@ -270,6 +295,11 @@ export interface StorageAdapter {
    * through `src/story/store.ts`, which writes only the records that changed.
    */
   readonly storyRecords: Collection<StoredStoryRecord>;
+  /**
+   * Keyed by `id`. Story agent sessions and their steps, written through
+   * `src/agent/records.ts`, kept so a session can be inspected and replayed.
+   */
+  readonly agentRecords: AgentRecordCollection;
   /**
    * Applies `writes` in order as one atomic step: either all take effect or
    * none does. Resolves with the info of each snapshot saved, in order. A

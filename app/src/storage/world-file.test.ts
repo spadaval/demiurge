@@ -39,8 +39,9 @@ const documents: StoredDocument[] = documentsFile;
 /**
  * A world with records in every collection, written the ways the app writes
  * them: the lighthouse story's documents and bible, world entries, AI
- * provenance, a stored request, an outline, a timeline, and snapshots saved
- * on their own and in a batch, one of them of a deleted document.
+ * provenance, a stored request, an outline, a timeline, an agent session, and
+ * snapshots saved on their own and in a batch, one of them of a deleted
+ * document.
  */
 async function fillWorld(storage: StorageAdapter): Promise<void> {
   for (const document of documents) {
@@ -115,6 +116,15 @@ async function fillWorld(storage: StorageAdapter): Promise<void> {
     }),
   );
   await value(saveStory(storage, story, 16));
+  await value(
+    storage.agentRecords.save({
+      id: "s1/session",
+      sessionId: "s1",
+      kind: "session",
+      data: { role: "plan", scope: { kind: "world" } },
+      updatedAt: 17,
+    }),
+  );
   await value(
     storage.snapshots.save({
       documentId: "doc-deleted",
@@ -235,7 +245,7 @@ describe("reading a world file", () => {
   const file = (records: unknown, overrides: Record<string, unknown> = {}) =>
     JSON.stringify({
       format: "demiurge-world",
-      version: 1,
+      version: WORLD_FILE_VERSION,
       records,
       ...overrides,
     });
@@ -259,10 +269,24 @@ describe("reading a world file", () => {
     ).toMatchObject({ kind: "invalid_world_file", path: "format" });
   });
 
+  test("reads a version 1 file, which has no agent records", () => {
+    const { agentRecords: _, ...version1 } = world;
+    expect(
+      parseWorldFile(file(version1, { version: 1 }))._unsafeUnwrap(),
+    ).toEqual(world);
+    expect(
+      parseWorldFile(file(world, { version: 1 }))._unsafeUnwrapErr(),
+    ).toEqual({
+      kind: "invalid_world_file",
+      path: "records.agentRecords",
+      reason: "not a field of this record",
+    });
+  });
+
   test("refuses a version it does not read", () => {
     expect(
-      parseWorldFile(file(world, { version: 2 }))._unsafeUnwrapErr(),
-    ).toEqual({ kind: "unsupported_world_version", version: 2 });
+      parseWorldFile(file(world, { version: 3 }))._unsafeUnwrapErr(),
+    ).toEqual({ kind: "unsupported_world_version", version: 3 });
     expect(
       parseWorldFile(file(world, { version: undefined }))._unsafeUnwrapErr(),
     ).toEqual({ kind: "unsupported_world_version", version: undefined });
