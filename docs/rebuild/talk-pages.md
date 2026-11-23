@@ -1,6 +1,6 @@
 # Talk Pages
 
-Status: proposal (2026-10-17).
+Status: built (`worldcrafter-lhh3`, 2026-11-23): topics, turns through the story agent runner, and the World inbox. Anchored launch from scenes, passages and records is `worldcrafter-rxvy`; the agent slip is `worldcrafter-w4mr`; edit proposals by block ID are `worldcrafter-yx9v`.
 
 ## Idea
 
@@ -44,29 +44,51 @@ Closing a topic can prompt: "Record anything from this as a fact?"
 
 ## Data model
 
-Discussions are their own store (neither content nor annotations):
+Discussions are their own store, the `talkRecords` collection (neither content nor annotations): one record per topic (`<topic>/topic`) and one per message (`<topic>/message/000001`). `app/src/talk/records.ts` owns the shapes:
 
 ```ts
+type TopicScope =
+  | { kind: "world" }
+  | { kind: "scene"; scene: string }                 // a bible scene ID
+  | { kind: "passage"; scene: string; documentId: string; blockId: string; quote: string }
+  | { kind: "record"; ref: string };                 // `drive:keep-light`
+
+type TalkAuthor =
+  | { kind: "human" }
+  | {
+      kind: "model";
+      profile: string;          // the profile's label, signed "Model · <label>"
+      model: string;
+      session: string | null;   // the agent session the turn ran in
+      requestId: string | null; // the agent step record whose answer this is
+      trace: string[];          // every step record of the run: its tool calls
+    };
+
 type Topic = {
   id: string;
-  scope: { kind: "world" } | { kind: "document"; docId: string; blockId?: string };
   title: string;
+  scope: TopicScope;
   status: "open" | "resolved" | "archived";
-  origin: "user" | "ai";
-  createdAt: string;
+  startedBy: TalkAuthor;
+  session: string | null;       // one agent session per topic, once a turn ran
+  messages: number;
+  createdAt: number; updatedAt: number; closedAt: number | null;
 };
 
 type TalkMessage = {
-  id: string;
-  topicId: string;
-  author: { kind: "user" } | { kind: "model"; modelId: string; requestId: string };
-  body: string;               // markdown; light schema
-  proposals?: ProposalRef[];  // edits, facts, relations raised by this message
-  createdAt: string;
+  id: string; topic: string; index: number;
+  author: TalkAuthor;
+  body: string;                 // markdown
+  calls: { name: string; ok: boolean; summary: string }[];
+  createdAt: number;
 };
 ```
 
-A topic whose block anchor goes stale falls back to the document scope.
+A topic's turns run through the story agent runner (`docs/rebuild/story-agent.md`) as one `plan` session per topic, in the agent scope its scope maps to (a passage's model sees its scene, and the passage is quoted in the topic's prompt). The full request, tool arguments and results stay in the agent records; a message keeps a reference to them and a one-line summary of each call. A topic whose block anchor goes stale (the block is gone or no longer holds the quote) falls back to the scene.
+
+The World inbox (`app/src/talk/inbox.ts`) is every open topic a model started, newest first, then the contradictions the story keeps (`storyContradictions`).
+
+Not built yet: a tool for the agent to raise a topic itself (`Talk.raise` is the command it would call), proposals in a turn ("Record as fact"), and rendering a turn's Markdown beyond paragraphs.
 
 ## Why this fits the philosophy
 

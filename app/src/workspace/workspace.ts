@@ -12,6 +12,7 @@ import {
 import { createStore, type Store } from "./store";
 import {
   closeTab,
+  isSheetTab,
   type KeyValueStore,
   loadTabs,
   openTab,
@@ -64,10 +65,15 @@ export interface WorkspaceCommands {
   /** Opens a document as the active tab, loading it if needed. */
   openDocument(documentId: string): ResultAsync<DocumentSession, CommandError>;
   /**
+   * Opens a sheet (`sheetTab`) as the active tab. A sheet has no session:
+   * what it shows is its own service's.
+   */
+  openSheet(tab: string): void;
+  /**
    * Saves and closes a tab. Refuses with `unsaved` if the save fails, so
    * closing never discards writing, and reports `still_open` if the tab was
-   * reopened (or kept by an earlier failed close) meanwhile. Returns the tabs
-   * after closing.
+   * reopened (or kept by an earlier failed close) meanwhile. A sheet's tab
+   * just closes. Returns the tabs after closing.
    */
   closeTab(documentId: string): ResultAsync<TabsState, CommandError>;
   renameDocument(
@@ -274,7 +280,16 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
         });
     },
 
+    openSheet(tab) {
+      if (!isSheetTab(tab)) throw new Error(`${tab} is not a sheet tab`);
+      setTabs(openTab(tabs.get(), tab));
+    },
+
     closeTab(documentId) {
+      if (isSheetTab(documentId)) {
+        setTabs(closeTab(tabs.get(), documentId));
+        return okAsync(tabs.get());
+      }
       const lease = tabLeases.get(documentId);
       tabLeases.delete(documentId);
       // Let a load in progress finish first, so its session is released too.

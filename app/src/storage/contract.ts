@@ -424,9 +424,7 @@ export function describeStorageContract(
         t1,
         t2,
       ]);
-      expect(await value(storage.talkRecords.listForTopic("none"))).toEqual(
-        [],
-      );
+      expect(await value(storage.talkRecords.listForTopic("none"))).toEqual([]);
       await value(storage.talkRecords.delete("t1/message/000001"));
       expect(await value(storage.talkRecords.listOfKind("message"))).toEqual([
         m2,

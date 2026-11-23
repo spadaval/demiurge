@@ -6,6 +6,8 @@ import type { CommandError } from "~/workspace/workspace";
 import { KIND_DEFINITIONS } from "~/world/kinds";
 import { useServices, useStore } from "./hooks";
 import type { ManuscriptBook, SceneRow } from "./manuscript";
+import { useActiveTab } from "./tab-routes";
+import { InboxFoot, TopicsPanel } from "./topics";
 
 type RailView = "manuscript" | "world" | "topics";
 
@@ -25,10 +27,12 @@ export function Rail({
   active: string | null;
   onError: (error: CommandError) => void;
 }) {
-  const { environment, layerSource, generation } = useServices();
+  const { environment, generation } = useServices();
   const profile = useStore(generation.profile);
-  const [view, setView] = useState<RailView>("manuscript");
-  const topics = layerSource.topics;
+  const activeTab = useActiveTab();
+  const [view, setView] = useState<RailView>(
+    activeTab?.startsWith("sheet:") ? "topics" : "manuscript",
+  );
   return (
     <nav className="rail" aria-label="Manuscript and world">
       <div className="rail-brand">
@@ -62,21 +66,10 @@ export function Rail({
           <ManuscriptPanel active={active} onError={onError} />
         )}
         {view === "world" && <WorldPanel active={active} />}
-        {view === "topics" && <TopicsPanel />}
+        {view === "topics" && <TopicsPanel active={activeTab} />}
       </div>
       <footer className="rail-foot">
-        <p>
-          {topics.length === 0 ? (
-            "No open topics in the world inbox"
-          ) : (
-            <>
-              <b>
-                {topics.length} open {topics.length === 1 ? "topic" : "topics"}
-              </b>{" "}
-              in the world inbox
-            </>
-          )}
-        </p>
+        <InboxFoot />
         <p className="rail-model">
           <span>
             {profile ? (
@@ -428,28 +421,5 @@ function WorldPanel({ active }: { active: string | null }) {
         ),
       )}
     </>
-  );
-}
-
-function TopicsPanel() {
-  const { layerSource } = useServices();
-  const topics = layerSource.topics;
-  if (topics.length === 0) {
-    return <p className="rail-empty rail-section">No open topics.</p>;
-  }
-  return (
-    <section className="rail-section" aria-labelledby="rail-topics">
-      <div className="rail-label">
-        <h2 id="rail-topics">Open topics</h2>
-      </div>
-      <ul className="topic-list">
-        {topics.map((topic) => (
-          <li key={topic.id}>
-            <span className="topic-title">{topic.title}</span>
-            <span className="topic-about">{topic.about}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

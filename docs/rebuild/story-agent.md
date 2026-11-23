@@ -24,7 +24,7 @@ Storage holds the session (`<id>/session`: the conversation, each writer message
 
 ## What it does not do yet
 
-- The UI (`worldcrafter-mtkn`) and running sessions in the Worker (`worldcrafter-ji5d`).
+- Most of the UI (`worldcrafter-mtkn`) and running sessions in the Worker (`worldcrafter-ji5d`). Talk pages run their turns through the runner (`docs/rebuild/talk-pages.md`).
 - Writing a draft into the scene's document: the prose role's answer is in the log and the conversation, and putting it in the document is the editor's job.
 - Completion-endpoint models: every role uses chat. A finetune served only as raw completions would need a prompt layout for the conversation.
 - Timeline values the model writes are asserted, as the CLI's are. Whether they should carry an `inferred` authority is a product call.

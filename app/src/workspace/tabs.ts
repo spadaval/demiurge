@@ -1,5 +1,6 @@
 /**
- * Which documents are open as tabs in a world, and which was last active.
+ * Which documents and sheets are open as tabs in a world, and which was last
+ * active.
  * This is workspace UI state: it lives outside the documents and outside the
  * world store, persisted per world in a key-value store (localStorage in the
  * browser). The URL decides the active tab while the app runs; `active` is
@@ -11,6 +12,22 @@ export interface TabsState {
 }
 
 export const NO_TABS: TabsState = { open: [], active: null };
+
+/**
+ * A tab that holds a sheet rather than a document (a topic, the World
+ * inbox) has an ID starting `sheet:`, which no document ID does: documents
+ * are named by nanoid, which never writes a colon.
+ */
+const SHEET_PREFIX = "sheet:";
+
+export const isSheetTab = (id: string) => id.startsWith(SHEET_PREFIX);
+
+/** The tab of a sheet named `name`: `topic/<id>`, `inbox`. */
+export const sheetTab = (name: string) => `${SHEET_PREFIX}${name}`;
+
+/** The name of a sheet tab, or null for a document's tab. */
+export const sheetName = (id: string) =>
+  isSheetTab(id) ? id.slice(SHEET_PREFIX.length) : null;
 
 /** Opens `id` after the active tab (or at the end) and makes it active. */
 export function openTab(state: TabsState, id: string): TabsState {

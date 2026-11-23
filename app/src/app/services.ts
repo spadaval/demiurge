@@ -9,6 +9,7 @@ import { createGeneration } from "./generation";
 import type { AppServices } from "./hooks";
 import type { LayerSource } from "./layers";
 import { createAppManuscript } from "./manuscript";
+import { createAppTalk } from "./talk";
 import { createAppWorldStore, createWorldIndex } from "./world";
 
 export interface AppServicesInput {
@@ -29,7 +30,22 @@ export async function createAppServices(
   const world = createAppWorldStore(workspace);
   const worldIndex = createWorldIndex(world);
   const manuscript = createAppManuscript(workspace, world);
-  await Promise.all([worldIndex.refresh(), manuscript.refresh()]);
+  const storage = createConnectedStorage(
+    workspace.connection,
+    workspace.readOnly,
+  );
+  const profile = createProfileStore(keyValue, workspace.worldId);
+  const talk = createAppTalk({
+    storage,
+    profile,
+    readOnly: workspace.readOnly,
+    ...(input.fetch ? { fetch: input.fetch } : {}),
+  });
+  await Promise.all([
+    worldIndex.refresh(),
+    manuscript.refresh(),
+    talk.refresh(),
+  ]);
   return {
     workspace,
     world,
@@ -40,11 +56,12 @@ export async function createAppServices(
     environment: input.environment,
     generation: createGeneration({
       workspace,
-      storage: createConnectedStorage(workspace.connection, workspace.readOnly),
+      storage,
       world,
       manuscript,
-      profile: createProfileStore(keyValue, workspace.worldId),
+      profile,
       ...(input.fetch ? { fetch: input.fetch } : {}),
     }),
+    talk,
   };
 }

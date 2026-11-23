@@ -377,11 +377,50 @@ a {
   white-space: pre;
 }
 
-.topic-list li {
+.topic-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
   padding: 5px 20px;
+  text-decoration: none;
+}
+
+a.topic-row:hover .topic-title {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
+}
+
+.topic-row[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--ink);
+}
+
+.rail-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.rail-more {
+  margin: 6px 0 0;
+  padding: 0 20px;
+}
+
+.rail-foot-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.rail-foot-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 3px;
 }
 
 .topic-title {
@@ -1693,6 +1732,414 @@ a {
   }
 }
 
+/* ── Topics ───────────────────────────────────────────────────────────── */
+
+/* A text action: apparatus words that act, in the surrounding size. */
+.text-action {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.text-action:hover:not(:disabled) {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.text-action:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+/* A reference to a record, scene, entry or topic. */
+.ref {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.ref:hover {
+  text-decoration-color: var(--ink);
+}
+
+.ref-plain {
+  color: var(--ink);
+}
+
+.ref-removed {
+  color: var(--ink-3);
+}
+
+.sheet-title {
+  margin: 0;
+  font: 500 21px / 1.25 var(--font-apparatus);
+  color: var(--ink);
+}
+
+.excerpt {
+  margin: 12px 0 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule-strong);
+  font: italic 400 15px / 1.5 var(--font-prose);
+  color: var(--ink-2);
+}
+
+.code {
+  font:
+    400 12.5px / 1.5 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Ledger sheets: the World inbox, resolved and archived topics. */
+/* The ledger spans the prose column, gutter and gloss column, up to 1000px. */
+.ledger-sheet {
+  max-width: 1000px;
+  margin: 0 32px 0 var(--margin-width);
+  padding: 52px 0 160px;
+}
+
+.ledger-head {
+  margin-bottom: 22px;
+}
+
+.ledger-lede {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.ledger,
+.turns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ledger {
+  border-bottom: 1px solid var(--rule);
+}
+
+.ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 32px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+  color: inherit;
+  text-decoration: none;
+}
+
+.ledger-link:hover {
+  border-top-color: var(--rule-strong);
+}
+
+.ledger-link:focus-visible {
+  outline: 1px solid var(--ink-2);
+  outline-offset: -3px;
+}
+
+.ledger-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ledger-kind,
+.ledger-group,
+.turn-head {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.ledger-lead {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.ledger-secondary {
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.ledger-meta {
+  flex: none;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.ledger-group {
+  display: flex;
+  justify-content: space-between;
+  margin: 22px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* The topic sheet: head, turns and composer on the prose column. */
+.topic-sheet {
+  display: flex;
+  flex-direction: column;
+  max-width: var(--prose-width);
+  margin-left: var(--margin-width);
+  padding: 52px 0 160px;
+}
+
+.topic-head {
+  margin-bottom: 18px;
+}
+
+.topic-scope {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.topic-scope .ref,
+.topic-scope .ref-plain,
+.topic-scope .ref-removed {
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.topic-stale {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.topic-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.topic-title-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.topic-title-field {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 500 21px / 1.25 var(--font-apparatus);
+  color: var(--ink);
+  caret-color: var(--ink);
+}
+
+.topic-title-field:focus-visible {
+  outline: none;
+}
+
+.topic-status {
+  flex: none;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.topic-actions {
+  display: flex;
+  flex: none;
+  gap: 12px;
+}
+
+.topic-started {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.turns-empty {
+  margin: 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.turn {
+  padding-top: 18px;
+  padding-bottom: 6px;
+  border-top: 1px solid var(--rule);
+  animation: turn-in var(--fade) var(--ease-out);
+}
+
+@keyframes turn-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A model's turn is set off by a rule down its left edge: attribution in form. */
+.turn-model {
+  padding-left: 14px;
+  border-left: 1px solid var(--rule-strong);
+}
+
+.turn-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.turn-author {
+  color: var(--ink-2);
+}
+
+.turn-time {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-head .text-action {
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.turn-body {
+  font: 400 15px / 1.55 var(--font-apparatus);
+  color: var(--ink);
+}
+
+.turn-body p {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.turn-status {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.turn-calls {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.turn-calls summary {
+  cursor: pointer;
+}
+
+.turn-calls ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.turn-calls li {
+  margin-bottom: 3px;
+}
+
+.turn-call-result {
+  color: var(--ink-2);
+}
+
+.turn-failure,
+.topic-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 0;
+}
+
+.topic-closed {
+  margin: 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--rule);
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.composer {
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.composer-sees {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 3lh;
+  max-height: 12lh;
+  field-sizing: content;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--rail);
+  font: 400 15px / 1.55 var(--font-apparatus);
+  color: var(--ink);
+  caret-color: var(--ink);
+  resize: vertical;
+}
+
+.composer textarea:hover {
+  border-color: var(--rule-strong);
+}
+
+.composer textarea:focus-visible {
+  border-color: var(--rule-strong);
+  outline-offset: 1px;
+}
+
+.composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.composer .button-primary:disabled {
+  border-color: var(--rule-strong);
+  background: none;
+  color: var(--ink-3);
+  cursor: default;
+}
+
 /* ── Narrower screens ─────────────────────────────────────────────────── */
 
 @media (max-width: 1380px) {
@@ -1898,5 +2345,25 @@ a {
 
   .page-empty {
     padding: 40px 20px;
+  }
+
+  .topic-sheet,
+  .ledger-sheet {
+    max-width: none;
+    margin-left: 0;
+    padding: 28px 20px 96px;
+  }
+
+  .topic-title-row {
+    flex-wrap: wrap;
+  }
+
+  .topic-title-row > :first-child {
+    flex-basis: 100%;
+  }
+
+  .ledger-row {
+    flex-direction: column;
+    gap: 2px;
   }
 }

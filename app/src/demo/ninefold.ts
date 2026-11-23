@@ -4,7 +4,7 @@
  * saved. Seeding goes through the real stores (documents, outline, world
  * facts, timeline), so the rail, stamp and chronology are computed exactly as
  * for a real world. Layers with no data source yet (speakers, time
- * expressions, subtext, entry suggestions, topics) come from the fixtures
+ * expressions, subtext, entry suggestions) come from the fixtures
  * below. Only `main.tsx` imports this, and only when the flag is set.
  */
 import type { ResultAsync } from "neverthrow";
@@ -14,6 +14,7 @@ import { createLayerSource } from "~/app/layers";
 import { buildContext } from "~/context/builder";
 import { gatherWorldContext } from "~/context/gather";
 import { createRequestStore } from "~/context/requests";
+import { labelOf } from "~/generate/profile";
 import {
   PROVENANCE_VERSION,
   provenanceRecord,
@@ -25,6 +26,15 @@ import type { Fetch } from "~/llm/types";
 import { runOutlineCommand } from "~/outline/store";
 import { createMemoryStorage } from "~/storage/memory";
 import type { JsonValue, StorageAdapter } from "~/storage/types";
+import {
+  type ModelAuthor,
+  messageRecordId,
+  saveTalk,
+  TALK_RECORD_VERSION,
+  type TalkAuthor,
+  type TalkMessage,
+  type Topic,
+} from "~/talk/records";
 import { createTimelineStore } from "~/time/store";
 import { sceneEventId } from "~/time/timeline";
 import type { KeyValueStore } from "~/workspace/tabs";
@@ -594,6 +604,10 @@ export async function seedDemoWorld(
     "provenance",
   );
 
+  for (const [topic, messages] of demoTopics(now)) {
+    await unwrap(saveTalk(storage, topic, messages), "topic");
+  }
+
   const tabStore = memoryKeyValue({
     [`worldcrafter:${worldId}:backend-profile`]: JSON.stringify(DEMO_PROFILE),
     [`worldcrafter:${worldId}:tabs`]: JSON.stringify({
@@ -614,21 +628,84 @@ export async function seedDemoWorld(
     storage,
     tabStore,
     fetch: demoFetch({ stall: options.stall ?? false }),
-    layerSource: createLayerSource(
-      new Map([[DEMO_SCENE, sealedDoorLayers()]]),
-      [
-        {
-          id: "t1",
-          title: "Does Kesh already know?",
-          about: "4.2 The Sealed Door",
-        },
-        {
-          id: "t2",
-          title: "Ardelia's age at the sealing",
-          about: "Ardelia Vane",
-        },
-        { id: "t3", title: "Where the Undertow sleeps", about: "The world" },
-      ],
-    ),
+    layerSource: createLayerSource(new Map([[DEMO_SCENE, sealedDoorLayers()]])),
   };
+}
+
+/**
+ * Two world topics: one the writer started, with a model's answer, and one
+ * the model raised, which waits in the World inbox.
+ */
+function demoTopics(now: number): [Topic, TalkMessage[]][] {
+  const model: ModelAuthor = {
+    kind: "model",
+    profile: labelOf(DEMO_PROFILE),
+    model: DEMO_PROFILE.model ?? "",
+    session: null,
+    requestId: null,
+    trace: [],
+  };
+  const topic = (
+    id: string,
+    title: string,
+    startedBy: TalkAuthor,
+    messages: number,
+  ): Topic => ({
+    version: TALK_RECORD_VERSION,
+    id,
+    title,
+    scope: { kind: "world" },
+    status: "open",
+    startedBy,
+    session: null,
+    messages,
+    createdAt: now,
+    updatedAt: now,
+    closedAt: null,
+  });
+  const message = (
+    topicId: string,
+    index: number,
+    author: TalkAuthor,
+    body: string,
+  ): TalkMessage => ({
+    version: TALK_RECORD_VERSION,
+    id: messageRecordId(topicId, index),
+    topic: topicId,
+    index,
+    author,
+    body,
+    calls: [],
+    createdAt: now,
+  });
+  return [
+    [
+      topic("demo-age", "Ardelia's age at the sealing", { kind: "human" }, 2),
+      [
+        message(
+          "demo-age",
+          1,
+          { kind: "human" },
+          "How old was Ardelia when the Ninefold sealed the door?",
+        ),
+        message(
+          "demo-age",
+          2,
+          model,
+          "The entry gives her as 340 and looking 30. If the sealing was three hundred years ago, she was about 40 then.",
+        ),
+      ],
+    ],
+    [
+      topic("demo-undertow", "Where the Undertow sleeps", model, 1),
+      [
+        message(
+          "demo-undertow",
+          1,
+          model,
+          "Three scenes say the Undertow sleeps under the harbour, and one puts it under the archive. Which is it?",
+        ),
+      ],
+    ],
+  ];
 }

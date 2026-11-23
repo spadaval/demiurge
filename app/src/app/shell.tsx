@@ -15,12 +15,20 @@ import {
 } from "~/generate/shortcuts";
 import { LAYER_LABELS, LAYERS, layersForScene, mentions } from "~/layers/model";
 import { createStore } from "~/workspace/store";
+import { isSheetTab } from "~/workspace/tabs";
 import type { CommandError } from "~/workspace/workspace";
 import { KIND_DEFINITIONS } from "~/world/kinds";
 import { describeCommandError, describeReadOnly } from "./environment";
 import { useEnvironment, useServices, useStore, useWorkspace } from "./hooks";
 import { formatStoryTime } from "./manuscript";
 import { Rail } from "./rail";
+import {
+  CLOSED_TOPICS_TAB,
+  INBOX_TAB,
+  tabRoute,
+  topicOfTab,
+  useActiveTab,
+} from "./tab-routes";
 import { entryNames } from "./world";
 
 /** A message for the writer: an error, or a note about what isn't built yet. */
@@ -39,8 +47,9 @@ export function Shell() {
   // Narrow screens only: the rail opens over the page.
   const [railOpen, setRailOpen] = useState(false);
   const active = useActiveDocumentId();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: opening a document closes the rail
-  useEffect(() => setRailOpen(false), [active]);
+  const activeTab = useActiveTab();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: opening a document or sheet closes the rail
+  useEffect(() => setRailOpen(false), [activeTab]);
   const onError = (error: CommandError) => setMessage({ kind: "error", error });
   const info = (text: string) => setMessage({ kind: "info", text });
   return (
@@ -62,7 +71,7 @@ export function Shell() {
             />
           </svg>
         </button>
-        <TabStrip active={active} onMessage={setMessage} />
+        <TabStrip onMessage={setMessage} />
         <StoryTimeStamp active={active} />
         <div className="masthead-controls">
           {active && <LayerToggles documentId={active} />}
@@ -123,26 +132,47 @@ const isFailedClose = (message: Message | null, id: string) =>
   message.error.documentId === id;
 
 function TabStrip({
-  active,
   onMessage,
 }: {
-  active: string | null;
   onMessage: Dispatch<SetStateAction<Message | null>>;
 }) {
-  const { workspace, manuscript, worldIndex, generation } = useServices();
+  const { workspace, manuscript, worldIndex, generation, talk } = useServices();
+  const active = useActiveTab();
   const entries = useStore(worldIndex.entries);
+  const topics = useStore(talk.topics);
   const tabs = useStore(workspace.tabs);
   const documents = useStore(workspace.documents);
   const state = useStore(manuscript.state);
   const navigate = useNavigate();
   // Documents whose last close failed with unsaved changes.
   const failedCloses = useRef(new Set<string>());
-  const titleOf = (id: string) =>
-    documents.find((document) => document.id === id)?.title ?? "…";
+  const titleOf = (id: string) => {
+    if (id === INBOX_TAB) return "World inbox";
+    if (id === CLOSED_TOPICS_TAB) return "Resolved and archived";
+    const topic = topicOfTab(id);
+    if (topic !== null) {
+      return topics.find((t) => t.id === topic)?.title ?? "New topic";
+    }
+    return documents.find((document) => document.id === id)?.title ?? "…";
+  };
   const sceneOf = (id: string) =>
     state.kind === "ready" ? state.view.scenes.get(id) : undefined;
 
+  const closeSheet = async (id: string) => {
+    const topic = topicOfTab(id);
+    if (topic !== null) {
+      // A topic never sent is discarded with its tab; a running turn stops.
+      talk.stop(topic);
+      talk.discardDraft(topic);
+    }
+    const closed = await workspace.commands.closeTab(id);
+    if (closed.isErr() || id !== active) return;
+    const next = closed.value.active;
+    await (next ? navigate(tabRoute(next)) : navigate({ to: "/" }));
+  };
+
   const close = async (id: string, retried = false): Promise<void> => {
+    if (isSheetTab(id)) return closeSheet(id);
     // A generation writes into the document until it ends: end it first,
     // keeping what arrived, so closing saves all of it.
     await generation.stop(id);
@@ -170,9 +200,7 @@ function TabStrip({
     onMessage((current) => (isFailedClose(current, id) ? null : current));
     if (id !== active) return;
     const next = closed.value.active;
-    await (next
-      ? navigate({ to: "/doc/$documentId", params: { documentId: next } })
-      : navigate({ to: "/" }));
+    await (next ? navigate(tabRoute(next)) : navigate({ to: "/" }));
   };
 
   return (
@@ -181,16 +209,17 @@ function TabStrip({
         const scene = sceneOf(id);
         const isActive = id === active;
         const kind = entries.get(id)?.kind;
-        const crumb = scene
-          ? scene.chapterTitle
-          : kind
-            ? `World › ${KIND_DEFINITIONS[kind].label}`
-            : "";
+        const crumb = isSheetTab(id)
+          ? "Topics"
+          : scene
+            ? scene.chapterTitle
+            : kind
+              ? `World › ${KIND_DEFINITIONS[kind].label}`
+              : "";
         return (
           <div key={id} className="tab" data-active={isActive}>
             <Link
-              to="/doc/$documentId"
-              params={{ documentId: id }}
+              {...tabRoute(id)}
               aria-current={isActive ? "page" : undefined}
             >
               {isActive && crumb && <span className="crumb">{crumb} › </span>}

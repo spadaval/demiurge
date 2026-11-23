@@ -10,6 +10,8 @@ import {
   loadTabs,
   NO_TABS,
   openTab,
+  sheetName,
+  sheetTab,
 } from "./tabs";
 import { createWorkspace, UNTITLED } from "./workspace";
 import { acquireWriterLock, type LockRequester } from "./writer-lock";
@@ -119,6 +121,30 @@ describe("workspace commands", () => {
       active: second.documentId,
     });
     expect(ws.session(first.documentId)).toBeUndefined();
+  });
+
+  test("sheets open and close as tabs beside documents, with no session", async () => {
+    const tabStore = memoryKeyValue();
+    const ws = workspace({ tabStore });
+    const doc = (await ws.commands.createDocument())._unsafeUnwrap();
+    const topic = sheetTab("topic/t1");
+    expect(sheetName(topic)).toBe("topic/t1");
+    expect(sheetName(doc.documentId)).toBeNull();
+    ws.commands.openSheet(topic);
+    ws.commands.openSheet(sheetTab("inbox"));
+    expect(ws.tabs.get()).toEqual({
+      open: [doc.documentId, topic, sheetTab("inbox")],
+      active: sheetTab("inbox"),
+    });
+    expect(ws.session(topic)).toBeUndefined();
+    expect(loadTabs(tabStore, "w1")).toEqual(ws.tabs.get());
+    expect(() => ws.commands.openSheet(doc.documentId)).toThrow();
+
+    const after = (await ws.commands.closeTab(topic))._unsafeUnwrap();
+    expect(after).toEqual({
+      open: [doc.documentId, sheetTab("inbox")],
+      active: sheetTab("inbox"),
+    });
   });
 
   test("closing a tab saves it first", async () => {

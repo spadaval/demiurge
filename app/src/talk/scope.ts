@@ -4,6 +4,7 @@
  */
 
 import type { AgentScope } from "../agent/context";
+import type { JsonValue } from "../storage/types";
 import { parseRef } from "../story/refs";
 import { type Ref, refExists, type Story } from "../story/story";
 import { refLabel } from "../story/touches";
@@ -141,4 +142,41 @@ export function topicPrompt(
     lines.push("", "The passage the topic is about:", "", `> ${scope.quote}`);
   }
   return lines.join("\n");
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The text under a content node: its leaves' text, in order. */
+function textOf(node: unknown): string {
+  if (!isObject(node)) return "";
+  if (typeof node.text === "string") return node.text;
+  return Array.isArray(node.children) ? node.children.map(textOf).join("") : "";
+}
+
+/** The text of the block `blockId` of a content tree, if it has the block. */
+export function blockText(
+  content: JsonValue,
+  blockId: string,
+): string | undefined {
+  const stack: unknown[] = Array.isArray(content) ? [...content] : [];
+  while (stack.length > 0) {
+    const node = stack.shift();
+    if (!isObject(node)) continue;
+    if (node.id === blockId) return textOf(node);
+    if (Array.isArray(node.children)) stack.push(...node.children);
+  }
+  return undefined;
+}
+
+/**
+ * Whether a passage topic's anchor has gone stale in `content`, its scene's
+ * document now: the block is gone, or no longer holds the quoted text.
+ */
+export function passageStale(
+  content: JsonValue,
+  scope: Extract<TopicScope, { kind: "passage" }>,
+): boolean {
+  const text = blockText(content, scope.blockId);
+  return text === undefined || !text.includes(scope.quote);
 }
