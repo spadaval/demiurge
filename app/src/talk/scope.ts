@@ -173,7 +173,8 @@ function topicPromptText(
  * The last part `topicPrompt` wrote into `prompt` for a topic with `scope`,
  * under any title and scope name (a topic renamed, or a record renamed,
  * since): exactly the part, whatever follows it. It stands on its own
- * lines, after a blank line or at the start. Null when there is none.
+ * lines: at the start or after a newline, and at the end or before one.
+ * Null when there is none.
  */
 export function findTopicPrompt(
   prompt: string,
@@ -186,7 +187,7 @@ export function findTopicPrompt(
     .split(literal(open))
     .join("[^\\n]*");
   const matches = [
-    ...prompt.matchAll(new RegExp(`(?:^|\\n\\n)(${shape})(?=\\n\\n|$)`, "g")),
+    ...prompt.matchAll(new RegExp(`(?:^|\\n)(${shape})(?=\\n|$)`, "g")),
   ];
   return matches.at(-1)?.[1] ?? null;
 }

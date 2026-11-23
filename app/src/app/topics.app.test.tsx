@@ -1002,6 +1002,53 @@ test("an instruction added after the topic's part is kept in the profile default
   expect(system).not.toContain("Who lit the lamp?");
 });
 
+test("an instruction added on the next line can be saved as the default again and again", async () => {
+  await render("/inbox");
+  await click(query("#rail-tab-topics"));
+  stub.script(streamed(["Mara lit it."]));
+  await newTopic("Who lit the lamp?", "Who lit the lamp on the storm night?");
+  await click(control("Context", ".composer"));
+  await until(() => slipField("System prompt") !== null, "the next slip");
+  const prompt = slipField("System prompt")?.value ?? "";
+  const profilePart = prompt.slice(0, prompt.indexOf("\n\n# This talk page\n"));
+  const added = "Always answer in exactly one sentence.";
+  const asDefault = () =>
+    click(
+      queryAll(".topic-slip input[type=radio]").find(
+        (input) => input.parentElement?.textContent === "Profile default",
+      ) ?? null,
+    );
+
+  await type(slipField("System prompt"), `${prompt}\n${added}`);
+  await asDefault();
+  stub.script(streamed(["Mara."]));
+  await say("Go on.");
+  expect(chat(lastRequest())[0]?.content).toBe(`${prompt}\n${added}`);
+
+  // The session now holds the instruction on the line after its part.
+  await until(
+    () => slipField("System prompt")?.value === `${prompt}\n${added}`,
+    "the next slip",
+  );
+  await type(slipField("System prompt"), `Be concise.\n${prompt}\n${added}`);
+  await asDefault();
+  stub.script(streamed(["Mara."]));
+  await say("Again.");
+  expect(query(".topic-error")).toBeNull();
+  expect(chat(lastRequest())[0]?.content).toBe(
+    `Be concise.\n${prompt}\n${added}`,
+  );
+
+  // A new topic gets both, with only its own part.
+  stub.script(streamed(["Ivo does."]));
+  await newTopic("Who keeps the log?", "Who?");
+  const system = chat(lastRequest())[0]?.content ?? "";
+  expect(system).toStartWith(
+    `Be concise.\n${profilePart}\n${added}\n\n# This talk page\n`,
+  );
+  expect(system).not.toContain("Who lit the lamp?");
+});
+
 test("a refused profile default sends nothing, and the message and edits can be sent again", async () => {
   const { keyValue, refuse } = refusingDefaults();
   await render("/inbox", keyValue);

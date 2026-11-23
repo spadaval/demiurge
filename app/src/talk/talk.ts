@@ -263,14 +263,33 @@ export function profilePrompt(
   if (part === null) {
     return before.includes(TOPIC_PROMPT_HEADING) ? refused : ok(edited);
   }
-  const at = edited.lastIndexOf(`\n\n${part}`);
-  if (at !== -1) {
-    return ok(edited.slice(0, at) + edited.slice(at + 2 + part.length));
+  const at = lineIndex(edited, part);
+  if (at === -1) return refused;
+  // The part goes with the newlines around it. The writer's text on both
+  // sides stays, joined as the text after the part was set off from it.
+  const left = edited.slice(0, at).replace(/\n+$/, "");
+  const after = edited.slice(at + part.length);
+  const right = after.replace(/^\n+/, "");
+  const between = after.slice(0, after.length - right.length);
+  return ok(left === "" ? right : right === "" ? left : left + between + right);
+}
+
+/** Where `part` last stands on lines of its own in `text`; -1 if nowhere. */
+function lineIndex(text: string, part: string): number {
+  for (
+    let at = text.lastIndexOf(part);
+    at !== -1;
+    at = at === 0 ? -1 : text.lastIndexOf(part, at - 1)
+  ) {
+    const end = at + part.length;
+    if (
+      (at === 0 || text[at - 1] === "\n") &&
+      (end === text.length || text[end] === "\n")
+    ) {
+      return at;
+    }
   }
-  if (edited.startsWith(part)) {
-    return ok(edited.slice(part.length).replace(/^\n+/, ""));
-  }
-  return refused;
+  return -1;
 }
 
 /** Saves a topic session's prompt default as `strip` leaves it. */

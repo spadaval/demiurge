@@ -820,6 +820,24 @@ describe("a topic prompt saved as the profile default", () => {
     );
   });
 
+  test("finds the part when the writer's text is set off by one newline", () => {
+    // Added on the next line, then saved again with a line before it.
+    const once = `Be careful.\n\n${part}\nAlways answer in exactly one sentence.`;
+    expect(saved(once)._unsafeUnwrap()).toBe(
+      "Be careful.\nAlways answer in exactly one sentence.",
+    );
+    expect(saved(`Be concise.\n${once}`, once)._unsafeUnwrap()).toBe(
+      "Be concise.\nBe careful.\nAlways answer in exactly one sentence.",
+    );
+    // One newline before it.
+    const mine = `Mine.\n${part}`;
+    expect(saved(`${mine}\nMore.`, mine)._unsafeUnwrap()).toBe("Mine.\nMore.");
+    // Not a part when it shares a line with the writer's text.
+    expect(saved(`Be careful.\n\n${part} More.`)._unsafeUnwrapErr()).toContain(
+      "Keep that part as it is",
+    );
+  });
+
   test("finds a passage topic's part by its quote", () => {
     const passage = {
       kind: "passage",
