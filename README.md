@@ -11,72 +11,82 @@ Stories get made by picking elements that seem interesting and weaving them into
 
 We use AI throughout the work, up to and including writing the story, because we think that's the best way to create compelling stories. We don't see AI-written work as inherently good or bad. Our hunch is that a story needs to be co-authored by a human and an AI to be good, which is a reasonable belief but an unverified one. What we don't want is a slop cannon: volume that nobody has judged.
 
-So this is built for a team of a human and an AI agent, working on the same model of the story, to make sure the story has what it needs to be interesting before final drafting begins. See [the story model](docs/rebuild/story-model.md#fluidity). The first version is headless, a CLI and a skill used in an agent session, to test the model before building screens for it. The web app is the current plan and not a commitment: the form follows the results.
+So this is built for a team of a human and an AI agent, working on the same typed story bible, to make sure the story has what it needs to be interesting before final drafting begins. See [the story model](docs/rebuild/story-model.md#fluidity). The bible was first tested headless, through a CLI and a skill in an agent session, over [five rounds](docs/rounds/README.md). It is now moving into the web app, with a story agent the app runs itself so the writer controls its prompts, tools, context and models. [PRODUCT.md](PRODUCT.md) says what ships today and what is planned.
 
 ## Key Differentiators
 
-- **Structured Writing Experience**: Move beyond the blank canvas with a structured approach to writing and worldbuilding.
-- **Deep AI Integration**: AI is integrated into various aspects of the workflow to assist and enhance the creative process, up to and including writing the story.
+- **Structured Writing Experience**: Move beyond the blank canvas with a typed story bible of actors, drives, events, timelines, knowledge and open questions, checked as you work.
+- **Deep AI Integration**: AI is integrated into various aspects of the workflow to assist and enhance the creative process, up to and including writing the story. AI-written text is marked until you accept it.
 - **Extreme AI Control**: Gain fine-grained control over the input to the AI model, including context, parameters, and samplers. Full support for local models.
-
 
 ## Tech Stack
 
-- **Frontend**: React 19 with TypeScript
-- **Routing**: TanStack Router
-- **State Management**: @legendapp/state with localStorage persistence
-- **UI Framework**: Tailwind CSS
-- **API Client**: Auto-generated OpenAPI client with @hey-api/openapi-ts
-- **LLM Integration**: SSE (Server-Sent Events) streaming
-- **Error Handling**: neverthrow for functional error handling
-- **Build Tool**: Vite
+The application is in [`app/`](app/). The repository root has no `package.json`.
+
+- **Frontend**: React 19 with TypeScript, built with Vite
+- **Routing**: TanStack Router, on hash history
+- **Editor**: Plate (`platejs`, on Slate), with block IDs and AI segments
+- **Styling**: plain CSS in `app/src/app/styles.css`, following the Night Edition design in [DESIGN.md](DESIGN.md)
+- **Storage**: IndexedDB behind a `StorageAdapter`, with an in-memory adapter for tests
+- **LLM Integration**: streaming over Server-Sent Events from OpenAI-compatible backends (llama.cpp, OpenRouter and others), with sampler settings passed through
+- **Error Handling**: neverthrow `Result`s for expected failures
+- **Tests**: `bun test`, with happy-dom and fake-indexeddb
 - **Code Quality**: Biome for formatting and linting
+- **Hosting**: static assets on a Cloudflare Worker (`app/wrangler.jsonc`)
 
 ## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18 or later)
 - [Bun](https://bun.sh/) (v1.1 or later)
 
 ### Setup
 
-1. Clone the repository:
-   ```sh
-   git clone <repository-url> demiurge
-   cd demiurge
-   ```
+```sh
+git clone <repository-url> demiurge
+cd demiurge/app
+bun install
+```
 
-2. Install dependencies:
-   ```sh
-   bun install
-   ```
+### Commands
 
-3. Start the development server:
-   ```sh
-   bun dev
-   ```
+Run these from `app/`.
 
-This starts your app in development mode, rebuilding assets on file changes.
+- `bun run check` runs the type check (`tsc`), lint (Biome) and tests.
+- `bun test` runs the tests alone.
+- `bun run build` type-checks and writes the static web app to `app/dist/`, for any static server.
+- `bun run format` formats with Biome, and `bun run lint` lints.
+- `bun scripts/story.ts --help` runs the story CLI, which edits a story bible held in one JSON file.
 
-### Available Scripts
-
-- `bun dev` - Starts the development server with hot reloading
-- `bun build` - Builds the application for production
-- `bun start` - Starts the production server
-- `bun format` - Formats code with Biome
-- `bun gen-client` - Regenerates the OpenAPI client from spec
+There is no dev server script. To try the app, build it and serve `app/dist/`.
 
 ## Project Structure
 
 ```
-src/
-├── client/              # Auto-generated OpenAPI client
-├── components/          # Reusable UI components
-├── lib/                 # Business logic and state management
-│   └── state/           # Application state (chat, LLM)
-├── routes/              # TanStack Router route components
-├── styles/              # CSS files
-├── utils/               # Helper functions
-└── router.tsx           # Router configuration
+app/
+├── scripts/       # Story CLI, comparison, round and judging tools, measurement scripts
+├── src/
+│   ├── app/       # Shell, routes, pages, rail and styles
+│   ├── editor/    # Plate configuration, block IDs, AI segments
+│   ├── content/   # Content schema and its Markdown projection
+│   ├── storage/   # StorageAdapter: IndexedDB and in-memory
+│   ├── story/     # The story bible: schema, commands, checks and queries
+│   ├── world/     # World entries, kinds, names and facts
+│   ├── time/      # Timelines, frames and chronology
+│   ├── outline/   # Manuscript outline: books, chapters, scenes
+│   ├── layers/    # Apparatus layers painted over prose
+│   ├── context/   # Model context assembly
+│   ├── generate/  # Generation, profiles and the context viewer
+│   ├── llm/       # Streaming LLM client
+│   ├── workspace/ # Workspace, tabs, document sessions, writer lock
+│   └── test/      # Test setup for browser APIs
+└── wrangler.jsonc # Cloudflare Worker for the hosted static app
+docs/
+├── rebuild/       # Design of the current app
+├── strategies/    # Past strategies and their results
+├── rounds/        # The World first rounds and their results
+├── verdicts/      # Comparison and judging rubrics
+└── philosophy.md  # The product's principles
 ```
+
+[PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md) describe the product and its design. [AGENTS.md](AGENTS.md) is the guide for agents working in this repository, and `.atelier/` holds work tracking.
