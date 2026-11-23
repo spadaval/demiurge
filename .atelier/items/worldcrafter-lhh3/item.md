@@ -100,8 +100,10 @@ view, New topic through two turns, discarding an unsent topic, resolve,
 reopen and archive with the closed ledger, the inbox sheet, Try again, and
 Send with no model. Storage contract, IndexedDB upgrade (4 to 5), world
 file and connected-storage tests cover the collection. `cd app && bun run
-check`: 1723 pass, 0 fail, no warnings (after round 2's fixes and the
-merge of master).
+check`: 1726 pass, 0 fail, no warnings (after round 3's fix).
+`app/src/app/topics.styles.test.ts` loads `styles.css` into happy-dom and
+checks the active topic's bar, the rail-action inset and the turn-list
+reset, which component tests can't see.
 
 Where it departs from DESIGN.md's Topics section, and why:
 - **Not built: hosting the agent slip on a topic sheet.** That means the
@@ -112,21 +114,21 @@ Where it departs from DESIGN.md's Topics section, and why:
   now lists "talk pages hosting the slip" as not done. Each message stores
   the request ID and trace the slip needs. Hosting it also means starting
   topic sessions from the profile defaults store (`agent/defaults.ts`),
-  which nothing in the app creates yet. **The lead should decide whether
-  this needs an item of its own; I haven't filed one.** Launching scene,
+  which nothing in the app creates yet. The lead filed it as
+  `worldcrafter-ywt3`. Launching scene,
   passage and record topics, and Talk gloss notes, are `worldcrafter-rxvy`.
 - **Since merging master (wqh0, hqca, w4mr)**: topic turns write through
   `services.bible.storage`, so the model's edits show at once in open scenes
   and the World inspector (tested). The inbox and resolved-and-archived
   sheets use the inspector's ledger components. A contradiction row opens
   the Contradictions view, and a record scope links to its detail.
-- **Not built, no item yet**: proposals in a turn ("Record as fact"). No
-  structured proposal exists in the agent's output to render. Also missing:
-  a tool for the agent to raise a topic itself (`Talk.raise` is the command
-  it would call, so today only code raises topics); Markdown in turn bodies
-  beyond paragraphs (shown as plain paragraphs); and keeping a running
-  turn's end in view while the writer is at the foot. The lead may want
-  items for the first two.
+- **Not built, filed by the lead**: proposals in a turn ("Record as
+  fact"), `worldcrafter-gobh`; no structured proposal exists in the agent's
+  output to render. A tool for the agent to raise a topic itself,
+  `worldcrafter-8jrq`; `Talk.raise` is the command it would call, so today
+  only code raises topics. Not built, no item: Markdown in turn bodies
+  beyond paragraphs (shown as plain paragraphs), and keeping a running
+  turn's end in view while the writer is at the foot.
 - **Choices**: topic turns use the world's one profile with `max_tokens`
   raised to 2000 and streaming on, because the profile's own sampler is
   tuned for 400-token prose continuations. The topic sheet sits on the
@@ -141,3 +143,4 @@ Where it departs from DESIGN.md's Topics section, and why:
 1-jkqn.4: fixed in 7f136cc
 2-c04g.5: fixed in 2d2cb74
 2-c04g.6: fixed in 2d2cb74
+3-yey3.3: fixed in 33f8b65
