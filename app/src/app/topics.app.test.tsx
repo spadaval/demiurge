@@ -320,7 +320,10 @@ test("new topic: name it, send, and the model's turn runs with tool calls, signe
     "Where was she?",
   );
   await click(send());
-  await until(() => turns().length === 4, "the second turn");
+  await until(
+    () => turns().length === 4 && !query("[aria-busy]"),
+    "the second turn",
+  );
   expect(turns().map((t) => t.body)).toEqual([
     "Who lit the lamp on the storm night?",
     "Mara lit it, by the log.",
@@ -460,4 +463,84 @@ test("without a model, Send says so and keeps what the writer wrote", async () =
     "Which is it?",
   );
   expect(stub.received).toEqual([]);
+});
+
+test("unsent writing survives moving to another tab and back", async () => {
+  const router = await render("/inbox");
+  await click(query("#rail-tab-topics"));
+  await click(control("New topic", ".rail"));
+  await until(() => query(".topic-sheet") !== null, "the topic sheet");
+  const path = router.state.location.pathname;
+  await type(query<HTMLInputElement>(".topic-title-field"), "My unsent title");
+  await type(
+    query<HTMLTextAreaElement>(".composer textarea"),
+    "My unsent message",
+  );
+  await act(() => router.navigate({ to: "/inbox" }));
+  await until(() => query(".ledger-sheet") !== null, "the inbox");
+  await act(() => router.navigate({ to: path }));
+  await until(() => query(".topic-sheet") !== null, "the topic again");
+  expect(query<HTMLInputElement>(".topic-title-field")?.value).toBe(
+    "My unsent title",
+  );
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe(
+    "My unsent message",
+  );
+  // Nothing is stored for it meanwhile.
+  expect((await listTopics(storage))._unsafeUnwrap()).toEqual([]);
+
+  // A stored topic's composer keeps its text too, until it is sent.
+  const { topic } = await raise("The log and the storm disagree");
+  await act(() =>
+    router.navigate({ to: "/topic/$topicId", params: { topicId: topic.id } }),
+  );
+  await until(() => query(".composer") !== null, "the stored topic");
+  await type(
+    query<HTMLTextAreaElement>(".composer textarea"),
+    "Half a thought",
+  );
+  await act(() => router.navigate({ to: "/inbox" }));
+  await until(() => query(".ledger-sheet") !== null, "the inbox");
+  await act(() =>
+    router.navigate({ to: "/topic/$topicId", params: { topicId: topic.id } }),
+  );
+  await until(() => query(".composer") !== null, "the stored topic again");
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe(
+    "Half a thought",
+  );
+  stub.script(streamed(["Noted."]));
+  await click(send());
+  await until(() => turns().length === 3 && !query("[aria-busy]"), "the turn");
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe("");
+  expect(turns().map((t) => t.body)).toEqual([
+    "The log says calm; the scene says gale.",
+    "Half a thought",
+    "Noted.",
+  ]);
+});
+
+test("the writer's message shows while the model's turn runs", async () => {
+  const { topic } = await raise("The log and the storm disagree");
+  await render(`/topic/${topic.id}`);
+  await until(() => query(".composer") !== null, "the composer");
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  stub.script(async (body) => {
+    await held;
+    return streamed(["Answered."])(body);
+  });
+  await type(query<HTMLTextAreaElement>(".composer textarea"), "Which is it?");
+  await click(send());
+  await until(() => query("[aria-busy]") !== null, "the running turn");
+  expect(turns().map((t) => [t.author, t.body])).toEqual([
+    ["Model · Planner", "The log says calm; the scene says gale."],
+    ["You", "Which is it?"],
+    ["Model · Planner", ""],
+  ]);
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe("");
+  release();
+  await until(() => !query("[aria-busy]"), "the answer");
+  expect(turns().at(-1)?.body).toBe("Answered.");
 });

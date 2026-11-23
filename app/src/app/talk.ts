@@ -27,12 +27,22 @@ import { createStore, type Store, type WritableStore } from "~/workspace/store";
 
 /** What the running turn of a topic has done so far. */
 export interface RunningTurn {
+  /** The writer's message the turn answers; null when trying a turn again. */
+  readonly message: string | null;
   /** `Waiting for the model…`, `Running touches…`. */
   readonly status: string;
   /** The model's text so far, streamed. */
   readonly text: string;
   readonly calls: readonly TurnCall[];
 }
+
+/** A topic's unsent writing. */
+export interface Unsent {
+  readonly title: string;
+  readonly text: string;
+}
+
+const NOTHING_UNSENT: Unsent = { title: "", text: "" };
 
 export interface AppTalkOptions {
   /** The workspace's connected storage. */
@@ -52,6 +62,13 @@ export interface AppTalk {
   readonly story: Store<Story | null>;
   /** Topics opened with "New topic" and not sent yet, by ID: their scope. */
   readonly drafts: Store<ReadonlyMap<string, TopicScope>>;
+  /**
+   * What the writer has typed and not sent, by topic: a new topic's title
+   * and the composer's text. Kept while the topic's tab is open, so moving
+   * to another tab and back loses nothing; never stored.
+   */
+  readonly unsent: Store<ReadonlyMap<string, Unsent>>;
+  setUnsent(id: string, change: Partial<Unsent>): void;
   /** Each opened topic as last loaded. */
   readonly views: Store<ReadonlyMap<string, TopicView>>;
   readonly running: Store<ReadonlyMap<string, RunningTurn>>;
@@ -65,6 +82,10 @@ export interface AppTalk {
   open(id: string): Promise<void>;
   /** A topic about `scope`, not stored until its first message; its ID. */
   draft(scope: TopicScope): string;
+  /**
+   * Forgets a topic's tab: a draft is discarded, and what was typed and not
+   * sent goes with it.
+   */
   discardDraft(id: string): void;
   /** Stores a drafted topic with its first message and runs the model's turn. */
   start(id: string, title: string, message: string): Promise<boolean>;
@@ -87,6 +108,7 @@ export interface AppTalk {
 const TALK_SAMPLER = { max_tokens: 2000 };
 
 const IDLE: RunningTurn = {
+  message: null,
   status: "Waiting for the model…",
   text: "",
   calls: [],
@@ -115,6 +137,12 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
   const views = createStore<ReadonlyMap<string, TopicView>>(new Map());
   const running = createStore<ReadonlyMap<string, RunningTurn>>(new Map());
   const errors = createStore<ReadonlyMap<string, string>>(new Map());
+  const unsent = createStore<ReadonlyMap<string, Unsent>>(new Map());
+  const setUnsent = (id: string, change: Partial<Unsent>) =>
+    setIn(unsent, id, {
+      ...(unsent.get().get(id) ?? NOTHING_UNSENT),
+      ...change,
+    });
   const problem = createStore<string | null>(null);
   const controllers = new Map<string, AbortController>();
 
@@ -154,14 +182,15 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
   async function turn(
     id: string,
     command: (run: TurnOptions) => ResultAsync<TurnOutcome, TalkError>,
+    message: string | null = null,
   ): Promise<boolean> {
     if (running.get().has(id)) return false;
     const controller = new AbortController();
     controllers.set(id, controller);
     setIn(errors, id, undefined);
-    setIn(running, id, IDLE);
+    setIn(running, id, { ...IDLE, message });
     const onEvent = (event: AgentEvent) => {
-      const now = running.get().get(id) ?? IDLE;
+      const now = running.get().get(id) ?? { ...IDLE, message };
       switch (event.kind) {
         case "delta":
           setIn(running, id, {
@@ -235,20 +264,44 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       setIn(drafts, id, scope);
       return id;
     },
-    discardDraft: (id) => setIn(drafts, id, undefined),
+    discardDraft(id) {
+      setIn(drafts, id, undefined);
+      setIn(unsent, id, undefined);
+    },
+    unsent,
+    setUnsent,
     async start(id, title, message) {
       const scope = drafts.get().get(id);
       if (scope === undefined) return false;
-      const done = await turn(id, (run) =>
-        talk.start({ id, title, scope, message }, run),
+      setUnsent(id, { text: "" });
+      const done = await turn(
+        id,
+        (run) => talk.start({ id, title, scope, message }, run),
+        message,
       );
-      // Stored once it got that far, whatever the turn came to.
       if (topics.get().some((topic) => topic.id === id)) {
+        // Stored once it got that far, whatever the turn came to.
         setIn(drafts, id, undefined);
+        setIn(unsent, id, undefined);
+      } else {
+        // Nothing was stored: the writer's text stays theirs to send.
+        setUnsent(id, { text: message });
       }
       return done;
     },
-    send: (id, message) => turn(id, (run) => talk.send(id, message, run)),
+    async send(id, message) {
+      const sent = () => views.get().get(id)?.topic.messages ?? 0;
+      const before = sent();
+      setUnsent(id, { text: "" });
+      const done = await turn(
+        id,
+        (run) => talk.send(id, message, run),
+        message,
+      );
+      // Not stored: the writer's text stays theirs to send.
+      if (sent() <= before) setUnsent(id, { text: message });
+      return done;
+    },
     async resume(id) {
       await turn(id, (run) => talk.resume(id, run));
     },

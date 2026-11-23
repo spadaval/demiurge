@@ -563,8 +563,9 @@ function TopicTitleField({
 /** A topic named but not stored: nothing is kept until its first Send. */
 function DraftSheet({ id, scope }: { id: string; scope: TopicScope }) {
   const { talk } = useServices();
-  const [title, setTitle] = useState("");
+  const title = useStore(talk.unsent).get(id)?.title ?? "";
   const running = useStore(talk.running).get(id);
+  const label = useModelLabel();
   return (
     <div className="topic-sheet">
       <header className="topic-head">
@@ -573,22 +574,22 @@ function DraftSheet({ id, scope }: { id: string; scope: TopicScope }) {
         <div className="topic-title-row">
           <TopicTitleField
             value={title}
-            onChange={setTitle}
+            onChange={(value) => talk.setUnsent(id, { title: value })}
             readOnly={talk.readOnly}
             autoFocus
           />
           <span className="topic-status">Open</span>
         </div>
       </header>
-      <div className="turns">
-        {running ? (
-          <RunningTurnView id={id} turn={running} label={null} />
-        ) : (
-          <p className="turns-empty">
-            No turns yet. Say what this topic should settle.
-          </p>
-        )}
-      </div>
+      {running ? (
+        <ol className="turns">
+          <RunningTurnView id={id} turn={running} label={label} />
+        </ol>
+      ) : (
+        <p className="turns-empty">
+          No turns yet. Say what this topic should settle.
+        </p>
+      )}
       <TopicError id={id} />
       <Composer
         id={id}
@@ -600,10 +601,17 @@ function DraftSheet({ id, scope }: { id: string; scope: TopicScope }) {
   );
 }
 
-function TopicSheet({ view }: { view: TopicView }) {
-  const { talk, generation } = useServices();
-  const { topic, messages, stop } = view;
+/** `Model · <profile label>` for the model set up now, if one is. */
+function useModelLabel(): string | null {
+  const { generation } = useServices();
   const profile = useStore(generation.profile);
+  return profile ? `Model · ${profile.label ?? profile.name}` : null;
+}
+
+function TopicSheet({ view }: { view: TopicView }) {
+  const { talk } = useServices();
+  const { topic, messages, stop } = view;
+  const label = useModelLabel();
   const running = useStore(talk.running).get(topic.id);
   const [title, setTitle] = useState(topic.title);
   useEffect(() => setTitle(topic.title), [topic.title]);
@@ -648,11 +656,7 @@ function TopicSheet({ view }: { view: TopicView }) {
           <Turn key={message.id} message={message} />
         ))}
         {running && (
-          <RunningTurnView
-            id={topic.id}
-            turn={running}
-            label={profile ? `Model · ${profile.label ?? profile.name}` : null}
-          />
+          <RunningTurnView id={topic.id} turn={running} label={label} />
         )}
         {!running && stop && <StoppedTurn id={topic.id} stop={stop} />}
       </ol>
@@ -792,21 +796,31 @@ function RunningTurnView({
 }) {
   const { talk } = useServices();
   return (
-    <li className="turn turn-model" aria-busy="true">
-      <div className="turn-head">
-        <span className="turn-author">{label ?? "Model"}</span>
-        <button
-          type="button"
-          className="text-action"
-          onClick={() => talk.stop(id)}
-        >
-          Stop
-        </button>
-      </div>
-      <output className="turn-status">{turn.status}</output>
-      {turn.text !== "" && <TalkBody text={turn.text} />}
-      <ToolCalls calls={turn.calls} />
-    </li>
+    <>
+      {turn.message !== null && (
+        <li className="turn">
+          <div className="turn-head">
+            <span className="turn-author">You</span>
+          </div>
+          <TalkBody text={turn.message} />
+        </li>
+      )}
+      <li className="turn turn-model" aria-busy="true">
+        <div className="turn-head">
+          <span className="turn-author">{label ?? "Model"}</span>
+          <button
+            type="button"
+            className="text-action"
+            onClick={() => talk.stop(id)}
+          >
+            Stop
+          </button>
+        </div>
+        <output className="turn-status">{turn.status}</output>
+        {turn.text !== "" && <TalkBody text={turn.text} />}
+        <ToolCalls calls={turn.calls} />
+      </li>
+    </>
   );
 }
 
@@ -874,7 +888,8 @@ function Composer({
 }) {
   const { talk } = useServices();
   const running = useStore(talk.running).has(id);
-  const [text, setText] = useState("");
+  const text = useStore(talk.unsent).get(id)?.text ?? "";
+  const setText = (value: string) => talk.setUnsent(id, { text: value });
   const field = useId();
   const blocked = talk.readOnly
     ? "This tab is read-only."
@@ -885,13 +900,9 @@ function Composer({
         : text.trim() === ""
           ? "Write something to send."
           : null;
+  // The talk service clears what is sent, and keeps what wasn't taken.
   const submit = async () => {
-    if (blocked) return;
-    const sent = text;
-    setText("");
-    const ok = await send(sent);
-    // Keep what the writer wrote when it wasn't taken.
-    if (!ok && talk.errors.get().has(id)) setText(sent);
+    if (!blocked) await send(text);
   };
   return (
     <form
