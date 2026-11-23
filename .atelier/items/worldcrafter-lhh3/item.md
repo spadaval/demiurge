@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-lhh3
 title: Talk pages and world inbox
-status: building
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ai
