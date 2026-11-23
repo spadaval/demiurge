@@ -405,7 +405,10 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       setIn(views, id, { ...log, stop });
     } else {
       fail(id, outcome.error);
-      await open(id);
+      // Shows what was stored before the failure. A new topic may have
+      // nothing stored, and the turn's error is the one to show.
+      const loaded = await talk.load(id);
+      if (loaded.isOk()) setIn(views, id, loaded.value);
     }
     // A turn may have changed the bible, and the topic list's order.
     await refresh();
