@@ -3,14 +3,15 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-erje
 title: Extend app/src/llm with multi-turn tool-calling and provider adapters
-status: open
+status: building
 mission: worldcrafter-r7vd
 labels:
 - llm
 - agent
 priority: high
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A51564328-ab55-47e2-a228-a246e1757d43%3Adelegate-task%3Aeb1b221b-f407-4648-b09f-965a10e0dd63
 ready: null
 trivial: null
 caused_by: null
