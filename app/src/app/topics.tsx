@@ -22,13 +22,7 @@ import type {
 import { SCOPE_GROUPS, scopeLine, scopeName } from "~/talk/scope";
 import type { TopicView, TurnStop } from "~/talk/talk";
 import { useServices, useStore } from "./hooks";
-import {
-  Empty,
-  LedgerGroup,
-  LedgerRow,
-  SheetHead,
-  ViewLink,
-} from "./inspector";
+import { Empty, LedgerGroup, LedgerRow, ViewLink } from "./inspector";
 import { contradictionKind } from "./inspector-model";
 import { CLOSED_TOPICS_TAB, INBOX_TAB, topicTab } from "./tab-routes";
 import type { RunningTurn } from "./talk";
@@ -271,6 +265,20 @@ const startedLine = (topic: Topic) =>
 
 const plural = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n === 1 ? one : many}`;
+
+/**
+ * A ledger sheet's head, in the inspector's form. Not the inspector's
+ * `SheetHead`, which reports bible edits made on its sheet; nothing on these
+ * sheets edits the bible.
+ */
+function SheetHead({ title, children }: { title: string; children: string }) {
+  return (
+    <header className="sheet-head inspector-head">
+      <h1 className="sheet-title">{title}</h1>
+      <p className="inspector-lede">{children}</p>
+    </header>
+  );
+}
 
 /** A topic's title as a reference to its topic tab. */
 function TopicRef({ topic }: { topic: Topic }) {
