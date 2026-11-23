@@ -155,6 +155,7 @@ describe.each(adapters)("story store on %s", (_, open) => {
     expect(await value(saveStory(storage, fixture, 2000))).toEqual({
       saved: [],
       deleted: [],
+      changes: [],
     });
 
     const renamed = run(fixture, {
@@ -162,11 +163,22 @@ describe.each(adapters)("story store on %s", (_, open) => {
       id: "arrival",
       title: "Landfall",
     });
-    expect(await value(saveStory(storage, renamed, 3000))).toEqual({
+    const before = await value(storage.storyRecords.load("scene/arrival"));
+    const savedRenamed = await value(saveStory(storage, renamed, 3000));
+    const record = await value(storage.storyRecords.load("scene/arrival"));
+    expect(savedRenamed).toEqual({
       saved: ["scene/arrival"],
       deleted: [],
+      changes: [
+        {
+          id: "scene/arrival",
+          kind: "scene",
+          before: before.data,
+          after: record.data,
+        },
+      ],
     });
-    const record = await value(storage.storyRecords.load("scene/arrival"));
+    expect(record.data).toMatchObject({ title: "Landfall" });
     expect(record.updatedAt).toBe(3000);
     expect(
       (await value(storage.storyRecords.load("actor/mara"))).updatedAt,
@@ -177,7 +189,7 @@ describe.each(adapters)("story store on %s", (_, open) => {
       id: "confession",
       index: 0,
     });
-    expect(await value(saveStory(storage, moved, 4000))).toEqual({
+    expect(await value(saveStory(storage, moved, 4000))).toMatchObject({
       saved: ["sceneOrder"],
       deleted: [],
     });
@@ -201,6 +213,18 @@ describe.each(adapters)("story store on %s", (_, open) => {
     sameStory(loaded, change.story);
     const ids = (await value(storage.storyRecords.list())).map((r) => r.id);
     expect(ids).not.toContain("scene/confession");
+    // The change names the deleted scene with what it held, and the new order.
+    expect(
+      change.changes.find((c) => c.id === "scene/confession"),
+    ).toMatchObject({
+      kind: "scene",
+      before: { id: "confession" },
+      after: null,
+    });
+    expect(change.changes.find((c) => c.id === "sceneOrder")).toMatchObject({
+      before: ["arrival", "storm-night", "confession"],
+      after: ["arrival", "storm-night"],
+    });
     // Its reveal of the candidate went with it; the knowledge of it stays.
     expect(ids).toContain("knowledge/mara-knows");
     expect((await value(storage.storyRecords.load("sceneOrder"))).data).toEqual(

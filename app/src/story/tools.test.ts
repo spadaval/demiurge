@@ -619,7 +619,7 @@ describe("a model's tool call", () => {
   });
 
   test("answers with the whole result as the tool turn", async () => {
-    const { result, message } = await value(
+    const { result, message, changes } = await value(
       executeStoryToolCall(
         storage,
         toolCall("addCause", '{"cause":"wreck","effect":"storm"}'),
@@ -630,6 +630,28 @@ describe("a model's tool call", () => {
     expect(message.tool_call_id).toBe("call-1");
     expect(JSON.parse(message.content)).toEqual(result);
     expect(result.ok).toBe(true);
+    // The record it wrote, beside the result rather than in what the model reads.
+    expect(changes).toEqual([
+      {
+        id: "cause/wreck/storm",
+        kind: "cause",
+        before: null,
+        after: { cause: "wreck", effect: "storm" },
+      },
+    ]);
+    expect(message.content).not.toContain("cause/wreck/storm");
+  });
+
+  test("a query or a refusal changes no record", async () => {
+    for (const [name, args] of [
+      ["show", '{"ref":"actor:mara"}'],
+      ["addCause", '{"cause":"wreck","effect":"nowhere"}'],
+    ] as const) {
+      const { changes } = await value(
+        executeStoryToolCall(storage, toolCall(name, args), 2000),
+      );
+      expect(changes).toEqual([]);
+    }
   });
 
   test("refuses arguments that aren't JSON", async () => {
