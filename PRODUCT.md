@@ -65,7 +65,7 @@ As planned for the web app.
   - *timeline*, *frame*, *event*
   - *holds* and *revealed*
   - *inferred* and *asserted*: AI-inferred versus writer-confirmed data
-- **Undecided:** whether non-actor world kinds (places, cultures, magic systems and the like) need their own entry documents beside the bible, settled during the UI migration in mission worldcrafter-r7vd. Scenes and entries are documents (decision worldcrafter-9zj1, amended by worldcrafter-ok5a); each scene record will link to its prose document.
+- **Undecided:** whether non-actor world kinds (places, cultures, magic systems and the like) need their own entry documents beside the bible, to be settled when the UI moves onto the bible in missions worldcrafter-mtkn and worldcrafter-3z9j. Scenes and entries are documents (decision worldcrafter-9zj1, amended by worldcrafter-ok5a); each scene record will link to its prose document.
 
 ## Brand Commitments
 
