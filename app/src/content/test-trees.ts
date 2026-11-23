@@ -159,6 +159,8 @@ export function generateTrees(count: number, seed = 42): ContentDocument[] {
     "\\",
     "[",
     "]",
+    "[[",
+    "]]",
     "(",
     ")",
     "{",

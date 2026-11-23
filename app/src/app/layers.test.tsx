@@ -82,6 +82,10 @@ test("the demo scene renders its marks, cues and keyed notes", async () => {
     "Kesh",
     "Ardelia",
   ]);
+  // The writer's note stays in the prose, brackets and all, painted as a note.
+  expect(
+    [...(prose?.querySelectorAll(".lm-note") ?? [])].map((n) => n.textContent),
+  ).toEqual(["[[ does Kesh already ", "know? ]]"]);
   const keys = [...view.querySelectorAll(".lm-key")].map((k) =>
     k.getAttribute("data-key"),
   );

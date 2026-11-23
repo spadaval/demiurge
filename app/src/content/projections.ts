@@ -16,11 +16,18 @@
  * Source map
  * ----------
  * Every block a projection includes appears once, as one contiguous span of
- * the output holding exactly its block text. Every other output character
- * (block separators, list markers, heading hashes, the scene break) was
- * inserted by the projection: `toBlock` returns null for it, and no span
- * contains it. Spans are therefore never adjacent, so every output position
- * belongs to at most one span.
+ * the output holding exactly its block text, less any ranges the projection
+ * cut from it (the span's `cuts`, in block-text offsets; only `prose` cuts,
+ * for writer notes). Every other output character (block separators, list
+ * markers, heading hashes, the scene break) was inserted by the projection:
+ * `toBlock` returns null for it, and no span contains it. Spans are
+ * therefore never adjacent, so every output position belongs to at most one
+ * span.
+ *
+ * Across a cut, a character maps to its own block offset, so the output
+ * position where a cut was made maps to the first character after it. A block
+ * offset inside or at either end of a cut maps to that output position. An
+ * output range that spans a cut maps to a block range that contains it.
  *
  * `prose` (continuation, summaries, world context)
  * ------------------------------------------------
@@ -42,6 +49,10 @@
  * them, and empty items count.
  * Soft line breaks are written as-is, with no marker on the next line.
  * Placeholders are dropped (they are instructions to the writer, not story).
+ * So are writer notes, `[[ like this ]]`, with the whitespace that would
+ * double up around them (`writer-notes.ts` has the rules): they are the
+ * writer talking to themselves. A block that held only notes is dropped as
+ * an empty one is.
  * AI segments are rendered inline, whatever their status; their children are
  * numbered among themselves (they are not siblings of the blocks around the
  * segment), as in the export.
@@ -65,6 +76,7 @@ import {
   type ListStyle,
   validateDocument,
 } from "./schema";
+import { type TextRange, writerNoteCuts } from "./writer-notes";
 
 /** A position in a block's text: `offset` is from 0 to the text's length. */
 export type BlockPosition = { blockId: string; offset: number };
@@ -72,8 +84,17 @@ export type BlockPosition = { blockId: string; offset: number };
 /** A range `[start, end)` of one block's text. */
 export type BlockRange = { blockId: string; start: number; end: number };
 
-/** Where a block's text sits in the output: `[start, end)`. */
-export type Span = { blockId: string; start: number; end: number };
+/**
+ * Where a block's text sits in the output: `[start, end)`. `cuts`, when
+ * present, are the ranges of the block's text left out of the span, sorted
+ * and disjoint.
+ */
+export type Span = {
+  blockId: string;
+  start: number;
+  end: number;
+  cuts?: readonly TextRange[];
+};
 
 export type Projection = { text: string; map: SourceMap };
 
@@ -103,7 +124,10 @@ export class SourceMap {
   toBlock(offset: number): BlockPosition | null {
     const span = this.spanAt(offset);
     if (!span || offset >= span.end) return null;
-    return { blockId: span.blockId, offset: offset - span.start };
+    return {
+      blockId: span.blockId,
+      offset: blockOffset(span, offset - span.start, true),
+    };
   }
 
   /**
@@ -115,10 +139,12 @@ export class SourceMap {
     if (end < start) return null;
     const span = this.spanAt(start);
     if (!span || end > span.end) return null;
+    const blockEnd = blockOffset(span, end - span.start, false);
     return {
       blockId: span.blockId,
-      start: start - span.start,
-      end: end - span.start,
+      start:
+        start === end ? blockEnd : blockOffset(span, start - span.start, true),
+      end: blockEnd,
     };
   }
 
@@ -129,8 +155,16 @@ export class SourceMap {
    */
   toText(blockId: string, offset: number): number | null {
     const span = this.byId.get(blockId);
-    if (!span || offset < 0 || offset > span.end - span.start) return null;
-    return span.start + offset;
+    if (!span || offset < 0) return null;
+    let cut = 0;
+    let removed = 0;
+    for (const range of span.cuts ?? []) {
+      removed += range.end - range.start;
+      if (range.start < offset)
+        cut += Math.min(offset, range.end) - range.start;
+    }
+    if (offset > span.end - span.start + removed) return null;
+    return span.start + offset - cut;
   }
 
   /** The last span starting at or before `offset`, if `offset` is in it or at its end. */
@@ -152,6 +186,21 @@ export class SourceMap {
   }
 }
 
+/**
+ * The block offset of output position `local` (from the span's start). A
+ * `character` position is the character there, so it skips a cut that starts
+ * at it; otherwise it is the boundary after the character before, which
+ * doesn't.
+ */
+function blockOffset(span: Span, local: number, character: boolean): number {
+  let offset = local;
+  for (const range of span.cuts ?? []) {
+    if (character ? range.start > offset : range.start >= offset) break;
+    offset += range.end - range.start;
+  }
+  return offset;
+}
+
 /** Accumulates output text and the spans of block text within it. */
 class Writer {
   text = "";
@@ -162,10 +211,18 @@ class Writer {
     this.text += text;
   }
 
-  block(blockId: string, text: string): void {
+  /** A block's text, less `cuts` (block-text ranges, sorted and disjoint). */
+  block(blockId: string, text: string, cuts: readonly TextRange[] = []): void {
     const start = this.text.length;
-    this.text += text;
-    this.spans.push({ blockId, start, end: this.text.length });
+    let from = 0;
+    for (const cut of cuts) {
+      this.text += text.slice(from, cut.start);
+      from = cut.end;
+    }
+    this.text += text.slice(from);
+    const span: Span = { blockId, start, end: this.text.length };
+    if (cuts.length > 0) span.cuts = cuts;
+    this.spans.push(span);
   }
 
   finish(): Projection {
@@ -232,14 +289,19 @@ function writeProse(document: ContentDocument): Projection {
       }
 
       const text = blockText(block);
-      if (text === "" && block.type !== "hr") continue;
+      const cuts = writerNoteCuts(text);
+      const kept = cuts.reduce(
+        (length, cut) => length - (cut.end - cut.start),
+        text.length,
+      );
+      if (kept === 0 && block.type !== "hr") continue;
       const listItem = listNumber > 0;
       if (out.text !== "") {
         out.insert(listItem && listContinues ? "\n" : "\n\n");
       }
       listContinues = listItem;
       out.insert(proseMarker(block, listNumber));
-      if (block.type !== "hr") out.block(block.id, text);
+      if (block.type !== "hr") out.block(block.id, text, cuts);
     }
   }
   return out.finish();

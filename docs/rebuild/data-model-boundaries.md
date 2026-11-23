@@ -64,10 +64,12 @@ Plate stores some derived or invisible state that the schema doesn't allow (`lis
 
 | Projection | Used for | Notes |
 |---|---|---|
-| `prose` | continuation, summaries, world context | strips placeholders and annotations; AI segments rendered inline |
+| `prose` | continuation, summaries, world context | strips placeholders, writer notes and annotations; AI segments rendered inline |
 | `addressable` | AI edits | every block prefixed with its ID, e.g. `[b_7f3a] text…` |
 | `plain+map` | entity matching and extraction, consistency checks | flat text per block with an offset map |
 | `export` | reading, sharing outside the app | readable markdown, one-way; exact export and import go through an adapter that preserves the model |
+
+**Writer notes are literal text, cut by `prose`** (worldcrafter-wknl, 2026-11-22). A note the writer types into the prose, `[[ like this ]]` in Fountain's syntax, stays ordinary text in the tree, so the schema doesn't change and the export keeps it. The workspace paints it as apparatus through `decorate`, and `prose` cuts it, with the whitespace that would double up around it. Both use one matcher (`app/src/content/writer-notes.ts`): a note runs from `[[` to the first `]]` with no `]` between, and brackets that never close stay prose. The cut ranges are recorded on the block's span, so the source map still maps block offsets both ways. `plain+map` keeps notes, so every block offset still has a position. A dedicated note node was the alternative not taken: it would add a schema type, its own projections and an editor element for text the writer already types inline, and a note typed as plain brackets would still reach the model until something converted it.
 
 **Text → tree is only allowed at narrow, typed entry points:**
 
