@@ -1150,6 +1150,49 @@ describe("story CLI", () => {
     expect(saved().scenes[1]).not.toHaveProperty("viewpoint");
   });
 
+  test("viewpoint marks are taken as the scene opens, with what changes during it", () => {
+    ok("init", "A keeper finds a letter.");
+    ok("add-actor", "mara", "Mara");
+    ok("add-event", "wreck", "The wreck");
+    ok("set-position", "wreck", "1954-10-12");
+    ok("add-event", "letter", "The letter");
+    ok("set-position", "letter", "1954-10-20");
+    ok("add-event", "reply", "The reply");
+    ok("set-position", "reply", "1954-10-25");
+    ok("add-version", "fog", "wreck", "The fog took her");
+    ok(
+      "add-knowledge",
+      "mara-fog",
+      "mara",
+      "believes",
+      "version:fog",
+      "--until",
+      "reply",
+    );
+    ok(
+      "add-knowledge",
+      "mara-truth",
+      "mara",
+      "knows",
+      "event:wreck",
+      "--since",
+      "reply",
+    );
+    ok("add-scene", "night", "The night");
+    ok("set-scene-events", "night", "wreck");
+    ok("add-scene", "post", "The post");
+    ok("set-scene-events", "post", "letter", "reply");
+    ok("set-scene-viewpoint", "post", "mara");
+    // The day count is left out: worldcrafter-yxfp is fixing it.
+    const before = ok("reader-order", "--before", "post");
+    expect(before).toStartWith(
+      'Before 2. scene:post ("The post"), through the eyes of Mara as it opens at event:letter ("The letter") at 20 October 1954, at event:reply ("The reply") at 25 October 1954 (the latest event it shows), the reader has been told:',
+    );
+    expect(before).toContain(
+      'shown in 1; Mara doesn\'t know yet, believes version:fog ("The fog took her"); Mara believes version:fog until event:reply, in this scene; Mara knows from event:reply, in this scene\n',
+    );
+  });
+
   test("span gives the time between two events, and reader-order --before what the reader has been told", () => {
     ok("init", "A keeper finds a letter.");
     ok("add-event", "bakehouse", "The bakehouse");
