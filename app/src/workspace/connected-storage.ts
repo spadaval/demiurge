@@ -1,5 +1,5 @@
 import { errAsync, type ResultAsync } from "neverthrow";
-import { batchContext } from "~/storage/internal";
+import { batchContext, restoreContext } from "~/storage/internal";
 import type {
   AnnotationCollection,
   Collection,
@@ -123,6 +123,14 @@ export function createConnectedStorage(
           ...(id === undefined ? {} : { id: String(id) }),
         },
         (storage) => storage.batch(writes),
+      );
+    },
+    dump: () => run((storage) => storage.dump()),
+    restore: (records) => {
+      const { collection = "documents" } = restoreContext(records);
+      return write(
+        { kind: "read_only", operation: "save", collection },
+        (storage) => storage.restore(records),
       );
     },
     close: () => connection.close(),

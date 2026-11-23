@@ -1,11 +1,13 @@
-import type {
-  BatchWrite,
-  CollectionName,
-  NotFoundError,
-  Snapshot,
-  SnapshotInfo,
-  StorageFailure,
-  StorageOperation,
+import {
+  type BatchWrite,
+  COLLECTION_NAMES,
+  type CollectionName,
+  type NotFoundError,
+  type Snapshot,
+  type SnapshotInfo,
+  type StorageFailure,
+  type StorageOperation,
+  type WorldRecords,
 } from "./types";
 
 export function notFound(
@@ -87,4 +89,12 @@ export function batchContext(writes: readonly BatchWrite[]): FailureContext {
         id: first.id,
       };
   }
+}
+
+/** Where a restore failure is reported: the first collection with a record. */
+export function restoreContext(records: WorldRecords): FailureContext {
+  const collection = COLLECTION_NAMES.find((name) => records[name].length > 0);
+  return collection === undefined
+    ? { operation: "save" }
+    : { operation: "save", collection };
 }

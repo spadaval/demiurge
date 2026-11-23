@@ -7,8 +7,10 @@ import type { ResultAsync } from "neverthrow";
 import type {
   Collection,
   JsonValue,
+  Snapshot,
   StorageAdapter,
   StorageError,
+  WorldRecords,
 } from "./types";
 
 /** A content tree with nested blocks, marks, links, an AI segment and block IDs. */
@@ -97,6 +99,18 @@ export const contentFixture: JsonValue = [
     children: [{ text: "" }],
   },
 ];
+
+/** A world with no records. */
+export const emptyWorld: WorldRecords = {
+  documents: [],
+  worldEntries: [],
+  annotations: [],
+  requests: [],
+  snapshots: [],
+  outlines: [],
+  timelines: [],
+  storyRecords: [],
+};
 
 async function value<T>(result: ResultAsync<T, StorageError>): Promise<T> {
   return (await result)._unsafeUnwrap();
@@ -516,6 +530,137 @@ export function describeStorageContract(
       });
     });
 
+    describe("dump and restore", () => {
+      const documentB = { id: "doc-b", title: "B", content: [], updatedAt: 2 };
+      const world: WorldRecords = {
+        documents: [
+          { id: "doc-a", title: "A", content: contentFixture, updatedAt: 1 },
+          documentB,
+        ],
+        worldEntries: [
+          { documentId: "doc-a", facts: { aliases: ["Mara"] }, updatedAt: 3 },
+        ],
+        annotations: [
+          {
+            id: "seg_01",
+            documentId: "doc-a",
+            kind: "ai_provenance",
+            data: { model: "local" },
+            updatedAt: 4,
+          },
+        ],
+        requests: [
+          {
+            id: "req-1",
+            documentId: null,
+            request: { messages: [] },
+            createdAt: 5,
+          },
+        ],
+        // IDs with a gap, and one for a document that no longer exists.
+        snapshots: [
+          {
+            id: 3,
+            documentId: "doc-a",
+            reason: "periodic",
+            createdAt: 6,
+            content: contentFixture,
+          },
+          {
+            id: 7,
+            documentId: "doc-gone",
+            reason: "repaired_on_load",
+            createdAt: 7,
+            content: { not: "a content tree" },
+          },
+        ],
+        outlines: [
+          {
+            id: "outline",
+            books: [
+              {
+                id: "book-1",
+                title: "One",
+                chapters: [{ id: "ch-1", title: "I", scenes: ["doc-a"] }],
+              },
+            ],
+            updatedAt: 8,
+          },
+        ],
+        timelines: [{ id: "timeline", timeline: { events: [] }, updatedAt: 9 }],
+        storyRecords: [
+          {
+            id: "actor/mara",
+            kind: "actor",
+            data: { id: "mara" },
+            updatedAt: 1,
+          },
+          { id: "story", kind: "story", data: { premise: "p" }, updatedAt: 1 },
+        ],
+      };
+
+      test("an empty store dumps empty collections", async () => {
+        expect(await value(storage.dump())).toEqual(emptyWorld);
+      });
+
+      test("dump returns every record a restore wrote, unchanged", async () => {
+        await value(storage.restore(world));
+        expect(await value(storage.dump())).toEqual(world);
+        expect(await value(storage.snapshots.load(7))).toEqual(
+          world.snapshots[1] as Snapshot,
+        );
+        expect(await value(storage.snapshots.list("doc-a"))).toEqual([
+          { id: 3, documentId: "doc-a", reason: "periodic", createdAt: 6 },
+        ]);
+      });
+
+      test("dump lists what the collections saved", async () => {
+        await value(storage.documents.save(documentB));
+        const info = await value(
+          storage.snapshots.save({
+            documentId: "doc-b",
+            reason: "periodic",
+            content: [],
+          }),
+        );
+        expect(await value(storage.dump())).toMatchObject({
+          documents: [documentB],
+          snapshots: [{ ...info, content: [] }],
+        });
+      });
+
+      test("snapshots saved after a restore get higher IDs", async () => {
+        await value(storage.restore(world));
+        const info = await value(
+          storage.snapshots.save({
+            documentId: "doc-a",
+            reason: "periodic",
+            content: [],
+          }),
+        );
+        expect(info.id).toBeGreaterThan(7);
+      });
+
+      test("a restore that fails part-way writes nothing", async () => {
+        const unstorable = [() => undefined] as unknown as JsonValue;
+        const failure = await error(
+          storage.restore({
+            ...world,
+            storyRecords: [
+              { id: "story", kind: "story", data: unstorable, updatedAt: 1 },
+            ],
+          }),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "save",
+          collection: "documents",
+        });
+        expect(await value(storage.documents.list())).toEqual([]);
+        expect(await value(storage.snapshots.list("doc-a"))).toEqual([]);
+      });
+    });
+
     test("operations on a closed store fail as Results, not throws", async () => {
       storage.close();
       const document = { id: "d", title: "t", content: [], updatedAt: 1 };
@@ -525,6 +670,8 @@ export function describeStorageContract(
         await error(storage.worldEntries.list()),
         await error(storage.annotations.listForDocument("d")),
         await error(storage.requests.delete("d")),
+        await error(storage.dump()),
+        await error(storage.restore({ ...emptyWorld, documents: [document] })),
         await error(
           storage.batch([{ kind: "saveDocument", record: document }]),
         ),
