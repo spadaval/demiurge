@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-17T00:00:00Z",
+  "generatedAt": "2026-11-22T00:00:00Z",
   "title": "Design System: Demiurge",
   "extensions": {
     "colorMeta": {
@@ -371,12 +371,36 @@
       "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-layers{display:inline-flex;margin:0;padding:0;border:1px solid var(--rule);border-radius:5px;overflow:hidden;background:var(--ground)}.ds-layers button{padding:6px 10px;border:0;border-right:1px solid var(--rule);background:none;font:500 13px var(--font-apparatus);color:var(--ink-3);cursor:pointer}.ds-layers button:last-child{border-right:0}.ds-layers button:hover{color:var(--ink-2)}.ds-layers button[aria-pressed=true]{background:#2b261f;color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink-3)}.ds-layers button[data-l=speakers][aria-pressed=true]{box-shadow:inset 0 -2px 0 var(--say-0)}.ds-layers button[data-l=time][aria-pressed=true]{box-shadow:inset 0 -2px 0 var(--time)}.ds-layers button[data-l=subtext][aria-pressed=true]{box-shadow:inset 0 -2px 0 var(--subtext)}.ds-layers button:focus-visible{outline:1px solid var(--ink-2);outline-offset:-3px}"
     },
     {
+      "name": "View Switch",
+      "kind": "tabs",
+      "refersTo": "view-switch-selected",
+      "description": "The rail's Manuscript / World / Topics switch: the layer strip's form; the selected view inverts to bone fill with ground text.",
+      "html": "<div class=\"ds-views\" role=\"tablist\" aria-label=\"Rail\"><button role=\"tab\" aria-selected=\"true\">Manuscript</button><button role=\"tab\" aria-selected=\"false\">World</button><button role=\"tab\" aria-selected=\"false\">Topics</button></div>",
+      "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-views{display:flex;width:268px;border:1px solid var(--rule);border-radius:5px;overflow:hidden;background:#110f0d;font-family:var(--font-apparatus)}.ds-views button{flex:1;padding:6px 8px;border:0;background:none;font:500 13px var(--font-apparatus);color:var(--ink-2);cursor:pointer}.ds-views button:hover{color:var(--ink)}.ds-views button[aria-selected=true]{background:var(--ink);color:var(--ground)}.ds-views button:focus-visible{outline:1px solid var(--ink-2);outline-offset:-3px}"
+    },
+    {
       "name": "Rail Navigation",
       "kind": "nav",
       "refersTo": "scene-row",
       "description": "Reading-order scene rows: tabular position, title, story-time year; current scene in ink with a 3px bar.",
       "html": "<nav class=\"ds-rail\"><h2 class=\"ds-rail-label\">Book one · reading order</h2><a class=\"ds-row\" href=\"#\"><span class=\"ds-pos\">3.2</span>The Winter Seal <span class=\"ds-year\">902</span></a><a class=\"ds-row\" href=\"#\" aria-current=\"page\"><span class=\"ds-pos\">4.2</span>The Sealed Door</a><a class=\"ds-row\" href=\"#\"><span class=\"ds-pos\">4.3</span>Aldric's Answer</a></nav>",
       "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-rail{width:300px;padding:18px 0;background:#110f0d;border-right:1px solid var(--rule);font-family:var(--font-apparatus)}.ds-rail-label{margin:0;padding:4px 20px 8px;font:600 12px var(--font-apparatus);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}.ds-row{position:relative;display:flex;align-items:center;gap:6px;height:32px;padding:0 20px;font-size:14px;color:var(--ink-2);text-decoration:none}.ds-row:hover{color:var(--ink)}.ds-row:focus-visible{outline:1px solid var(--ink-2);outline-offset:-3px}.ds-pos{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink-3)}.ds-year{font-size:12px;font-variant-numeric:tabular-nums;color:var(--time)}.ds-row[aria-current=page],.ds-row[aria-current=page] .ds-pos{color:var(--ink)}.ds-row[aria-current=page]::before{content:\"\";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink)}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "tabs",
+      "refersTo": "apparatus",
+      "description": "Open documents in the masthead, separated by 18px hairlines; the active tab is 600 ink with its crumb in ink-2; close buttons fade in on hover or focus.",
+      "html": "<div class=\"ds-tabs\"><span class=\"ds-tab\" data-active=\"true\"><a href=\"#\"><span class=\"ds-crumb\">Book one / </span><span class=\"ds-title\">The Sealed Door</span></a><button class=\"ds-close\" aria-label=\"Close\">×</button></span><span class=\"ds-tab\" data-active=\"false\"><a href=\"#\"><span class=\"ds-title\">Aldric</span></a><button class=\"ds-close\" aria-label=\"Close\">×</button></span></div>",
+      "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-tabs{display:flex;align-items:center;height:56px;padding:0 16px;background:var(--ground);border-bottom:1px solid var(--rule);font-family:var(--font-apparatus)}.ds-tab{position:relative;display:flex;align-items:center;font-size:14px;color:var(--ink-3)}.ds-tab+.ds-tab::before{content:\"\";width:1px;height:18px;margin-right:4px;background:var(--rule)}.ds-tab a{display:flex;align-items:center;padding:0 4px 0 0;color:inherit;text-decoration:none;white-space:nowrap}.ds-tab+.ds-tab a{padding-left:8px}.ds-tab a:hover{color:var(--ink-2)}.ds-tab[data-active=true] .ds-crumb{color:var(--ink-2);white-space:pre}.ds-tab[data-active=true] .ds-title{font-weight:600;color:var(--ink)}.ds-close{display:grid;place-items:center;width:18px;height:18px;margin-right:2px;padding:0;border:0;border-radius:4px;background:none;color:var(--ink-3);cursor:pointer;opacity:0;transition:opacity var(--fade) var(--ease-out)}.ds-tab:hover .ds-close,.ds-tab:focus-within .ds-close{opacity:1}.ds-close:hover{background:var(--raised);color:var(--ink)}"
+    },
+    {
+      "name": "Margin Cue",
+      "kind": "label",
+      "refersTo": "label",
+      "description": "Fountain-style speaker cue: 12px Source Sans 600, 0.1em, uppercase, right-aligned in the left margin in the speaker's tint. Always in the DOM; it fades in with the Speakers layer.",
+      "html": "<div class=\"ds-sheet\"><p class=\"ds-p\"><span class=\"ds-cue\" data-say=\"0\">Mara</span>“The door was sealed from the inside,” Mara said.</p><p class=\"ds-p\"><span class=\"ds-cue\" data-say=\"1\">Aldric</span>“Then someone is still in there.”</p></div>",
+      "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-sheet{padding:20px 20px 20px 118px;background:var(--ground)}.ds-p{position:relative;max-width:420px;margin:0 0 20px;font:400 19px/1.62 var(--font-prose);color:var(--ink)}.ds-cue{position:absolute;top:7px;right:calc(100% + 22px);width:96px;font:600 12px/1.4 var(--font-apparatus);letter-spacing:.1em;text-align:right;text-transform:uppercase;user-select:none}.ds-cue[data-say=\"0\"]{color:var(--say-0)}.ds-cue[data-say=\"1\"]{color:var(--say-1)}"
     },
     {
       "name": "Prose with Layer Marks",
@@ -409,6 +433,14 @@
       "description": "Borderless serif title field at the sheet head, scene number and save status in the margin.",
       "html": "<div class=\"ds-head-wrap\"><span class=\"ds-margin\"><span class=\"ds-num\">4.2</span><span class=\"ds-save\">Saved</span></span><input class=\"ds-title\" value=\"The Sealed Door\" aria-label=\"Title\"></div>",
       "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-head-wrap{position:relative;padding:24px 24px 24px 120px;background:var(--ground)}.ds-margin{position:absolute;left:0;top:39px;display:flex;flex-direction:column;align-items:flex-end;gap:9px;width:98px;font-family:var(--font-apparatus)}.ds-num{font-size:12px;font-weight:600;letter-spacing:.1em;font-variant-numeric:tabular-nums;color:var(--ink-3)}.ds-save{font-size:12px;color:var(--ink-3)}.ds-title{display:block;width:100%;max-width:620px;padding:0;border:0;background:none;font:400 32px/1.25 var(--font-prose);color:var(--ink)}.ds-title:focus-visible{outline:none}"
+    },
+    {
+      "name": "Notices",
+      "kind": "alert",
+      "refersTo": "notice-error",
+      "description": "Full-width rows under the masthead, 8px 32px, ink-2 on the ground with a hairline base; errors take the raised umber fill and ink text, never vermilion.",
+      "html": "<div class=\"ds-notices\"><p class=\"ds-notice\" role=\"status\">Stopped. The text so far is kept. <button class=\"ds-dismiss\">Dismiss</button></p><p class=\"ds-notice ds-notice-error\" role=\"alert\">Generation failed: the server answered 503. <button class=\"ds-dismiss\">Dismiss</button></p></div>",
+      "css": ":host{--ground:#14120f;--ink:#e6dfcf;--ink-2:#b3aa98;--ink-3:#9a917f;--rule:#2f2a23;--rule-strong:#4a4237;--raised:#221e18;--ai:#e34b2f;--time:#8da2f0;--time-band:rgb(141 162 240 / 0.28);--subtext:#e8b923;--say-0:#7cc4b5;--say-1:#e7a59b;--font-prose:\"Old Standard TT\",\"Iowan Old Style\",Georgia,serif;--font-apparatus:\"Source Sans 3\",\"Source Sans Pro\",system-ui,sans-serif;--ease-out:cubic-bezier(0.16,1,0.3,1);--fade:140ms;--draw:150ms} .ds-notices{background:var(--ground);font-family:var(--font-apparatus)}.ds-notice{margin:0;padding:8px 32px;border-bottom:1px solid var(--rule);font-size:14px;color:var(--ink-2)}.ds-notice-error{background:var(--raised);color:var(--ink)}.ds-dismiss{margin-left:8px;padding:0;border:0;background:none;font:inherit;color:var(--ink-3);text-decoration:underline;text-underline-offset:3px;cursor:pointer}.ds-dismiss:hover{color:var(--ink)}"
     }
   ],
   "narrative": {
