@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ko6g
 title: story CLI 'every example runs' times out under host load
-status: open
+status: done
 mission: worldcrafter-k7uh
 labels:
 - bug
@@ -32,3 +32,7 @@ Out: speeding up the CLI itself; the generate 'stays fast' tests (`worldcrafter-
 ## Context
 
 2026-11-22, on `worldcrafter-7r87` (and on master): the test takes about 4s against bun's 5s default. The implementer's report says it timed out twice under a host load average of 23. This review's `bun run check` passed with that test at 4.1s. Same class of flake as `worldcrafter-08kf`, different test.
+
+## Report
+
+Already fixed by worldcrafter-08kf (merge 04055e3), whose Goal the lead ruled to cover this test: app/scripts/story.test.ts line 36 sets setDefaultTimeout(60_000), so bun's 5 s default no longer applies to the --help example-run test. Four full bun test runs at load average 20 to 24 gave 0 failures, where nine story-CLI tests had timed out before. A hung example still fails, at the 60 s limit; that was not shown by a planted hang.
