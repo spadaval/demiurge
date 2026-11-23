@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-j8gz
 title: Update PRODUCT.md and README.md for unified typed-store and app-owned agent direction
-status: in_review
+status: changes_requested
 mission: worldcrafter-k7uh
 labels:
 - docs
