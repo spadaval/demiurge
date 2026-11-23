@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-t163
 title: Add app/ bun run check as an Atelier merge check
-status: open
+status: building
 mission: worldcrafter-k7uh
 labels:
 - atelier
@@ -11,7 +11,8 @@ labels:
 priority: medium
 blocked_by:
 - worldcrafter-08kf
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A19a62698-b51c-422f-9aec-662edcca5fd6%3Adelegate-task%3Af43fbdb7-6e0b-422d-8f9a-b46bc23427ac
 ready: null
 trivial: null
 caused_by: null
