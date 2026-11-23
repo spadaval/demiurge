@@ -5,6 +5,7 @@ import {
   parseLogprobs,
   ToolCallAssembly,
 } from "./parse";
+import { normalizeBaseUrl, proxyUrl, UPSTREAM_HEADER } from "./proxy";
 import { SseParser } from "./sse";
 import type {
   BackendKind,
@@ -382,7 +383,9 @@ export type SendOptions = {
 };
 
 /**
- * Sends `request` with `profile`'s credentials. Streams when
+ * Sends `request` with `profile`'s credentials, or through the app's Worker
+ * when the profile is `proxied` (relative to the page's origin, so the
+ * Access cookie goes with it). Streams when
  * `request.body.stream` is true. A request that fails `checkRequest` is not
  * sent. Every failure, including aborts, resolves as an `Err`; the returned
  * promise never rejects.
@@ -395,11 +398,25 @@ export function send(
   return new ResultAsync(sendAsync(profile, request, options));
 }
 
-function headers(profile: BackendProfile): Record<string, string> {
-  const out: Record<string, string> = { "Content-Type": "application/json" };
-  if (profile.apiKey) out.Authorization = `Bearer ${profile.apiKey}`;
-  if (profile.kind === "openrouter") out["X-Title"] = "Demiurge";
-  return out;
+/**
+ * Where `request` is sent and with what headers. A proxied profile's go to
+ * the app's own Worker, naming the server in `UPSTREAM_HEADER` and carrying
+ * no key: the Worker adds it from its secrets.
+ */
+function transport(
+  profile: BackendProfile,
+  request: LlmRequest,
+): { url: string; headers: Record<string, string> } {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (profile.kind === "openrouter") headers["X-Title"] = "Demiurge";
+  if (profile.proxied) {
+    headers[UPSTREAM_HEADER] = normalizeBaseUrl(profile.baseUrl);
+    return { url: proxyUrl(request.endpoint), headers };
+  }
+  if (profile.apiKey) headers.Authorization = `Bearer ${profile.apiKey}`;
+  return { url: request.url, headers };
 }
 
 async function sendAsync(
@@ -428,9 +445,10 @@ async function sendAsync(
 
   let response: Response;
   try {
-    response = await (options.fetch ?? fetch)(url, {
+    const route = transport(profile, request);
+    response = await (options.fetch ?? fetch)(route.url, {
       method: "POST",
-      headers: headers(profile),
+      headers: route.headers,
       body: JSON.stringify(request.body),
       ...(signal ? { signal } : {}),
     });
@@ -456,7 +474,7 @@ async function sendAsync(
       kind: "http",
       url,
       status: response.status,
-      message: `${url} returned ${response.status}: ${reason}`,
+      message: `${url} returned ${response.status}${profile.proxied ? " through the app's server" : ""}: ${reason}`,
     });
   }
 

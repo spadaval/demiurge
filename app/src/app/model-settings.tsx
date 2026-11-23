@@ -106,6 +106,31 @@ export function ModelSettingsPage() {
             />
           </Field>
 
+          <fieldset
+            className="settings-field settings-kind"
+            aria-describedby="model-route-hint"
+          >
+            <legend className="settings-label">Send requests</legend>
+            <div className="settings-switch">
+              {ROUTES.map(({ proxied, label }) => (
+                <label key={label} data-checked={form.proxied === proxied}>
+                  <input
+                    type="radio"
+                    name="route"
+                    checked={form.proxied === proxied}
+                    onChange={() => set({ proxied })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <span id="model-route-hint" className="settings-hint">
+              {form.proxied
+                ? "Through the server this app is hosted on, which must list this base URL and holds its key. Use it from a phone, or for a server that refuses requests from the browser."
+                : "From this browser straight to the server, with the key below."}
+            </span>
+          </fieldset>
+
           <div className="settings-field">
             <label className="settings-label" htmlFor="model-api-key">
               API key
@@ -115,14 +140,16 @@ export function ModelSettingsPage() {
                 id="model-api-key"
                 aria-describedby="model-api-key-hint"
                 type={showKey ? "text" : "password"}
-                value={form.apiKey}
+                value={form.proxied ? "" : form.apiKey}
                 onChange={(event) => set({ apiKey: event.target.value })}
                 spellCheck={false}
                 autoComplete="off"
-                placeholder="None"
+                placeholder={form.proxied ? "Held by the app's server" : "None"}
+                disabled={form.proxied}
               />
               <button
                 type="button"
+                disabled={form.proxied}
                 className="settings-reveal"
                 aria-pressed={showKey}
                 onClick={() => setShowKey((shown) => !shown)}
@@ -131,8 +158,9 @@ export function ModelSettingsPage() {
               </button>
             </div>
             <span id="model-api-key-hint" className="settings-hint">
-              Sent only to this server, with each request. A local llama.cpp
-              server usually needs none.
+              {form.proxied
+                ? "The app's server adds its own key, so none is kept in this browser."
+                : "Sent only to this server, with each request. A local llama.cpp server usually needs none."}
             </span>
           </div>
 
@@ -191,6 +219,11 @@ export function ModelSettingsPage() {
     </div>
   );
 }
+
+const ROUTES: readonly { proxied: boolean; label: string }[] = [
+  { proxied: false, label: "Directly" },
+  { proxied: true, label: "Through this app's server" },
+];
 
 /** A labelled field with its hint, linked for assistive technology. */
 function Field({

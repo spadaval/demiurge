@@ -57,9 +57,17 @@ export type BackendProfile = {
   kind: BackendKind;
   /** Base URL including the version segment, e.g. `http://localhost:8080/v1`. */
   baseUrl: string;
+  /** Sent to the server with each request; never when `proxied`. */
   apiKey?: string;
   model?: string;
   sampler: Sampler;
+  /**
+   * Send requests through the app's Worker (`llm/proxy.ts`), which adds the
+   * server's credentials from its own secrets, instead of straight to
+   * `baseUrl`. Requests are still addressed and stored with `baseUrl`'s
+   * URL: how they travel is not part of them.
+   */
+  proxied?: boolean;
 };
 
 /**

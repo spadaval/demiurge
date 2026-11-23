@@ -4,7 +4,8 @@
  * part of the world: like the open tabs (`workspace/tabs.ts`) it lives in a
  * key-value store (localStorage) per world, outside documents and outside
  * the world store. The API key is kept only here; the LLM client keeps it
- * out of stored requests, and so out of provenance.
+ * out of stored requests, and so out of provenance. A proxied profile keeps
+ * none: the Worker adds it from its secrets (`worker/proxy.ts`).
  *
  * One profile per world for now. Requests carry the profile's `name`, a
  * stable identifier minted when it is first saved; what the writer calls it
@@ -47,7 +48,7 @@ const isKind = (value: unknown): value is BackendKind =>
 /** A stored profile, or null if it isn't one. */
 export function parseProfile(value: unknown): BackendProfile | null {
   if (!isRecord(value)) return null;
-  const { name, label, kind, baseUrl, apiKey, model, sampler } = value;
+  const { name, label, kind, baseUrl, apiKey, model, sampler, proxied } = value;
   if (
     typeof name !== "string" ||
     (label !== undefined && typeof label !== "string") ||
@@ -55,6 +56,7 @@ export function parseProfile(value: unknown): BackendProfile | null {
     typeof baseUrl !== "string" ||
     (apiKey !== undefined && typeof apiKey !== "string") ||
     (model !== undefined && typeof model !== "string") ||
+    (proxied !== undefined && typeof proxied !== "boolean") ||
     !isRecord(sampler)
   ) {
     return null;
@@ -68,6 +70,7 @@ export function parseProfile(value: unknown): BackendProfile | null {
     ...(model ? { model } : {}),
     // Read back from JSON, so every value is a JSON value.
     sampler: sampler as Sampler,
+    ...(proxied ? { proxied } : {}),
   };
 }
 
@@ -109,6 +112,8 @@ export interface ProfileForm {
   readonly model: string;
   /** The sampler as a JSON object. */
   readonly sampler: string;
+  /** Send through the app's Worker, which holds the key. */
+  readonly proxied: boolean;
 }
 
 export const DEFAULT_SAMPLER: Sampler = { temperature: 0.8, max_tokens: 400 };
@@ -121,6 +126,7 @@ export function formOf(profile: BackendProfile | null): ProfileForm {
     apiKey: profile?.apiKey ?? "",
     model: profile?.model ?? "",
     sampler: JSON.stringify(profile?.sampler ?? DEFAULT_SAMPLER, null, 2),
+    proxied: profile?.proxied ?? false,
   };
 }
 
@@ -150,6 +156,11 @@ export function profileFromForm(
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     return err("The base URL must start with http:// or https://.");
   }
+  if (form.proxied && url.protocol !== "https:") {
+    return err(
+      "The app's server forwards only to https:// servers. Reach a home server through a Cloudflare Tunnel.",
+    );
+  }
   let sampler: JsonValue;
   try {
     sampler = JSON.parse(form.sampler);
@@ -163,7 +174,8 @@ export function profileFromForm(
       'The sampler must be a JSON object, like { "temperature": 0.8 }.',
     );
   }
-  const apiKey = form.apiKey.trim();
+  // Through the Worker, the key is the Worker's secret: none is kept here.
+  const apiKey = form.proxied ? "" : form.apiKey.trim();
   const model = form.model.trim();
   return ok({
     name: existing?.name ?? newId(),
@@ -173,5 +185,6 @@ export function profileFromForm(
     ...(apiKey ? { apiKey } : {}),
     ...(model ? { model } : {}),
     sampler: sampler as Sampler,
+    ...(form.proxied ? { proxied: true } : {}),
   });
 }

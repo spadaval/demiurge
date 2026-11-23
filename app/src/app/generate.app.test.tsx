@@ -604,6 +604,27 @@ test("with no model set up, Generate next leads to the model settings, which sto
   expect(
     JSON.stringify((await storage.documents.list())._unsafeUnwrap()),
   ).not.toContain(KEY);
+
+  // Through the app's server, the key is the server's: none is kept here.
+  const through = [
+    ...(container?.querySelectorAll<HTMLLabelElement>(
+      ".settings-switch label",
+    ) ?? []),
+  ].find((label) => label.textContent === "Through this app's server");
+  await click(through?.querySelector("input") ?? null);
+  expect(key.disabled).toBe(true);
+  await click(button("Save", ".settings"));
+  expect(query(".settings [role=alert]")?.textContent).toContain("https://");
+  await type(field("Base URL") as HTMLInputElement, "https://llm.example/v1");
+  await click(button("Save", ".settings"));
+  expect(query(".settings-outcome")?.textContent).toBe("Saved for this world.");
+  const proxied = keyValue.data.get("worldcrafter:w1:backend-profile") ?? "";
+  expect(JSON.parse(proxied)).toMatchObject({
+    name,
+    baseUrl: "https://llm.example/v1",
+    proxied: true,
+  });
+  expect(proxied).not.toContain(KEY);
 });
 
 test("a request that fails with nothing received brings its slip back, edits included", async () => {
