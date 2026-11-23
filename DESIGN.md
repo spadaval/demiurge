@@ -97,7 +97,7 @@ spacing:
   rail-inset: "20px"
   paragraph: "20px"
   note-gap: "14px"
-  ledger-row: "32px"
+  ledger-row: "32px" # minimum row height; rows with secondary lines grow
   turn-gap: "18px"
 components:
   button:
@@ -149,7 +149,6 @@ components:
   ledger-row:
     textColor: "{colors.ink-2}"
     typography: "{typography.apparatus}"
-    height: "{spacing.ledger-row}"
     padding: "7px 0"
   reference:
     textColor: "{colors.ink}"
@@ -298,7 +297,7 @@ Square paper, softened controls. The page, plate, notices and blocks have square
 ### Buttons
 Plain and printed.
 - **Shape:** gentle corners (5px), 1px `rule` border, no fill, 13.5px Source Sans 500, 7px 14px.
-- **Primary:** bone-ink fill with ground-coloured 600 text; one per surface: "Generate next" at the masthead's right, Send in a request or agent slip, Send in a topic's composer.
+- **Primary:** bone-ink fill with ground-coloured 600 text; one per surface: "Generate next" at the masthead's right, Send in a prose request slip, and Send in a topic's composer. An agent slip has no Send of its own, because the composer's Send sends the next turn.
 - **Hover / Focus:** secondary buttons strengthen their border to `rule-strong`; primary brightens to a paler bone (#f3eee2). Focus everywhere is a 1px `ink-2` outline offset 2px (inset 3px on segmented controls).
 - **Text actions:** rail and notice actions are bare `ink-2` text that underline on hover (3px offset).
 
@@ -352,7 +351,7 @@ The story bible read as the edition's appendix: five ledgers and a detail sheet 
 
 **Rail.** The World view opens with an "Inspect" section: five 32px rows, Cast & Drives, Open Questions, Timeline & Counts, Reader-Order and Contradictions, each with a tabular count right-aligned in `ink-3` (actors, undecided questions, placed events, scenes, kept contradictions). The view showing in the World tab is `ink` with the 3px left bar. World entries by kind follow, as now.
 
-**Sheet head.** In the prose column: the Sheet title (the view's name), then a 14px `ink-2` lede of one sentence with its totals ("9 actors, 14 drives. 2 actors have no drive yet."). On a record's detail sheet, a Label above the title names the record's kind in `ink-3` ("Drive", "Event", "Open question") with its authority at the right ("linked", "inferred").
+**Sheet head.** In the prose column: the Sheet title (the view's name), then a 14px `ink-2` lede of one sentence with its totals ("9 actors, 14 drives. 2 actors have no drive yet."). On a record's detail sheet, a Label above the title names the record's kind in `ink-3` ("Drive", "Event", "Open question") with its authority at the right ("linked", "inferred", "suggested").
 
 **The five views**, each one ledger:
 - **Cast & Drives:** grouped by actor, characters then organisations. The actor's row leads with its name and, as one secondary line, counts that are references into its detail ("2 relations · 1 membership · 3 turns"). Its drives are sub-rows: the want as the lead, then "stakes · action" in `ink-2`, then a line of references: origin events ("from …") and the drives it opposes, allies with or competes with. A gap is an `ink-3` phrase in the row ("no drive yet", "no origin"); a deliberate gap reads "gap kept · reason". No speaker tints and no swatches: the cast is story-wide.
@@ -374,12 +373,12 @@ Conversation in Demiurge is a talk page about one thing, after Wikipedia's (`doc
 **Scoped, not global.** These are the differences from chat, and each is a check:
 - Every topic has exactly one scope: the world, a scene, a passage in a scene, or one bible record. The scope is always shown at the topic's head as a reference, and it decides what the model sees.
 - A composer exists only at the foot of an open topic's sheet. There is no conversation without a topic, no "new chat", no chat panel docked, floating or drawn over the manuscript, no launcher bubble, and no composer fixed to the viewport.
-- World scope is the village pump, a scope chosen like any other and not a catch-all default. "New topic" in the rail starts a world topic; a topic started from a scene, passage or record (`worldcrafter-rxvy`) takes that scope.
+- World scope is the village pump, a scope chosen like any other and not a catch-all default. "New topic" in the rail starts a world topic; a topic started from a scene, passage or record (`worldcrafter-rxvy`) takes that scope. Either way the writer names it first. Its title is never taken from the first message.
 - Turns are a record, not a stream of bubbles: no avatars, no left/right alignment, no typing dots, no read receipts.
 
-On a scene sheet, a passage's topics (`worldcrafter-rxvy`) appear as gloss notes of kind "Talk": a neutral key and head in `ink-2`, the topic's title as the body, and "Open" as the action. They follow the Gloss Note grammar and the Paint-Only Rule; this section adds no layer hue for them.
+On a scene sheet, a passage's open topics (`worldcrafter-rxvy`) are gloss notes of kind "Talk" on the Notes layer, because a talk page about a passage is the writer's annotation grown up. They follow the Gloss Note grammar exactly. The key letter, the head and the toggle underline take the Notes layer's `ink-3`. The topic's title is the body, and "Open" is the action. The key is always in the DOM, and the note fades in and its tick draws only when Notes is on (the Paint-Only Rule). This adds no layer and no hue. While Notes is off, the scene's passage topics are still listed in the rail's Topics view under Passages.
 
-**Rail (Topics view).** First the World inbox: a Label with its count, its first three rows, and an "Open the inbox" text action that opens the World inbox sheet. Then open topics grouped by scope kind under Labels (World, Scenes, Passages, Records). Each row shows the title in 14px `ink` and an about line in 12.5px `ink-3` naming its scope, ending "· raised by model" when the model started it. The topic in the active tab carries the 3px left bar. The Label row's action is "New topic"; the panel's last line, "Resolved and archived", opens a ledger sheet of the rest, grouped by status.
+**Rail (Topics view).** First the World inbox: a Label with its count, its first three items, and an "Open the inbox" text action that opens the World inbox sheet. The preview uses the open-topic row below (a title, then an about line), not the inbox ledger's row. For a contradiction the about line starts with its kind ("Contradiction · Scene 4 The Ferry"). Then open topics grouped by scope kind under Labels (World, Scenes, Passages, Records). Each row shows the title in 14px `ink` and an about line in 12.5px `ink-3` naming its scope, ending "· raised by model" when the model started it. The topic in the active tab carries the 3px left bar. The Label row's action is "New topic"; the panel's last line, "Resolved and archived", opens a ledger sheet of the rest, grouped by status.
 
 **World inbox sheet.** A ledger of everything waiting on the writer: open topics the model started, and kept contradictions the story has surfaced. Each row has its kind as an `ink-3` Label ("Topic", "Contradiction"), the title as the lead, the scope as its secondary line, and at the right where it came from ("Model · profile", date). A topic row opens its topic sheet; a contradiction opens its detail in the World inspector.
 
@@ -388,8 +387,9 @@ On a scene sheet, a passage's topics (`worldcrafter-rxvy`) appear as gloss notes
 - **Turns (prose column, 620px):** each turn sits under a 1px `rule` line with 18px above its head. The head is a Label: the author in `ink-2` ("You", or "Model · profile label"), the time at the right in tabular `ink-3`, and on a model turn a "Request" text action that opens that turn's agent slip. The body is in the Talk setting in `ink`, for both authors. A model turn is also set off by a 1px `rule-strong` rule down its left edge, with the head and body inset 14px. That carries the attribution in form, legible without colour. Quoted manuscript prose takes the Excerpt setting, and records and scenes are references.
 - **Tool use in a turn:** one fold line under a model turn's body, in 12.5px `ink-3` ("› 3 tool calls · reader-order, touches, trace"). Opened, it lists each call's name in the Code setting with a one-line result in `ink-2`. The arguments and full results live only in the agent slip, which "Request" opens.
 - **Proposals:** a turn that proposes a fact, a relation or a decision ends with one `ink-2` line per proposal, saying what would be recorded, followed by an `ink` text action ("Record as fact"). Prose proposed for the manuscript is an AI segment and is set in the plate (the Vermilion Signature Rule); it is the only vermilion a topic sheet can carry.
-- **Running turn:** the pending model turn shows its head with Stop as a text action at the right, and a live `ink-3` status line naming the current step ("Running touches…"). Streamed text appears in place as it arrives. There is no pulse (the breathing pulse belongs to the AI caption), no spinner and no typing dots. A failed turn shows its error in the Notice error form inside the turn, with "Try again".
-- **Composer:** at the foot of the turns, only on an open topic. First a 12.5px `ink-3` line saying what the model will see ("The model sees this scene, 4 records it touches, and this topic."), with a "Context" text action that opens the next turn's agent slip. Then the textarea, in the slip's field form (rail fill, 1px `rule` border, 5px corners) and the Talk setting, growing with its content up to 12 lines. Send is the composer's one primary button, at the right, and Ctrl/⌘+Enter sends. A resolved or archived topic has no composer, only "Resolved on <date>." and "Reopen".
+- **Running turn:** the pending model turn shows its head with Stop as a text action at the right (the only Stop for an agent turn; the composer keeps Send, disabled until the turn ends), and a live `ink-3` status line naming the current step ("Running touches…"). Streamed text appears in place as it arrives. There is no pulse (the breathing pulse belongs to the AI caption), no spinner and no typing dots. A failed turn shows its error in the Notice error form inside the turn, with "Try again".
+- **Composer:** at the foot of the turns, only on an open topic. First a 12.5px `ink-3` line saying what the model will see ("The model sees this scene, 4 records it touches, and this topic."), with a "Context" text action that opens the next turn's agent slip. Then the textarea, in the slip's field form (rail fill, 1px `rule` border, 5px corners) and the Talk setting, growing with its content up to 12 lines. Send is the composer's one primary button, at the right, and Ctrl/⌘+Enter sends. It sends the composer's text with the next-turn slip's edits, if there are any, stored as that turn's request revision. It is disabled while a turn runs, while the composer is empty, and while the topic has no title. A resolved or archived topic has no composer, only "Resolved on <date>." and "Reopen".
+- **New topic:** "New topic" opens a topic sheet in a new tab at once, with no dialog or overlay. The scope line is filled in, and the title is an empty field in the Sheet title setting. It uses the document title field's form (no border, the caret in `ink`), with an `ink-3` placeholder: "Name this topic". Focus starts in it. The status reads "Open". There are no turns yet, only one 13px `ink-3` line: "No turns yet. Say what this topic should settle.". The composer is ready below, and its Send waits for a title. Nothing is stored until the first Send, so closing the tab before that discards the topic. Once stored, the title stays an editable field while the topic is open, for either author's topics.
 - **Gloss column:** holds the agent slip beside the turn it explains, on a leader, or beside the composer for the next turn. Nothing else.
 
 **Responsive.**
@@ -410,7 +410,11 @@ The Request Slip extended to agent turns. One component (`app/src/generate/conte
 5. **Kept contradictions.** A Label, then rows in the Contradictions ledger's form.
 6. **Touched by this change** (`trace` suspects). A Label, then one row per suspect: a reference to the record or scene, then the reason in `ink-3`. Following one opens its sheet (a record's detail, a scene's tab), and the slip stays open with its turn.
 
-**Actions.** For a prose request or the next turn: "Discard edits" as a text action and Send as the slip's one primary button, as now. A past turn's slip is a record: it has no Send.
+**Actions.**
+- **Prose request slip:** "Discard edits" as a text action and Send as the slip's one primary button. While the request runs, Stop takes Send's place, as now. It has no composer, so the slip sends.
+- **Next-turn slip** (topic sheet): "Discard edits" and no Send. Its edits wait for the composer's Send, which sends them with the writer's text. A line in `ink-2` says so ("Sent with your next message.").
+- **Running turn's slip:** read-only and live. Its tool calls append as they start, and its parts can be read but not edited. It has no Send and no Stop; Stop is the text action on the running turn's head.
+- **Past turn's slip:** a record, with no Send.
 
 **Colour.** Nothing in the slip is AI prose, so it carries no vermilion: not the assistant messages in the context packet, not the tool arguments, not the results. Neutrals throughout, `time` only for story-time values, raised umber only for a failure.
 
