@@ -77,6 +77,7 @@ import {
 } from "./records";
 import {
   agentScope,
+  findTopicPrompt,
   TOPIC_PROMPT_HEADING,
   topicPrompt,
   topicScopeProblem,
@@ -242,33 +243,26 @@ export interface Talk {
 export const topicSessionId = (topic: string) => `talk-${topic}`;
 
 /**
- * A topic session's prompt is the profile's prompt, then the topic's own
- * part (`topicPrompt`). `before` is the session's prompt before the writer
- * edited it, and `generated` the part as `topicPrompt` writes it now. The
- * part is `generated` if `before` holds it, else what follows the last
- * "# This talk page" heading in `before` (the topic was renamed since its
- * session started); null when `before` has no part.
- */
-function topicPart(before: string, generated: string): string | null {
-  if (before.includes(`\n\n${generated}`)) return generated;
-  const at = before.lastIndexOf(`\n\n${TOPIC_PROMPT_HEADING}\n`);
-  return at === -1 ? null : before.slice(at + 2);
-}
-
-/**
  * What a "Profile default" edit of a topic session's prompt saves: the
- * edited prompt without the topic's own part, so the next topic gets its
- * own part and not this one's. Everything the writer wrote is kept, before
- * or after the part. Err when the writer changed the part itself, since it
- * can't then be told from their own text.
+ * edited prompt without the topic's own part (`topicPrompt`, found in
+ * `before`, the session's prompt before the edit, by `findTopicPrompt`), so
+ * the next topic gets its own part and not this one's. Everything the
+ * writer wrote is kept, before or after the part. Err when the part can't
+ * be told from the writer's own text: the writer changed it in this edit,
+ * or `before` has its heading and no part of its shape.
  */
 export function profilePrompt(
   edited: string,
   before: string,
-  generated: string,
+  scope: TopicScope,
 ): Result<string, string> {
-  const part = topicPart(before, generated);
-  if (part === null) return ok(edited);
+  const refused = err(
+    `The prompt can't be saved as the profile default with this topic's own part (under "${TOPIC_PROMPT_HEADING}") changed. Keep that part as it is, or keep the edit for this session.`,
+  );
+  const part = findTopicPrompt(before, scope);
+  if (part === null) {
+    return before.includes(TOPIC_PROMPT_HEADING) ? refused : ok(edited);
+  }
   const at = edited.lastIndexOf(`\n\n${part}`);
   if (at !== -1) {
     return ok(edited.slice(0, at) + edited.slice(at + 2 + part.length));
@@ -276,9 +270,7 @@ export function profilePrompt(
   if (edited.startsWith(part)) {
     return ok(edited.slice(part.length).replace(/^\n+/, ""));
   }
-  return err(
-    `The prompt can't be saved as the profile default with this topic's own part (under "${TOPIC_PROMPT_HEADING}") changed. Keep that part as it is, or keep the edit for this session.`,
-  );
+  return refused;
 }
 
 /** Saves a topic session's prompt default as `strip` leaves it. */
@@ -670,17 +662,11 @@ export function createTalk(options: TalkOptions): Talk {
     if (loaded.isErr()) return err(loaded.error);
     const session = loaded.value;
     if (session === null) return err({ kind: "no_session", id: sessionId });
-    let generated = "";
-    if (edits.systemPrompt?.scope === "default") {
-      const story = await loadStory(storage);
-      if (story.isErr()) return err(story.error);
-      generated = topicPrompt(story.value, topic.title, topic.scope);
-    }
     return prepareNextTurn(
       {
         runner: runner(model),
         defaults: topicDefaults(defaults, (prompt) =>
-          profilePrompt(prompt, session.systemPrompt, generated),
+          profilePrompt(prompt, session.systemPrompt, topic.scope),
         ),
         profile: model.binding.profile.name,
       },

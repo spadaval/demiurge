@@ -965,8 +965,33 @@ test("an instruction added after the topic's part is kept in the profile default
   await say("Go on.");
   expect(chat(lastRequest())[0]?.content).toBe(`${prompt}\n\n${added}`);
 
-  // The default keeps the instruction, without this topic's part.
-  const profilePart = prompt.slice(0, prompt.indexOf("\n\n# This talk page\n"));
+  // Renamed, the topic's session keeps its part under the old title. A
+  // second default edit keeps the instruction the first one added.
+  const title = query<HTMLInputElement>(".topic-title-field");
+  await type(title, "Who lit it?");
+  await act(async () => {
+    title?.focus();
+    title?.blur();
+  });
+  await until(
+    () => text(".tab[data-active='true'] .tab-title") === "Who lit it?",
+    "the rename",
+  );
+  await until(
+    () => slipField("System prompt")?.value === `${prompt}\n\n${added}`,
+    "the next slip",
+  );
+  await type(slipField("System prompt"), `Be concise.\n${prompt}\n\n${added}`);
+  await click(
+    queryAll(".topic-slip input[type=radio]").find(
+      (input) => input.parentElement?.textContent === "Profile default",
+    ) ?? null,
+  );
+  stub.script(streamed(["Mara."]));
+  await say("Again.");
+
+  // The default keeps both, without this topic's part.
+  const profilePart = `Be concise.\n${prompt.slice(0, prompt.indexOf("\n\n# This talk page\n"))}`;
   stub.script(streamed(["Ivo does."]));
   await newTopic("Who keeps the log?", "Who?");
   const system = chat(lastRequest())[0]?.content ?? "";

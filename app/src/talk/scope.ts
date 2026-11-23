@@ -136,6 +136,14 @@ export function topicPrompt(
     scope.kind === "world"
       ? "the story as a whole"
       : scopeLine(story, scope).replace(" · ", " ");
+  return topicPromptText(about, title, scope);
+}
+
+function topicPromptText(
+  about: string,
+  title: string,
+  scope: TopicScope,
+): string {
   const lines = [
     TOPIC_PROMPT_HEADING,
     "",
@@ -145,6 +153,28 @@ export function topicPrompt(
     lines.push("", "The passage the topic is about:", "", `> ${scope.quote}`);
   }
   return lines.join("\n");
+}
+
+/**
+ * The last part `topicPrompt` wrote into `prompt` for a topic with `scope`,
+ * under any title and scope name (a topic renamed, or a record renamed,
+ * since): exactly the part, whatever follows it. It stands on its own
+ * lines, after a blank line or at the start. Null when there is none.
+ */
+export function findTopicPrompt(
+  prompt: string,
+  scope: TopicScope,
+): string | null {
+  // Any title and scope name: a placeholder no prompt holds, then any line.
+  const open = "\u0000";
+  const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const shape = literal(topicPromptText(open, open, scope))
+    .split(literal(open))
+    .join("[^\\n]*");
+  const matches = [
+    ...prompt.matchAll(new RegExp(`(?:^|\\n\\n)(${shape})(?=\\n\\n|$)`, "g")),
+  ];
+  return matches.at(-1)?.[1] ?? null;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>

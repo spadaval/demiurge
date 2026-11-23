@@ -691,10 +691,11 @@ describe("stored talk records", () => {
 });
 
 describe("a topic prompt saved as the profile default", () => {
-  const part = topicPrompt(fixture, "Who lit the lamp?", { kind: "world" });
+  const world = { kind: "world" } as const;
+  const part = topicPrompt(fixture, "Who lit the lamp?", world);
   const before = `Be careful.\n\n${part}`;
-  const saved = (edited: string, generated = part) =>
-    profilePrompt(edited, before, generated);
+  const saved = (edited: string, from = before) =>
+    profilePrompt(edited, from, world);
 
   test("drops exactly the topic's own part and keeps the writer's text around it", () => {
     expect(saved(`Be terse.\n\n${part}`)._unsafeUnwrap()).toBe("Be terse.");
@@ -711,23 +712,49 @@ describe("a topic prompt saved as the profile default", () => {
     expect(saved(`${part}\n\nOnly this.`)._unsafeUnwrap()).toBe("Only this.");
   });
 
-  test("finds the part of a topic renamed since its session started", () => {
-    const renamed = topicPrompt(fixture, "Who lit it?", { kind: "world" });
-    expect(
-      saved(`Be careful.\n\n${part}\n\nAnd brief.`, renamed)._unsafeUnwrap(),
-    ).toBe("Be careful.\n\nAnd brief.");
+  test("keeps an instruction added in an earlier turn when the topic was renamed since", () => {
+    // The session still holds the part under its old title, then the
+    // writer's instruction from an earlier default edit.
+    const earlier = `Be careful.\n\n${part}\n\nAlways answer in exactly one sentence.`;
+    expect(topicPrompt(fixture, "Who lit it?", world)).not.toBe(part);
+    expect(saved(`Be concise.\n${earlier}`, earlier)._unsafeUnwrap()).toBe(
+      "Be concise.\nBe careful.\n\nAlways answer in exactly one sentence.",
+    );
   });
 
-  test("refuses when the writer changed the topic's part itself", () => {
+  test("finds a passage topic's part by its quote", () => {
+    const passage = {
+      kind: "passage",
+      scene: "storm-night",
+      documentId: "d",
+      blockId: "b",
+      quote: "The lamp. (Lit?) [twice]",
+    } as const;
+    const quoted = topicPrompt(fixture, "Why twice?", passage);
+    expect(
+      profilePrompt(
+        `Be careful.\n\n${quoted}\n\nCite lines.`,
+        `Be careful.\n\n${quoted}`,
+        passage,
+      )._unsafeUnwrap(),
+    ).toBe("Be careful.\n\nCite lines.");
+  });
+
+  test("refuses when the part can't be told from the writer's text", () => {
+    const refusal = "Keep that part as it is";
+    // Changed in this edit.
     const changed = part.replace("keep to it", "wander freely");
     expect(saved(`Be careful.\n\n${changed}`)._unsafeUnwrapErr()).toContain(
-      "Keep that part as it is",
+      refusal,
+    );
+    // Changed in an earlier edit for this session only.
+    const earlier = `Be careful.\n\n${changed}`;
+    expect(saved(`${earlier}\n\nMore.`, earlier)._unsafeUnwrapErr()).toContain(
+      refusal,
     );
   });
 
   test("saves a prompt whose session had no topic part whole", () => {
-    expect(
-      profilePrompt("Be terse.", "Be careful.", part)._unsafeUnwrap(),
-    ).toBe("Be terse.");
+    expect(saved("Be terse.", "Be careful.")._unsafeUnwrap()).toBe("Be terse.");
   });
 });
