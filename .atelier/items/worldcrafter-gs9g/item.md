@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-gs9g
 title: Cloudflare Worker optional inference proxy for hosted providers and home llama.cpp
-status: open
+status: building
 mission: worldcrafter-3z9j
 labels:
 - worker
@@ -12,7 +12,8 @@ priority: medium
 blocked_by:
 - worldcrafter-erje
 - worldcrafter-ji5d
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A6d73f777-f6d1-4f6c-b6f0-9f634b2c4463%3Adelegate-task%3A256a170e-d56f-4914-b577-f1ffc0c6ce68
 ready: null
 trivial: null
 caused_by: null
