@@ -13,6 +13,7 @@ import type { Environment } from "./environment";
 import type { Generation } from "./generation";
 import type { LayerSource } from "./layers";
 import type { Manuscript } from "./manuscript";
+import type { AppTalk } from "./talk";
 import type { WorldIndex } from "./world";
 
 /** Everything the app's views use, created once at startup. */
@@ -33,6 +34,8 @@ export interface AppServices {
   readonly bible: Bible;
   /** Whether the World tab is open, and what it last showed. */
   readonly worldTab: WritableStore<WorldTab>;
+  /** Talk pages: topics, the World inbox, and their turns. */
+  readonly talk: AppTalk;
 }
 
 /** The World tab (DESIGN.md, Sheets): one tab for every inspector sheet. */

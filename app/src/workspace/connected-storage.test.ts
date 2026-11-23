@@ -41,6 +41,7 @@ async function contents(storage: StorageAdapter) {
     timelines: (await storage.timelines.list())._unsafeUnwrap(),
     storyRecords: (await storage.storyRecords.list())._unsafeUnwrap(),
     agentRecords: (await storage.agentRecords.list())._unsafeUnwrap(),
+    talkRecords: (await storage.talkRecords.list())._unsafeUnwrap(),
   };
 }
 
@@ -146,6 +147,31 @@ test("a read-only tab's writes are refused before they reach storage; reads work
     [
       storage.agentRecords.delete("s1/session"),
       { operation: "delete", collection: "agentRecords", id: "s1/session" },
+    ],
+    [
+      storage.talkRecords.save({
+        id: "t1/topic",
+        topicId: "t1",
+        kind: "topic",
+        data: {},
+        updatedAt: 1,
+      }),
+      { operation: "save", collection: "talkRecords", id: "t1/topic" },
+    ],
+    [
+      storage.batch([
+        {
+          kind: "saveTalkRecord",
+          record: {
+            id: "t1/topic",
+            topicId: "t1",
+            kind: "topic",
+            data: {},
+            updatedAt: 1,
+          },
+        },
+      ]),
+      { operation: "save", collection: "talkRecords", id: "t1/topic" },
     ],
     [
       storage.batch([{ kind: "deleteStoryRecord", id: "actor/mara" }]),

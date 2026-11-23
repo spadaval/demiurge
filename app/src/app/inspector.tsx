@@ -135,7 +135,7 @@ function Inspector({ story, at }: { story: Story; at: InspectorAt }) {
   );
 }
 
-function SheetHead({
+export function SheetHead({
   title,
   kind,
   authority,
@@ -287,7 +287,7 @@ function TimeValue({ position }: { position: Position }) {
 
 // ── Ledger ───────────────────────────────────────────────────────────────
 
-function LedgerGroup({
+export function LedgerGroup({
   label,
   count,
   children,
@@ -308,7 +308,7 @@ function LedgerGroup({
   );
 }
 
-function LedgerRow({
+export function LedgerRow({
   number,
   numberClass,
   lead,
@@ -350,7 +350,7 @@ function LedgerRow({
   );
 }
 
-function Empty({ children }: { children: ReactNode }) {
+export function Empty({ children }: { children: ReactNode }) {
   return <p className="ledger-empty">{children}</p>;
 }
 

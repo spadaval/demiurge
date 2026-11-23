@@ -111,6 +111,7 @@ export const emptyWorld: WorldRecords = {
   timelines: [],
   storyRecords: [],
   agentRecords: [],
+  talkRecords: [],
 };
 
 async function value<T>(result: ResultAsync<T, StorageError>): Promise<T> {
@@ -384,6 +385,49 @@ export function describeStorageContract(
       expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
         record("session", "s1"),
         record("step/2", "s1"),
+      ]);
+    });
+
+    describeCollection(
+      "talkRecords",
+      () => storage.talkRecords,
+      (id, version) => ({
+        id,
+        topicId: "t1",
+        kind: "message",
+        data: { body: "Is the ferry late?", version },
+        updatedAt: version,
+      }),
+    );
+
+    test("talk records can be listed for one topic and by kind", async () => {
+      const record = (id: string, topicId: string, kind: string) => ({
+        id: `${topicId}/${id}`,
+        topicId,
+        kind,
+        data: { id },
+        updatedAt: 1,
+      });
+      const t1 = record("topic", "t1", "topic");
+      const t2 = record("topic", "t2", "topic");
+      const m1 = record("message/000001", "t1", "message");
+      const m2 = record("message/000002", "t1", "message");
+      for (const r of [m2, t2, t1, m1]) {
+        await value(storage.talkRecords.save(r));
+      }
+      expect(await value(storage.talkRecords.listForTopic("t1"))).toEqual([
+        m1,
+        m2,
+        t1,
+      ]);
+      expect(await value(storage.talkRecords.listOfKind("topic"))).toEqual([
+        t1,
+        t2,
+      ]);
+      expect(await value(storage.talkRecords.listForTopic("none"))).toEqual([]);
+      await value(storage.talkRecords.delete("t1/message/000001"));
+      expect(await value(storage.talkRecords.listOfKind("message"))).toEqual([
+        m2,
       ]);
     });
 
@@ -670,6 +714,46 @@ export function describeStorageContract(
         ]);
       });
 
+      test("saves talk records together, or none of them", async () => {
+        const talkRecord = (id: string, kind: string, data: JsonValue) => ({
+          id: `t1/${id}`,
+          topicId: "t1",
+          kind,
+          data,
+          updatedAt: 4,
+        });
+        const topic = talkRecord("topic", "topic", { title: "Ferry" });
+        const first = talkRecord("message/000001", "message", { body: "a" });
+        await value(
+          storage.batch([
+            { kind: "saveTalkRecord", record: topic },
+            { kind: "saveTalkRecord", record: first },
+          ]),
+        );
+        const failure = await error(
+          storage.batch([
+            {
+              kind: "saveTalkRecord",
+              record: talkRecord("topic", "topic", { title: "Changed" }),
+            },
+            {
+              kind: "saveTalkRecord",
+              record: talkRecord("message/000002", "message", unstorable),
+            },
+          ]),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "save",
+          collection: "talkRecords",
+          id: "t1/topic",
+        });
+        expect(await value(storage.talkRecords.listForTopic("t1"))).toEqual([
+          first,
+          topic,
+        ]);
+      });
+
       test("saving a document and annotation after their delete brings them back", async () => {
         await value(storage.documents.save(document("Before")));
         await value(storage.annotations.save(annotation));
@@ -795,6 +879,15 @@ export function describeStorageContract(
             updatedAt: 10,
           },
         ],
+        talkRecords: [
+          {
+            id: "t1/topic",
+            topicId: "t1",
+            kind: "topic",
+            data: { title: "Ferry" },
+            updatedAt: 11,
+          },
+        ],
       };
 
       test("an empty store dumps empty collections", async () => {
@@ -880,6 +973,8 @@ export function describeStorageContract(
         await error(storage.worldEntries.list()),
         await error(storage.annotations.listForDocument("d")),
         await error(storage.agentRecords.listForSession("s")),
+        await error(storage.talkRecords.listForTopic("t")),
+        await error(storage.talkRecords.listOfKind("topic")),
         await error(storage.requests.delete("d")),
         await error(storage.timelines.listTombstones()),
         await error(storage.dump()),

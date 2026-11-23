@@ -19,7 +19,9 @@ import {
   type StorageAdapter,
   type StorageError,
   type StoredAgentRecord,
+  type StoredTalkRecord,
   type SyncedCollectionName,
+  type TalkRecordCollection,
   type Tombstone,
   type WorldRecords,
 } from "./types";
@@ -31,13 +33,15 @@ import {
  * 1: documents, world entries, annotations, requests, snapshots, outlines,
  *    timelines. 2: story-bible records (`storyRecords`). 3: story agent
  *    sessions (`agentRecords`). 4: tombstones of deleted records
- *    (`tombstones`).
+ *    (`tombstones`). 5: talk-page topics and messages (`talkRecords`).
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 const DOCUMENT_INDEX = "byDocument";
 const SESSION_INDEX = "bySession";
 const COLLECTION_INDEX = "byCollection";
+const TOPIC_INDEX = "byTopic";
+const KIND_INDEX = "byKind";
 
 /**
  * Snapshot content lives apart from snapshot metadata so listing history
@@ -142,6 +146,11 @@ export function upgrade(
     db.createObjectStore(TOMBSTONES, {
       keyPath: ["collection", "key"],
     }).createIndex(COLLECTION_INDEX, "collection");
+  }
+  if (step(5)) {
+    const talk = db.createObjectStore("talkRecords", { keyPath: "id" });
+    talk.createIndex(TOPIC_INDEX, "topicId");
+    talk.createIndex(KIND_INDEX, "kind");
   }
 }
 
@@ -358,6 +367,23 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
       ),
   };
 
+  const talkRecords: TalkRecordCollection = {
+    ...keyed<StoredTalkRecord>("talkRecords", (record) => record.id),
+    // Each index orders equal values by primary key, so these are by ID.
+    listForTopic: (topicId) =>
+      run<StoredTalkRecord[]>(
+        { operation: "list", collection: "talkRecords", id: topicId },
+        "readonly",
+        (store) => store.index(TOPIC_INDEX).getAll(topicId),
+      ),
+    listOfKind: (kind) =>
+      run<StoredTalkRecord[]>(
+        { operation: "list", collection: "talkRecords", id: kind },
+        "readonly",
+        (store) => store.index(KIND_INDEX).getAll(kind),
+      ),
+  };
+
   const snapshots: SnapshotCollection = {
     save: (input) => {
       const info: Omit<SnapshotInfo, "id"> = {
@@ -441,6 +467,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
     timelines: keyed("timelines", (record) => record.id),
     storyRecords: keyed("storyRecords", (record) => record.id),
     agentRecords,
+    talkRecords,
     batch: (writes) => {
       const stores = new Set<StoreName>();
       for (const write of writes) {
@@ -458,6 +485,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
           stores.add("storyRecords");
         }
         if (write.kind === "saveAgentRecord") stores.add("agentRecords");
+        if (write.kind === "saveTalkRecord") stores.add("talkRecords");
       }
       // A transaction needs at least one store.
       if (stores.size === 0) return okAsync([]);
@@ -503,6 +531,9 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
               case "saveAgentRecord":
                 putLive(tx, "agentRecords", write.record.id, write.record);
                 break;
+              case "saveTalkRecord":
+                putLive(tx, "talkRecords", write.record.id, write.record);
+                break;
             }
           }
           return () =>
@@ -528,6 +559,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
             timelines: all("timelines"),
             storyRecords: all("storyRecords"),
             agentRecords: all("agentRecords"),
+            talkRecords: all("talkRecords"),
           };
           return () => {
             const read = <T>(request: IDBRequest) => request.result as T[];
@@ -541,6 +573,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
                 timelines: read(requests.timelines),
                 storyRecords: read(requests.storyRecords),
                 agentRecords: read(requests.agentRecords),
+                talkRecords: read(requests.talkRecords),
               } as Omit<WorldRecords, "snapshots">,
               infos: read<SnapshotInfo>(requests.snapshots),
               contents: read<SnapshotContentRecord>(requests.snapshotContent),
@@ -589,6 +622,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
           putAll("timelines", records.timelines, (r) => r.id);
           putAll("storyRecords", records.storyRecords, (r) => r.id);
           putAll("agentRecords", records.agentRecords, (r) => r.id);
+          putAll("talkRecords", records.talkRecords, (r) => r.id);
           // An explicit key above the key generator's moves it past that
           // key, so later snapshot saves get higher IDs.
           for (const { content, ...info } of records.snapshots) {

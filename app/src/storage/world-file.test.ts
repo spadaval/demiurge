@@ -39,9 +39,9 @@ const documents: StoredDocument[] = documentsFile;
 /**
  * A world with records in every collection, written the ways the app writes
  * them: the lighthouse story's documents and bible, world entries, AI
- * provenance, a stored request, an outline, a timeline, an agent session, and
- * snapshots saved on their own and in a batch, one of them of a deleted
- * document.
+ * provenance, a stored request, an outline, a timeline, an agent session, a
+ * talk topic, and snapshots saved on their own and in a batch, one of them
+ * of a deleted document.
  */
 async function fillWorld(storage: StorageAdapter): Promise<void> {
   for (const document of documents) {
@@ -123,6 +123,15 @@ async function fillWorld(storage: StorageAdapter): Promise<void> {
       kind: "session",
       data: { role: "plan", scope: { kind: "world" } },
       updatedAt: 17,
+    }),
+  );
+  await value(
+    storage.talkRecords.save({
+      id: "t1/topic",
+      topicId: "t1",
+      kind: "topic",
+      data: { title: "Is the keeper's log a lie?", status: "open" },
+      updatedAt: 18,
     }),
   );
   await value(
@@ -269,8 +278,8 @@ describe("reading a world file", () => {
     ).toMatchObject({ kind: "invalid_world_file", path: "format" });
   });
 
-  test("reads a version 1 file, which has no agent records", () => {
-    const { agentRecords: _, ...version1 } = world;
+  test("reads a version 1 file, which has no agent or talk records", () => {
+    const { agentRecords: _, talkRecords: __, ...version1 } = world;
     expect(
       parseWorldFile(file(version1, { version: 1 }))._unsafeUnwrap(),
     ).toEqual(world);
@@ -283,10 +292,24 @@ describe("reading a world file", () => {
     });
   });
 
+  test("reads a version 2 file, which has no talk records", () => {
+    const { talkRecords: _, ...version2 } = world;
+    expect(
+      parseWorldFile(file(version2, { version: 2 }))._unsafeUnwrap(),
+    ).toEqual(world);
+    expect(
+      parseWorldFile(file(world, { version: 2 }))._unsafeUnwrapErr(),
+    ).toEqual({
+      kind: "invalid_world_file",
+      path: "records.talkRecords",
+      reason: "not a field of this record",
+    });
+  });
+
   test("refuses a version it does not read", () => {
     expect(
-      parseWorldFile(file(world, { version: 3 }))._unsafeUnwrapErr(),
-    ).toEqual({ kind: "unsupported_world_version", version: 3 });
+      parseWorldFile(file(world, { version: 4 }))._unsafeUnwrapErr(),
+    ).toEqual({ kind: "unsupported_world_version", version: 4 });
     expect(
       parseWorldFile(file(world, { version: undefined }))._unsafeUnwrapErr(),
     ).toEqual({ kind: "unsupported_world_version", version: undefined });

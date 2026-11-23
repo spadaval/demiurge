@@ -127,6 +127,40 @@ export function streamed(pieces: readonly string[]): Reply {
     );
 }
 
+/** Streams tool calls as SSE deltas, one chunk per call, then `[DONE]`. */
+export function streamedToolCalls(...calls: StubCall[]): Reply {
+  return () =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          calls.forEach((call, index) => {
+            controller.enqueue(
+              encoder.encode(
+                event({
+                  tool_calls: [
+                    {
+                      index,
+                      id: call.id ?? `call-${index + 1}`,
+                      type: "function",
+                      function: {
+                        name: call.name,
+                        arguments: JSON.stringify(call.args),
+                      },
+                    },
+                  ],
+                }),
+              ),
+            );
+          });
+          controller.enqueue(encoder.encode(event({}, "tool_calls")));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      }),
+      { headers: { "Content-Type": "text/event-stream" } },
+    );
+}
+
 /**
  * Streams `first`, then nothing until the client goes away. `started`
  * resolves once the first piece is sent.

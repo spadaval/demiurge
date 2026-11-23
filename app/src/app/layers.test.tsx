@@ -77,7 +77,6 @@ async function renderDemo(
                 mergeLayers(demo.layerSource.scene(DEMO_SCENE), extra),
               ],
             ]),
-            demo.layerSource.topics,
           ),
     environment: {
       role: "writer",

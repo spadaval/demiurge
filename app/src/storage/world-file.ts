@@ -8,8 +8,8 @@
  *
  *     {
  *       "format": "demiurge-world",
- *       "version": 2,
- *       "records": { "documents": [...], ..., "agentRecords": [...] }
+ *       "version": 3,
+ *       "records": { "documents": [...], ..., "talkRecords": [...] }
  *     }
  *
  * `records` has one array per collection (`COLLECTION_NAMES`), in the shape
@@ -45,6 +45,7 @@ import {
   type StoredOutline,
   type StoredRequest,
   type StoredStoryRecord,
+  type StoredTalkRecord,
   type StoredTimeline,
   type WorldEntry,
   type WorldRecords,
@@ -53,14 +54,18 @@ import {
 export const WORLD_FILE_FORMAT = "demiurge-world";
 /**
  * 1: every collection up to `storyRecords`. 2: adds `agentRecords`; a version
- * 1 file reads as having none.
+ * 1 file reads as having none. 3: adds `talkRecords`; an older file reads as
+ * having none.
  */
-export const WORLD_FILE_VERSION = 2;
+export const WORLD_FILE_VERSION = 3;
 
 /** The collections a file of each version holds. */
 const VERSION_COLLECTIONS: Record<number, readonly CollectionName[]> = {
-  1: COLLECTION_NAMES.filter((name) => name !== "agentRecords"),
-  2: COLLECTION_NAMES,
+  1: COLLECTION_NAMES.filter(
+    (name) => name !== "agentRecords" && name !== "talkRecords",
+  ),
+  2: COLLECTION_NAMES.filter((name) => name !== "talkRecords"),
+  3: COLLECTION_NAMES,
 };
 
 /** A world file that can't be read: `path` locates the problem, e.g. `records.documents[2].title`. */
@@ -331,6 +336,16 @@ const COLLECTIONS: {
     check: shape<StoredAgentRecord>({
       id: string,
       sessionId: string,
+      kind: string,
+      data: json,
+      updatedAt: time,
+    }),
+    key: (record) => record.id,
+  },
+  talkRecords: {
+    check: shape<StoredTalkRecord>({
+      id: string,
+      topicId: string,
       kind: string,
       data: json,
       updatedAt: time,

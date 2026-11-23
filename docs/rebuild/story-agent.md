@@ -8,6 +8,7 @@ A session has a role and a scope, fixed when it starts, and a system prompt, mod
 
 - **Role.** `plan` is structural work and talk: outlining, reworking, weighing open questions. It offers every story tool by default. `prose` is drafting a scene, and offers no tools by default. Each role is bound to its own backend profile and sampler (`ProfileBindings` in `profiles.ts`), so planning can go to a reasoning model and drafting to a finetune or a local model. A binding can narrow or widen its tools (`all`, `queries`, `none`) and can stream. Bindings are browser configuration like the backend profile: the runner is given them, and a session records only its role, so no API key is stored.
 - **Scope.** The whole story, one scene, or one bible record (`drive:keep-light`). A scope the bible doesn't have is refused when the session starts.
+- **History.** A session can start with a conversation already under way (`history`: writer and model turns without packets), as a talk page that the model raised does.
 - **System prompt, model and sampler.** A session starts with its profile's defaults for the role (`defaults.ts`: what the writer saved as "Profile default", else the built-in prompt, the profile's model and no sampler of its own). `configure` changes any of them for the session's next model calls and keeps the change on the session record. The session's model replaces its profile's, on the profile's server; its sampler is laid over its binding's. Earlier steps keep the requests they sent. The built-in default for `plan` is `.agents/skills/story-sketch/craft.md` word for word, then that skill's mechanics rewritten for the tools; a test fails when craft.md changes and the copy in `prompt.ts` doesn't. The default for `prose` is drafting guidance drawn from the skill's "Writing a scene".
 
 ## The context packet
@@ -30,7 +31,7 @@ The context viewer (`app/src/generate/context-viewer.tsx`, `kind: "turn"` and `k
 
 ## What it does not do yet
 
-- Talk pages hosting the slip (`worldcrafter-lhh3`) and running sessions in the Worker (`worldcrafter-ji5d`).
+- Talk pages hosting the slip (`worldcrafter-lhh3` runs topic turns through the runner, `docs/rebuild/talk-pages.md`) and running sessions in the Worker (`worldcrafter-ji5d`).
 - Writing a draft into the scene's document: the prose role's answer is in the log and the conversation, and putting it in the document is the editor's job.
 - Completion-endpoint models: every role uses chat. A finetune served only as raw completions would need a prompt layout for the conversation.
 - Timeline values the model writes are asserted, as the CLI's are. Whether they should carry an `inferred` authority is a product call.

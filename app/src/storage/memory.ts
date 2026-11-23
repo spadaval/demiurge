@@ -23,8 +23,10 @@ import type {
   StoredOutline,
   StoredRequest,
   StoredStoryRecord,
+  StoredTalkRecord,
   StoredTimeline,
   SyncedCollectionName,
+  TalkRecordCollection,
   Tombstone,
   WorldEntry,
   WorldRecords,
@@ -143,6 +145,23 @@ export function createMemoryStorage(): StorageAdapter {
         .list()
         .map((all) => all.filter((record) => record.sessionId === sessionId)),
   };
+  const talkRecordMap = new Map<string, StoredTalkRecord>();
+  const talkStore = keyed<StoredTalkRecord>(
+    "talkRecords",
+    (record) => record.id,
+    talkRecordMap,
+  );
+  const talkRecords: TalkRecordCollection = {
+    ...talkStore,
+    listForTopic: (topicId) =>
+      talkStore
+        .list()
+        .map((all) => all.filter((record) => record.topicId === topicId)),
+    listOfKind: (kind) =>
+      talkStore
+        .list()
+        .map((all) => all.filter((record) => record.kind === kind)),
+  };
   const annotationRecords = new Map<string, AnnotationRecord>();
   const annotationStore = keyed<AnnotationRecord>(
     "annotations",
@@ -207,6 +226,7 @@ export function createMemoryStorage(): StorageAdapter {
     timelines: keyed("timelines", (record) => record.id, timelineRecords),
     storyRecords: keyed("storyRecords", (record) => record.id, storyRecords),
     agentRecords,
+    talkRecords,
     batch: (writes) =>
       run(batchContext(writes), () => {
         // Copy every value before changing anything, so a value that can't
@@ -244,6 +264,9 @@ export function createMemoryStorage(): StorageAdapter {
                 write.record,
               );
               break;
+            case "saveTalkRecord":
+              put("talkRecords", talkRecordMap, write.record.id, write.record);
+              break;
           }
         }
         return saved;
@@ -260,6 +283,7 @@ export function createMemoryStorage(): StorageAdapter {
           timelines: sorted(timelineRecords),
           storyRecords: sorted(storyRecords),
           agentRecords: sorted(agentRecordMap),
+          talkRecords: sorted(talkRecordMap),
         } satisfies WorldRecords),
       ),
     restore: (records) =>
@@ -290,6 +314,7 @@ export function createMemoryStorage(): StorageAdapter {
         putAll("timelines", timelineRecords, copy.timelines, (r) => r.id);
         putAll("storyRecords", storyRecords, copy.storyRecords, (r) => r.id);
         putAll("agentRecords", agentRecordMap, copy.agentRecords, (r) => r.id);
+        putAll("talkRecords", talkRecordMap, copy.talkRecords, (r) => r.id);
         for (const snapshot of copy.snapshots) {
           snapshotRecords.set(snapshot.id, snapshot);
           nextSnapshotId = Math.max(nextSnapshotId, snapshot.id + 1);

@@ -174,6 +174,10 @@ function saveChecked(
       return checkStoredRecord(collection, value, path).map((record) =>
         storage.agentRecords.save(record),
       );
+    case "talkRecords":
+      return checkStoredRecord(collection, value, path).map((record) =>
+        storage.talkRecords.save(record),
+      );
   }
 }
 

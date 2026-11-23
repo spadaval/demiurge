@@ -11,6 +11,7 @@ import { createGeneration } from "./generation";
 import type { AppServices } from "./hooks";
 import type { LayerSource } from "./layers";
 import { createAppManuscript } from "./manuscript";
+import { createAppTalk } from "./talk";
 import { createAppWorldStore, createWorldIndex } from "./world";
 
 export interface AppServicesInput {
@@ -34,10 +35,20 @@ export async function createAppServices(
   const bible = createBible(
     createConnectedStorage(workspace.connection, workspace.readOnly),
   );
+  const profile = createProfileStore(keyValue, workspace.worldId);
+  // Talk turns write the bible through the bible service's storage, so what
+  // the model changes shows in open scenes and the World inspector at once.
+  const talk = createAppTalk({
+    storage: bible.storage,
+    profile,
+    readOnly: workspace.readOnly,
+    ...(input.fetch ? { fetch: input.fetch } : {}),
+  });
   await Promise.all([
     worldIndex.refresh(),
     manuscript.refresh(),
     bible.refresh(),
+    talk.refresh(),
   ]);
   return {
     workspace,
@@ -54,8 +65,9 @@ export async function createAppServices(
       storage: bible.storage,
       world,
       manuscript,
-      profile: createProfileStore(keyValue, workspace.worldId),
+      profile,
       ...(input.fetch ? { fetch: input.fetch } : {}),
     }),
+    talk,
   };
 }

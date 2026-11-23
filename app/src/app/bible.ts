@@ -139,6 +139,7 @@ export function watchStoryWrites(
       listTombstones: () => records.listTombstones(),
     },
     agentRecords: storage.agentRecords,
+    talkRecords: storage.talkRecords,
     batch: (writes) =>
       writes.some(writesStory)
         ? storage.batch(writes).map(after)
