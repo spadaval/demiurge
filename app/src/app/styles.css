@@ -2067,6 +2067,16 @@ a {
   color: var(--ink);
 }
 
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.record-list li + li {
+  margin-top: 4px;
+}
+
 .record-actions {
   margin: 14px 0 0;
   padding-top: 14px;

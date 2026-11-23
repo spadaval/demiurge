@@ -50,8 +50,11 @@ const keyValue = (): KeyValueStore => {
  * A world holding the fixture's bible and scene documents, and an entry
  * document for Mara, as an actor's entry.
  */
+/** The storage the last `setup` made, for tests that change it behind the app. */
+let storage: StorageAdapter = createMemoryStorage();
+
 async function setup(story: Story = lighthouse) {
-  const storage: StorageAdapter = createMemoryStorage();
+  storage = createMemoryStorage();
   for (const document of documents) {
     (await storage.documents.save(document))._unsafeUnwrap();
   }
@@ -119,7 +122,7 @@ async function render(workspace: Workspace, path: string) {
   });
   const view = container;
   await until(() => view.querySelector(".inspector-sheet, .prose") !== null);
-  return { view, router };
+  return { view, router, services };
 }
 
 async function until(done: () => boolean) {
@@ -425,6 +428,116 @@ describe("the World inspector", () => {
     await act(async () => close?.click());
     await until(() => router.state.location.pathname === "/");
     expect(view.querySelector(".tab")).toBeNull();
+  });
+});
+
+describe("the World inspector, in review", () => {
+  test("story time is said in the clock's own unit", async () => {
+    // The fixture's world clock counts days.
+    const { view } = await render(await setup(), "/world?at=event:storm");
+    const field = (label: string) =>
+      [...view.querySelectorAll(".record-field")]
+        .find((f) => f.querySelector("dt")?.textContent === label)
+        ?.querySelector("dd")?.textContent;
+    expect(field("Story time")).toBe('day 3 to 6, noted "day"');
+    act(() => root?.unmount());
+    container?.remove();
+
+    // A year clock is said in dates.
+    const inYears: Story = {
+      ...lighthouse,
+      timeline: {
+        ...lighthouse.timeline,
+        worldUnit: "year",
+        positions: lighthouse.timeline.positions.map((p) =>
+          p.event === "storm"
+            ? { ...p, start: 1203, end: 1204, precision: null }
+            : p,
+        ),
+      },
+    };
+    const years = await render(await setup(inYears), "/world?at=event:storm");
+    expect(
+      [...years.view.querySelectorAll(".record-field")]
+        .find((f) => f.querySelector("dt")?.textContent === "Story time")
+        ?.querySelector("dd")?.textContent,
+    ).toBe("year 1203");
+  });
+
+  test("memberships keep the events they hold from and to", async () => {
+    const story: Story = {
+      ...lighthouse,
+      memberships: [
+        ...lighthouse.memberships,
+        // Mara joins the guild for good, from the start.
+        { id: "mara-in-guild", member: "mara", group: "guild" },
+      ],
+    };
+    const { view } = await render(await setup(story), "/world?at=actor:ivo");
+    const field = (label: string) =>
+      [...view.querySelectorAll(".record-field")]
+        .find((f) => f.querySelector("dt")?.textContent === label)
+        ?.querySelectorAll("li");
+    expect(
+      [...(field("Belongs to") ?? [])].map((li) => li.textContent),
+    ).toEqual(["Kestrel Guild · from The storm · until The wreck"]);
+    await follow(view, "The storm", ".record-fields");
+    expect(title(view)).toBe("The storm");
+    act(() => root?.unmount());
+    container?.remove();
+
+    const guild = await render(await setup(story), "/world?at=actor:guild");
+    const members = [...guild.view.querySelectorAll(".record-field")]
+      .find((f) => f.querySelector("dt")?.textContent === "Members")
+      ?.querySelectorAll("li");
+    // In story order: from the start first.
+    expect([...(members ?? [])].map((li) => li.textContent)).toEqual([
+      "Mara · from the start · still",
+      "Ivo · from The storm · until The wreck",
+    ]);
+  });
+
+  test("choosing a view in the rail drawer closes the drawer", async () => {
+    const { view } = await render(await setup(), "/world?at=cast");
+    const workspace = () => view.querySelector(".workspace");
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>(".rail-toggle")?.click(),
+    );
+    expect(workspace()?.hasAttribute("data-rail-open")).toBe(true);
+    await follow(view, "Open Questions0", ".rail");
+    expect(title(view)).toBe("Open Questions");
+    expect(workspace()?.hasAttribute("data-rail-open")).toBe(false);
+  });
+
+  test("a failed read of the bible is a notice, until a read succeeds", async () => {
+    const { view, services } = await render(await setup(), "/world?at=cast");
+    const notice = () => view.querySelector(".notices .notice-error");
+    expect(notice()).toBeNull();
+    const good = (await storage.storyRecords.load("story"))._unsafeUnwrap();
+    // Something writes a bible this build can't read.
+    (
+      await storage.storyRecords.save({
+        ...good,
+        data: { version: 1, premise: 5 },
+      })
+    )._unsafeUnwrap();
+    await act(() => services.bible.refresh());
+    expect(notice()?.textContent).toContain(
+      "The story bible could not be read",
+    );
+    expect(notice()?.textContent).toContain(
+      "The World inspector shows the bible as last read.",
+    );
+    // The last good read stays on the sheet.
+    expect(title(view)).toBe("Cast & Drives");
+
+    (await storage.storyRecords.save(good))._unsafeUnwrap();
+    await act(async () =>
+      [...view.querySelectorAll<HTMLButtonElement>(".notices button")]
+        .find((b) => b.textContent === "Try again")
+        ?.click(),
+    );
+    await until(() => notice() === null);
   });
 });
 

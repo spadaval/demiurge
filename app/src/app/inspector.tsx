@@ -12,18 +12,20 @@ import {
   useEffect,
   useMemo,
 } from "react";
-import { describeWhen } from "~/story/calendar";
 import {
   type Contradiction,
   storyContradictions,
 } from "~/story/contradictions";
 import { countSeries, seriesTexts } from "~/story/counts";
 import { deliberateGaps } from "~/story/gaps";
+import { membershipsInStoryOrder } from "~/story/order";
 import { formatRef } from "~/story/refs";
+import { describePosition } from "~/story/render";
 import {
   type Actor,
   type Drive,
   isAnswered,
+  type Membership,
   type OpenQuestion,
   type Ref,
   refExists,
@@ -74,14 +76,9 @@ export function WorldPage() {
     const tab = worldTab.get();
     if (!tab.open || tab.at !== shown) worldTab.set({ open: true, at: shown });
   }, [worldTab, shown]);
-  if (state.kind === "loading") return null;
-  if (state.kind === "error") {
-    return (
-      <div className="page-empty" role="alert">
-        <p>{state.message}</p>
-      </div>
-    );
-  }
+  // A failed read is a Notice under the masthead (`BibleNotice`), not
+  // the sheet's to say.
+  if (state.kind !== "ready") return null;
   return <Inspector story={state.story} at={at} />;
 }
 
@@ -272,14 +269,8 @@ const drive = (id: string): Ref => ({ kind: "drive", id });
 
 /** A story-time value, in time blue. */
 function TimeValue({ position }: { position: Position }) {
-  return (
-    <span className="time num">
-      {describeWhen({ start: position.start, end: position.end })}
-      {position.precision && position.precision !== "year"
-        ? `, ${position.precision}`
-        : ""}
-    </span>
-  );
+  const { story } = useInspector();
+  return <span className="time num">{describePosition(story, position)}</span>;
 }
 
 // ── Ledger ───────────────────────────────────────────────────────────────
@@ -1200,14 +1191,53 @@ const text = (value: string): ReactNode =>
 const refList = (refs: readonly Ref[]): ReactNode =>
   refs.length === 0 ? <span className="gap">none</span> : <Refs refs={refs} />;
 
+/**
+ * Memberships, one per line: the other actor, then the events it holds
+ * from and to, or that it always has or still does.
+ */
+function MembershipList({
+  memberships,
+  other,
+}: {
+  memberships: readonly Membership[];
+  other: (m: Membership) => string;
+}) {
+  return (
+    <ul className="record-list">
+      {memberships.map((m) => (
+        <li key={m.id}>
+          <RecordRef subject={actor(other(m))} /> ·{" "}
+          {m.since === undefined ? (
+            "from the start"
+          ) : (
+            <>
+              from <RecordRef subject={event(m.since)} />
+            </>
+          )}{" "}
+          ·{" "}
+          {m.until === undefined ? (
+            "still"
+          ) : (
+            <>
+              until <RecordRef subject={event(m.until)} />
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A record's fields in groups, each group set off by a hairline. */
 function recordFields(story: Story, ref: Ref): Field[][] {
   switch (ref.kind) {
     case "actor": {
       const a = story.actors.find((x) => x.id === ref.id);
       if (!a) return [];
-      const memberOf = story.memberships.filter((m) => m.member === a.id);
-      const members = story.memberships.filter((m) => m.group === a.id);
+      // In story order, so leaving and rejoining reads as two spans.
+      const ordered = membershipsInStoryOrder(story);
+      const memberOf = ordered.filter((m) => m.member === a.id);
+      const members = ordered.filter((m) => m.group === a.id);
       return [
         [{ label: "Notes", value: text(a.notes), wide: true }],
         [
@@ -1223,7 +1253,12 @@ function recordFields(story: Story, ref: Ref): Field[][] {
             ? [
                 {
                   label: "Belongs to",
-                  value: refList(memberOf.map((m) => actor(m.group))),
+                  value: (
+                    <MembershipList
+                      memberships={memberOf}
+                      other={(m) => m.group}
+                    />
+                  ),
                 },
               ]
             : []),
@@ -1231,7 +1266,12 @@ function recordFields(story: Story, ref: Ref): Field[][] {
             ? [
                 {
                   label: "Members",
-                  value: refList(members.map((m) => actor(m.member))),
+                  value: (
+                    <MembershipList
+                      memberships={members}
+                      other={(m) => m.member}
+                    />
+                  ),
                 },
               ]
             : []),

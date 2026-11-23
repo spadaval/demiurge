@@ -47,8 +47,10 @@ export function Shell() {
   // Narrow screens only: the rail opens over the page.
   const [railOpen, setRailOpen] = useState(false);
   const active = useActiveDocumentId();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: opening a document closes the rail
-  useEffect(() => setRailOpen(false), [active]);
+  // Any navigation (a document, an inspector view or record) closes it.
+  const href = useRouterState({ select: (router) => router.location.href });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: following a link closes the rail
+  useEffect(() => setRailOpen(false), [href]);
   const onError = (error: CommandError) => setMessage({ kind: "error", error });
   const info = (text: string) => setMessage({ kind: "info", text });
   return (
@@ -85,6 +87,7 @@ export function Shell() {
       </header>
       <div className="notices" aria-live="polite">
         <Notices />
+        <BibleNotice />
         <GenerationNotice />
         {message && (
           <p
@@ -518,6 +521,31 @@ function GenerationShortcuts({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [generation, active]);
   return null;
+}
+
+/**
+ * Why the story bible could not be read, while it can't. After a good read
+ * the inspector keeps showing that, so this says it may be out of date.
+ */
+function BibleNotice() {
+  const { bible } = useServices();
+  const error = useStore(bible.error);
+  const state = useStore(bible.state);
+  if (error === null) return null;
+  return (
+    <p className="notice notice-error" role="alert">
+      {error}
+      {state.kind === "ready" &&
+        " The World inspector shows the bible as last read."}{" "}
+      <button
+        type="button"
+        className="notice-dismiss"
+        onClick={() => void bible.refresh()}
+      >
+        Try again
+      </button>
+    </p>
+  );
 }
 
 /** What the last generation command came to, when there is something to say. */

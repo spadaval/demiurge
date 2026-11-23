@@ -421,11 +421,6 @@ function InspectSection() {
       <div className="rail-label">
         <h2 id="rail-inspect">Inspect</h2>
       </div>
-      {state.kind === "error" && (
-        <p className="rail-empty" role="alert">
-          {state.message}
-        </p>
-      )}
       <ul className="inspect-list">
         {INSPECTOR_VIEWS.map(({ id, title }) => (
           <li key={id}>
