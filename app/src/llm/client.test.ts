@@ -1,6 +1,13 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import type { Result } from "neverthrow";
-import { buildRequest, checkRequest, send } from "./client";
+import {
+  addressedTo,
+  buildRequest,
+  checkRequest,
+  retarget,
+  send,
+  targetOf,
+} from "./client";
 import { SseParser } from "./sse";
 import type {
   BackendProfile,
@@ -529,6 +536,137 @@ describe("streaming", () => {
     );
     const error = expectErr(await send(profile, request), "server");
     expect(error.message).toContain("context full");
+  });
+});
+
+describe("retargeting a stored request", () => {
+  const made = () =>
+    buildRequest(
+      profile,
+      { kind: "chat", messages: [{ role: "user", content: "Go on." }] },
+      { stream: true, sampler: { top_k: 40 } },
+    );
+
+  test("a request for the profile as it is is left alone", () => {
+    const request = made();
+    expect(addressedTo(profile, request)).toBe(true);
+    expect(retarget(profile, request)).toEqual(request);
+  });
+
+  test("a new model at the same URL retargets; the rest is kept", () => {
+    const moved: BackendProfile = { ...profile, model: "mistral" };
+    const request = made();
+    expect(addressedTo(moved, request)).toBe(false);
+    const sent = retarget(moved, request);
+    expect(sent.url).toBe(request.url);
+    expect(sent.body).toEqual({ ...request.body, model: "mistral" });
+    expect(addressedTo(moved, sent)).toBe(true);
+  });
+
+  test("a profile without a model sends none", () => {
+    const { model: _model, ...unnamed } = profile;
+    const sent = retarget(unnamed, made());
+    expect(sent.body.model).toBeUndefined();
+    expect(addressedTo(unnamed, sent)).toBe(true);
+  });
+
+  test("moved to another kind of server, the old server's own parameters stay behind", () => {
+    const openrouter: BackendProfile = {
+      name: "local",
+      kind: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      model: "vendor/model",
+      sampler: { temperature: 0.7 },
+    };
+    const base = made();
+    const request: LlmRequest = {
+      ...base,
+      body: { ...base.body, mirostat: 2, dry_multiplier: 0.8 },
+    };
+    expect(addressedTo(openrouter, request)).toBe(false);
+    const sent = retarget(openrouter, request);
+    expect(sent.url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    // Kept as made, the writer's values included: the profile's new
+    // temperature doesn't override the request's.
+    expect(sent.body).toEqual({
+      temperature: 0.8,
+      min_p: 0.05,
+      top_k: 40,
+      messages: base.body.messages ?? null,
+      stream: true,
+      model: "vendor/model",
+    });
+    expect(addressedTo(openrouter, sent)).toBe(true);
+    // Back to llama.cpp, OpenRouter's routing stays behind too.
+    const routed = {
+      ...sent,
+      body: { ...sent.body, provider: { sort: "price" } },
+    };
+    expect(retarget(profile, routed).body.provider).toBeUndefined();
+  });
+
+  test("a parameter the new profile sets itself is the writer's choice, and kept", () => {
+    const openrouter: BackendProfile = {
+      ...profile,
+      kind: "openrouter",
+      sampler: { n_probs: 3 },
+    };
+    const request = made();
+    expect(addressedTo(openrouter, request)).toBe(true);
+    expect(retarget(openrouter, request).body.n_probs).toBe(3);
+  });
+
+  test("with what the profile was, only what the profile changed changes", () => {
+    const madeFor = targetOf(profile);
+    const base = made();
+    const edited: LlmRequest = {
+      ...base,
+      body: { ...base.body, model: "mine", provider: { sort: "price" } },
+    };
+    // Unchanged profile: the writer's model and parameters are left alone.
+    expect(addressedTo(profile, edited, madeFor)).toBe(true);
+    // A new profile model: the writer's own model stays.
+    const remodelled: BackendProfile = { ...profile, model: "mistral" };
+    expect(addressedTo(remodelled, edited, madeFor)).toBe(false);
+    expect(retarget(remodelled, edited, madeFor).body).toEqual(edited.body);
+    // Not edited, the request takes the profile's new model.
+    expect(retarget(remodelled, base, madeFor).body.model).toBe("mistral");
+    // A new server: its URL and the profile's model.
+    const moved: BackendProfile = {
+      ...profile,
+      baseUrl: "http://127.0.0.1:9/v1",
+    };
+    const sent = retarget(moved, edited, madeFor);
+    expect(sent.url).toBe("http://127.0.0.1:9/v1/chat/completions");
+    expect(sent.body.model).toBe("qwen");
+    // Same kind: no parameter is dropped, even one for another kind.
+    expect(sent.body.provider).toEqual({ sort: "price" });
+    // A new kind: the old kind's own parameters go.
+    const generic: BackendProfile = {
+      ...profile,
+      kind: "generic",
+      sampler: {},
+    };
+    const regeneric = retarget(generic, edited, madeFor).body;
+    expect(regeneric.n_probs).toBeUndefined();
+    expect(regeneric.provider).toBeUndefined();
+    expect(regeneric.model).toBe("mine");
+  });
+
+  test("a generic server takes neither llama.cpp's nor OpenRouter's own parameters", () => {
+    const generic: BackendProfile = {
+      ...profile,
+      kind: "generic",
+      sampler: {},
+    };
+    const request = {
+      ...made(),
+      body: { ...made().body, transforms: ["middle-out"] },
+    };
+    const sent = retarget(generic, request);
+    expect(sent.body.n_probs).toBeUndefined();
+    expect(sent.body.transforms).toBeUndefined();
+    expect(sent.body).toMatchObject({ temperature: 0.8, min_p: 0.05 });
   });
 });
 

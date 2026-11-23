@@ -62,6 +62,18 @@ export type BackendProfile = {
   sampler: Sampler;
 };
 
+/**
+ * Where a profile's requests go and what reads them, as stored with each
+ * request: so a later change to the profile can be told from the writer's
+ * edits to the request.
+ */
+export type ProfileTarget = {
+  /** Without a trailing slash. */
+  baseUrl: string;
+  kind: BackendKind;
+  model: string | null;
+};
+
 /** A tool the model may call, in the OpenAI `tools` shape every backend reads. */
 export type ToolDefinition = {
   type: "function";

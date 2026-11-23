@@ -12,13 +12,14 @@ import { errAsync } from "neverthrow";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { canonicalize } from "~/content/canonicalize";
+import { RETARGETED } from "~/generate/describe";
 import type { BackendProfile } from "~/llm/types";
 import { createMemoryStorage } from "~/storage/memory";
 import type { JsonValue, StorageAdapter } from "~/storage/types";
 import { createStorageConnection } from "~/workspace/connection";
 import type { KeyValueStore } from "~/workspace/tabs";
 import { createWorkspace, type Workspace } from "~/workspace/workspace";
-import { AppProviders } from "./hooks";
+import { AppProviders, type AppServices } from "./hooks";
 import { createAppRouter } from "./router";
 import { createAppServices } from "./services";
 
@@ -124,6 +125,7 @@ let root: Root | undefined;
 let container: HTMLElement | undefined;
 let storage: StorageAdapter;
 let workspace: Workspace;
+let services: AppServices;
 
 beforeEach(async () => {
   scripts.length = 0;
@@ -160,7 +162,7 @@ async function render(keyValue: KeyValueStore, path = "/doc/doc1") {
     saveDelayMs: 60_000,
   });
   (await workspace.refreshDocuments())._unsafeUnwrap();
-  const services = await createAppServices({
+  services = await createAppServices({
     workspace,
     keyValue,
     layerSource: (await import("./layers")).createLayerSource(),
@@ -395,6 +397,134 @@ test("regenerate replaces the segment; its request can be seen again", async () 
   expect(plates()).toHaveLength(1);
 });
 
+test("when the text a request continues from is gone, the slip offers to put it together at the caret", async () => {
+  await render(withProfile());
+  await generateNext();
+  expect(query(".request-slip")?.textContent).toContain(
+    "continues the text after “Night fell.”",
+  );
+  const editor = workspace.session("doc1")?.editor;
+  if (!editor) throw new Error("expected the session");
+  // The writer deletes that paragraph and puts the caret in the one before.
+  await act(async () => {
+    editor.tf.removeNodes({ at: [2] });
+    editor.tf.select({ path: [1, 0], offset: 4 });
+  });
+  await until(
+    () =>
+      query(".request-slip")?.textContent?.includes(
+        "The text this request continues from is no longer in the document.",
+      ) ?? false,
+    "the note that the place is gone",
+  );
+  // Not "at the end", and it can't be sent to nowhere.
+  expect(query(".request-slip")?.textContent).not.toContain("at the end");
+  expect(button("Send", ".request-slip")?.disabled).toBe(true);
+  expect(button("Put it together again", ".request-slip")).toBeNull();
+
+  await click(button("Put it together at the caret", ".request-slip"));
+  await until(
+    () =>
+      query(".request-slip")?.textContent?.includes(
+        "continues the text after “Mara crossed the flats.”",
+      ) ?? false,
+    "the request put together at the caret",
+  );
+  expect(button("Send", ".request-slip")?.disabled).toBe(false);
+  scripts.push(stream("Here."));
+  await click(button("Send", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  const prose = [...(query(".prose")?.children ?? [])];
+  expect(prose.indexOf(plates()[0] as HTMLElement)).toBe(2);
+});
+
+/** Presses a key in the document text, as the writer would. */
+const pressKey = async (
+  key: string,
+  mods: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {},
+  target: Element | null = query(".prose"),
+) => {
+  if (!target) throw new Error("nothing to press keys in");
+  await act(async () => {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+        ...mods,
+      }),
+    );
+  });
+};
+
+test("shortcuts: Mod+Enter twice generates, Escape stops, Mod+Shift+Enter accepts at the caret", async () => {
+  await render(withProfile());
+  const editor = workspace.session("doc1")?.editor;
+  if (!editor) throw new Error("expected the session");
+  await act(async () =>
+    editor.tf.select({ path: [2, 0], offset: "Night fell.".length }),
+  );
+  expect(
+    button("Generate next", ".masthead")?.getAttribute("aria-keyshortcuts"),
+  ).toBe("Control+Enter Meta+Enter");
+
+  // Mod+Enter in the text opens the request; again (focus in the slip
+  // now) sends it.
+  await pressKey("Enter", { ctrlKey: true });
+  await until(() => query(".request-slip") !== null, "the request slip");
+  expect(received).toHaveLength(0);
+  scripts.push(stream("Half of a sentence that never ends", { hold: true }));
+  await pressKey("Enter", { metaKey: true }, query(".request-slip"));
+  await until(
+    () => plateText(plates()[0]) === "Half of a sentence that never ends",
+    "the streamed text",
+  );
+  expect(received).toHaveLength(1);
+
+  // Escape stops it, keeping the text.
+  await pressKey("Escape");
+  await until(() => plates()[0]?.dataset.status === "ready", "the stop");
+  expect(plateText(plates()[0])).toBe("Half of a sentence that never ends");
+
+  // Accept wants the caret in the AI text.
+  await pressKey("Enter", { ctrlKey: true, shiftKey: true });
+  expect(query(".notices")?.textContent).toContain(
+    "Put the caret in the AI text to accept it.",
+  );
+  expect(plates()).toHaveLength(1);
+  await act(async () => editor.tf.select({ path: [3, 0, 0], offset: 2 }));
+  await pressKey("Enter", { ctrlKey: true, shiftKey: true });
+  await until(() => plates().length === 0, "the plate to go");
+  const paragraphs = [...(query(".prose")?.querySelectorAll("p") ?? [])].map(
+    (p) => p.textContent,
+  );
+  expect(paragraphs.at(-1)).toBe("Half of a sentence that never ends");
+});
+
+test("with a slip open, Mod+Enter from the text sends it, edits included", async () => {
+  await render(withProfile());
+  await generateNext();
+  const user = query<HTMLTextAreaElement>(
+    ".request-slip [data-role=user] textarea",
+  ) as HTMLTextAreaElement;
+  await type(user, `${user.value}\n\nKeep it short.`);
+  scripts.push(stream("Short."));
+  await pressKey("Enter", { ctrlKey: true });
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  expect(
+    (received[0]?.body as { messages: { content: string }[] }).messages[1]
+      ?.content,
+  ).toEndWith("Keep it short.");
+});
+
+test("Escape in the slip closes it and stops nothing", async () => {
+  await render(withProfile());
+  await generateNext();
+  await pressKey("Escape", {}, query(".request-slip"));
+  await until(() => query(".request-slip") === null, "the slip to close");
+  expect(query(".notices")?.textContent ?? "").not.toContain("Stopped");
+});
+
 test("stop keeps the partial text", async () => {
   await render(withProfile());
   await generateNext();
@@ -541,12 +671,17 @@ test("after the model is renamed and moved, earlier AI text still regenerates th
   await click(query(".tab a"));
   await until(() => plates().length === 1, "the document again");
 
+  const storedRequests = async () =>
+    (await storage.requests.list())._unsafeUnwrap().length;
+  const before = await storedRequests();
   await click(button("Request", "section[data-ai-segment]"));
   await until(() => query(".request-slip") !== null, "the segment's request");
   const slip = query(".request-slip")?.textContent ?? "";
   expect(slip).toContain("The model settings have changed");
   expect(slip).toContain(`Moved · chat · ${moved}/chat/completions`);
   await click(button("Close", ".request-slip"));
+  // Looking at it stores nothing.
+  expect(await storedRequests()).toBe(before);
 
   scripts.push(stream("Second."));
   await click(button("Regenerate", "section[data-ai-segment]"));
@@ -558,9 +693,160 @@ test("after the model is renamed and moved, earlier AI text still regenerates th
   );
   expect(received).toHaveLength(2);
   expect(received[1]?.auth).toBe(`Bearer ${KEY}`);
+  // Regenerate from the caption says where it went.
+  expect(query(".notices")?.textContent).toContain(RETARGETED);
+  expect(await storedRequests()).toBe(before + 1);
   // The stored request that was sent goes to the profile's own URL.
   const urls = (await storage.requests.list())
     ._unsafeUnwrap()
     .map((r) => (r.request as { request: { url: string } }).request.url);
   expect(urls).toContain(`${moved}/chat/completions`);
+});
+
+test("a model the writer chose in the slip stays through Request and Regenerate", async () => {
+  await render(withProfile());
+  await generateNext();
+  const parameters = query<HTMLTextAreaElement>(
+    ".request-slip [data-role=parameters] textarea",
+  ) as HTMLTextAreaElement;
+  await type(
+    parameters,
+    parameters.value.replace('"stub-model"', '"writer-chosen-model"'),
+  );
+  scripts.push(stream("First."));
+  await click(button("Send edited request", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  expect((received[0]?.body as { model: string }).model).toBe(
+    "writer-chosen-model",
+  );
+
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).not.toContain(
+    "The model settings have changed",
+  );
+  expect(
+    query<HTMLTextAreaElement>(".request-slip [data-role=parameters] textarea")
+      ?.value,
+  ).toContain('"writer-chosen-model"');
+  await click(button("Close", ".request-slip"));
+
+  scripts.push(stream("Second."));
+  await click(button("Regenerate", "section[data-ai-segment]"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the regenerated output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe(
+    "writer-chosen-model",
+  );
+});
+
+test("a request shown retargeted in the slip is stored once, when sent", async () => {
+  await render(withProfile());
+  await generateNext();
+  scripts.push(stream("First."));
+  await click(button("Send", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+
+  // Another model at the same server.
+  services.generation.profile.save({ ...PROFILE, model: "other-model" });
+  const storedRequests = async () =>
+    (await storage.requests.list())._unsafeUnwrap().length;
+  const before = await storedRequests();
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).toContain(
+    "The model settings have changed",
+  );
+  expect(
+    query<HTMLTextAreaElement>(".request-slip [data-role=parameters] textarea")
+      ?.value,
+  ).toContain('"other-model"');
+  expect(await storedRequests()).toBe(before);
+
+  scripts.push(stream("Second."));
+  await click(button("Send", ".request-slip"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the regenerated output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe("other-model");
+  expect(await storedRequests()).toBe(before + 1);
+});
+
+/** Generates once, then changes the profile to `next`. */
+async function generateThenChange(next: BackendProfile) {
+  await render(withProfile());
+  await generateNext();
+  scripts.push(stream("First."));
+  await click(button("Send", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  services.generation.profile.save(next);
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).toContain(
+    "The model settings have changed",
+  );
+}
+
+/** Regenerates from the caption and returns the model it sent. */
+async function regenerateModel(text: string) {
+  scripts.push(stream(text));
+  await click(button("Regenerate", "section[data-ai-segment]"));
+  await until(
+    () =>
+      plateText(plates()[0]) === text &&
+      plates()[0]?.dataset.status === "ready",
+    `the output ${text}`,
+  );
+  return (received.at(-1)?.body as { model: string }).model;
+}
+
+test("a model edited in a retargeted slip stays, as the profile hasn't changed again", async () => {
+  await generateThenChange({
+    ...PROFILE,
+    baseUrl: `http://127.0.0.1:${server.port}/v1`,
+    model: "model-b",
+  });
+  const parameters = query<HTMLTextAreaElement>(
+    ".request-slip [data-role=parameters] textarea",
+  ) as HTMLTextAreaElement;
+  await type(parameters, parameters.value.replace('"model-b"', '"mine"'));
+  scripts.push(stream("Second."));
+  await click(button("Send edited request", ".request-slip"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the second output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe("mine");
+
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).not.toContain(
+    "The model settings have changed",
+  );
+  await click(button("Close", ".request-slip"));
+  expect(await regenerateModel("Third.")).toBe("mine");
+});
+
+test("after sending a retargeted slip, a later model change still applies", async () => {
+  await generateThenChange({ ...PROFILE, model: "model-b" });
+  scripts.push(stream("Second."));
+  await click(button("Send", ".request-slip"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the second output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe("model-b");
+  services.generation.profile.save({ ...PROFILE, model: "model-c" });
+  expect(await regenerateModel("Third.")).toBe("model-c");
 });

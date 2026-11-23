@@ -1,7 +1,7 @@
 ---
 version: 1
 slug: "writing-workspace"
-primary_target: "writing-workspace"
+primary_target: "app/src/app"
 related_targets: []
 ---
 

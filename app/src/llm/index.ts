@@ -6,6 +6,7 @@ export {
   retarget,
   type SendOptions,
   send,
+  targetOf,
   toolCallMessage,
   toolResult,
 } from "./client";

@@ -56,8 +56,9 @@ export interface Slip {
    */
   readonly assembledOver: unknown;
   /**
-   * The request was made for a server the profile has since left, and is
-   * shown (and sent) addressed to the profile as it is now.
+   * The request was made for a profile that has since changed server, model
+   * or kind, and `record.request` is shown addressed to the profile as it is
+   * now. Only that request is in memory; sending stores it as a revision.
    */
   readonly retargeted: boolean;
 }
@@ -86,6 +87,8 @@ export interface Generation {
   /** Sends the slip's request: as shown when `edited` is null, else the edit, stored as a revision first. */
   sendSlip(edited: LlmRequest | null): Promise<void>;
   accept(documentId: string, segmentId: string): Promise<void>;
+  /** Accepts the ready AI segment holding the caret; says so if there is none. */
+  acceptAtCaret(documentId: string): Promise<void>;
   regenerate(documentId: string, segmentId: string): Promise<void>;
   /** Stops a document's generation, keeping what arrived, and waits for it to end. */
   stop(documentId: string): Promise<void>;
@@ -113,6 +116,20 @@ function caretBlock(session: DocumentSession): string | null {
   const index = editor.selection?.focus.path[0];
   const node = index === undefined ? undefined : editor.children[index];
   return node && ElementApi.isElement(node) && typeof node.id === "string"
+    ? node.id
+    : null;
+}
+
+/** The ready AI segment holding the caret, if there is one. */
+function caretSegment(session: DocumentSession): string | null {
+  const { editor } = session;
+  const index = editor.selection?.focus.path[0];
+  const node = index === undefined ? undefined : editor.children[index];
+  return node &&
+    ElementApi.isElement(node) &&
+    node.type === "ai_segment" &&
+    node.status !== "generating" &&
+    typeof node.id === "string"
     ? node.id
     : null;
 }
@@ -199,7 +216,9 @@ export function createGeneration(options: GenerationOptions): Generation {
       if (revision.isOk()) record = revision.value;
     }
     if (slip.get() !== (open ? shown : null)) return;
-    slip.set({ ...shown, record, sending: false });
+    // A stored revision is addressed as it is.
+    const retargeted = shown.retargeted && record === shown.record;
+    slip.set({ ...shown, record, sending: false, retargeted });
   };
 
   /** Runs a send or regenerate, closing `shown` once its segment is placed. */
@@ -226,6 +245,15 @@ export function createGeneration(options: GenerationOptions): Generation {
     return finished.finally(() => {
       if (running.get(documentId) === finished) running.delete(documentId);
     });
+  };
+
+  const accept = async (documentId: string, segmentId: string) => {
+    const generator = generatorOf(documentId);
+    if (!generator) return;
+    // A slip showing this segment's request would now be stale.
+    if (slip.get()?.replaces === segmentId) slip.set(null);
+    const accepted = await generator.accept(segmentId);
+    if (accepted.isErr()) fail(accepted.error);
   };
 
   return {
@@ -299,6 +327,11 @@ export function createGeneration(options: GenerationOptions): Generation {
       slip.set(sending);
       const { replaces } = shown;
       const id = shown.record.id;
+      // A retargeted request isn't stored yet: send it as a revision, made
+      // for the profile as it is now, edited or not.
+      const request =
+        edited ?? (shown.retargeted ? shown.record.request : null);
+      const madeFor = shown.retargeted ? shown.record.madeFor : undefined;
       const target = replaces
         ? { kind: "replace" as const, segmentId: replaces }
         : undefined;
@@ -308,8 +341,8 @@ export function createGeneration(options: GenerationOptions): Generation {
         shown.documentId,
         generator,
         () =>
-          edited
-            ? generator.sendEdited(id, edited, target)
+          request
+            ? generator.sendEdited(id, request, target, madeFor)
             : replaces
               ? generator.regenerate(replaces, id)
               : generator.send(id),
@@ -317,13 +350,20 @@ export function createGeneration(options: GenerationOptions): Generation {
       );
     },
 
-    async accept(documentId, segmentId) {
-      const generator = generatorOf(documentId);
-      if (!generator) return;
-      // A slip showing this segment's request would now be stale.
-      if (slip.get()?.replaces === segmentId) slip.set(null);
-      const accepted = await generator.accept(segmentId);
-      if (accepted.isErr()) fail(accepted.error);
+    accept,
+
+    async acceptAtCaret(documentId) {
+      const session = workspace.session(documentId);
+      if (!session) return;
+      const segmentId = caretSegment(session);
+      if (segmentId === null) {
+        notice.set({
+          kind: "info",
+          text: "Put the caret in the AI text to accept it.",
+        });
+        return;
+      }
+      await accept(documentId, segmentId);
     },
 
     async regenerate(documentId, segmentId) {

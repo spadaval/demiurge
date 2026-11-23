@@ -8,6 +8,11 @@ import {
   useState,
 } from "react";
 import { textBlocks } from "~/editor/layer-plugin";
+import {
+  ARIA_SHORTCUTS,
+  shortcutLabel,
+  shortcutOf,
+} from "~/generate/shortcuts";
 import { LAYER_LABELS, LAYERS, layersForScene, mentions } from "~/layers/model";
 import { createStore } from "~/workspace/store";
 import type { CommandError } from "~/workspace/workspace";
@@ -65,6 +70,7 @@ export function Shell() {
             <>
               <ContextButton active={active} onInfo={info} />
               <GenerateNext active={active} onInfo={info} />
+              <GenerationShortcuts active={active} onInfo={info} />
             </>
           )}
         </div>
@@ -371,7 +377,8 @@ function GenerateNext({
       type="button"
       className="button button-primary"
       aria-disabled={unavailable ? "true" : undefined}
-      title={unavailable ?? undefined}
+      aria-keyshortcuts={ARIA_SHORTCUTS.generate}
+      title={unavailable ?? shortcutLabel("generate")}
       onClick={() => {
         if (unavailable) return onInfo(unavailable);
         if (slip?.documentId === active) {
@@ -389,6 +396,74 @@ function GenerateNext({
       Generate next
     </button>
   );
+}
+
+/**
+ * Generation's shortcuts (`generate/shortcuts.ts`) in the open document:
+ * keys pressed in its prose or its request slip. Renders nothing.
+ */
+function GenerationShortcuts({
+  active,
+  onInfo,
+}: {
+  active: string;
+  onInfo: (text: string) => void;
+}) {
+  const { generation } = useServices();
+  const { open, unavailable } = useOpenRequest(active);
+  // The listener stays; what it acts on is read when a key is pressed.
+  const latest = useRef({ open, unavailable, onInfo });
+  latest.current = { open, unavailable, onInfo };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const shortcut = shortcutOf(event);
+      const sheet =
+        event.target instanceof Element ? event.target.closest(".sheet") : null;
+      if (!shortcut || !sheet) return;
+      const { open, unavailable, onInfo } = latest.current;
+      const slip = generation.slip.get();
+      const slipShown = slip?.documentId === active;
+      switch (shortcut) {
+        case "generate": {
+          event.preventDefault();
+          if (slipShown) {
+            // Send it as shown, edits included, as Send would.
+            if (!slip.sending) {
+              sheet
+                .querySelector<HTMLFormElement>(
+                  ".request-slip form.context-viewer-form",
+                )
+                ?.requestSubmit();
+            }
+            return;
+          }
+          if (unavailable) return onInfo(unavailable);
+          void open();
+          return;
+        }
+        case "stop": {
+          if (generation.active(active).get() === null) return;
+          event.preventDefault();
+          void generation.stop(active);
+          return;
+        }
+        case "accept": {
+          event.preventDefault();
+          if (generation.active(active).get() !== null) {
+            return onInfo(
+              "A generation is running. Stop it or let it finish first.",
+            );
+          }
+          void generation.acceptAtCaret(active);
+          return;
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [generation, active]);
+  return null;
 }
 
 /** What the last generation command came to, when there is something to say. */

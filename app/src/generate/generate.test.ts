@@ -843,23 +843,34 @@ for (const [name, open] of [
         baseUrl: `http://127.0.0.1:${server.port}/v1`,
         model: "other-model",
       };
+      const storedCount = async () =>
+        (await storage.requests.list())._unsafeUnwrap().length;
+      const before = await storedCount();
       const shown = (
         await generator.segmentRequest(first.segmentId as string)
       )._unsafeUnwrap();
       expect(shown.retargeted).toBe(true);
+      // Shown retargeted, but nothing is stored just for looking.
       expect(shown.record).toMatchObject({
-        origin: "revision",
-        parentId: assembled.id,
+        id: assembled.id,
+        origin: "assembled",
         request: {
           url: `${current.baseUrl}/chat/completions`,
           body: { model: "other-model" },
         },
       });
+      (
+        await generator.segmentRequest(first.segmentId as string)
+      )._unsafeUnwrap();
+      expect(await storedCount()).toBe(before);
       scripts.push(streamText("Second."));
       const second = (
         await generator.regenerate(first.segmentId as string)
       )._unsafeUnwrap();
       expect(second.outcome).toBe("complete");
+      expect(second.retargeted).toBe(true);
+      // Sending stores the retargeted revision, once.
+      expect(await storedCount()).toBe(before + 1);
       expect(received).toHaveLength(2);
       const { model: _a, ...firstBody } = received[0]?.body as Record<
         string,
@@ -881,6 +892,110 @@ for (const [name, open] of [
         await generator.segmentRequest(second.segmentId as string)
       )._unsafeUnwrap();
       expect(again.retargeted).toBe(false);
+    });
+
+    test("a model-only change at the same URL retargets, and a provider switch drops the old server's parameters", async () => {
+      const assembled = await prepare();
+      scripts.push(streamText("First."));
+      const first = (await generator.send(assembled.id))._unsafeUnwrap();
+      expect(first.retargeted).toBe(false);
+      expect(received[0]?.body).toMatchObject({ n_probs: 1 });
+
+      // Same URL, another model.
+      current = { ...profile, model: "other-model" };
+      const shown = (
+        await generator.segmentRequest(first.segmentId as string)
+      )._unsafeUnwrap();
+      expect(shown.retargeted).toBe(true);
+      expect(shown.record.request.body).toMatchObject({
+        model: "other-model",
+        n_probs: 1,
+      });
+
+      // The same URL now an OpenRouter-style server: llama.cpp's n_probs
+      // stays behind; what every server takes is kept.
+      current = {
+        ...profile,
+        kind: "openrouter",
+        model: "vendor/model",
+        sampler: { temperature: 0.8 },
+      };
+      scripts.push(streamText("Second."));
+      const second = (
+        await generator.regenerate(first.segmentId as string)
+      )._unsafeUnwrap();
+      expect(second.retargeted).toBe(true);
+      const body = received[1]?.body as Record<string, unknown>;
+      expect(body.n_probs).toBeUndefined();
+      expect(body).toMatchObject({ model: "vendor/model", temperature: 0.8 });
+    });
+
+    test("the writer's edits to the model and parameters survive Request and Regenerate", async () => {
+      const assembled = await prepare();
+      const edited = {
+        ...assembled.request,
+        body: {
+          ...assembled.request.body,
+          model: "writer-model",
+          provider: { sort: "price" },
+        },
+      };
+      scripts.push(streamText("First."));
+      const first = (
+        await generator.sendEdited(assembled.id, edited)
+      )._unsafeUnwrap();
+      expect(received[0]?.body).toMatchObject({ model: "writer-model" });
+
+      // The profile hasn't changed: nothing is retargeted.
+      const shown = (
+        await generator.segmentRequest(first.segmentId as string)
+      )._unsafeUnwrap();
+      expect(shown.retargeted).toBe(false);
+      expect(shown.record.request.body).toMatchObject({
+        model: "writer-model",
+        provider: { sort: "price" },
+      });
+      scripts.push(streamText("Second."));
+      const second = (
+        await generator.regenerate(first.segmentId as string)
+      )._unsafeUnwrap();
+      expect(second.retargeted).toBe(false);
+      expect(received[1]?.body).toMatchObject({
+        model: "writer-model",
+        provider: { sort: "price" },
+      });
+
+      // A new profile model at the same server: the writer's choice stays.
+      current = { ...profile, model: "other-model" };
+      scripts.push(streamText("Third."));
+      const third = (
+        await generator.regenerate(second.segmentId as string)
+      )._unsafeUnwrap();
+      expect(third.retargeted).toBe(true);
+      expect(received[2]?.body).toMatchObject({ model: "writer-model" });
+
+      // Another server: its model, since the writer's may not exist there.
+      current = {
+        ...current,
+        baseUrl: `http://127.0.0.1:${server.port}/v1`,
+      };
+      scripts.push(streamText("Fourth."));
+      (await generator.regenerate(third.segmentId as string))._unsafeUnwrap();
+      expect(received[3]?.body).toMatchObject({ model: "other-model" });
+    });
+
+    test("sending a stored request by ID sends it as stored, even after the profile changed", async () => {
+      const assembled = await prepare();
+      current = { ...profile, model: "other-model" };
+      scripts.push(streamText("Sent."));
+      const sent = (
+        await generator.send(assembled.id, { kind: "after", blockId: "p2" })
+      )._unsafeUnwrap();
+      expect(sent).toMatchObject({
+        requestId: assembled.id,
+        retargeted: false,
+      });
+      expect(received[0]?.body).toMatchObject({ model: "stub-model" });
     });
 
     test("Stop while regenerate or an edited send is still finding its request sends nothing", async () => {

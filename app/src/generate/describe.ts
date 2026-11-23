@@ -49,10 +49,20 @@ export function describeGenerateError(error: GenerateError): string {
   }
 }
 
-/** A sentence for the writer about how a generation ended, or null if it simply finished. */
+/** Said when a request went out retargeted (`GenerationResult.retargeted`). */
+export const RETARGETED =
+  "The model settings had changed since this request was made, so it went to the server and model set there now.";
+
+/** Sentences for the writer about how a generation ended, or null if it simply finished. */
 export function describeGenerationResult(
   result: GenerationResult,
 ): string | null {
+  const outcome = describeOutcome(result);
+  if (!result.retargeted) return outcome;
+  return outcome ? `${outcome} ${RETARGETED}` : RETARGETED;
+}
+
+function describeOutcome(result: GenerationResult): string | null {
   const nothing = result.segmentId === null;
   switch (result.outcome) {
     case "complete":

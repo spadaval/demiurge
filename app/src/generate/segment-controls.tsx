@@ -1,4 +1,5 @@
 import type { AiSegmentStatus } from "~/content/schema";
+import { ARIA_SHORTCUTS, shortcutLabel } from "./shortcuts";
 
 export interface SegmentControlsProps {
   /** The segment's status: Stop while generating, Accept and Regenerate once ready. */
@@ -31,7 +32,12 @@ export function SegmentControls({
   return (
     <span className="ai-segment-controls" role="toolbar" aria-label="AI text">
       {status === "generating" ? (
-        <button type="button" onClick={onStop}>
+        <button
+          type="button"
+          onClick={onStop}
+          aria-keyshortcuts={ARIA_SHORTCUTS.stop}
+          title={shortcutLabel("stop")}
+        >
           Stop
         </button>
       ) : (
@@ -58,7 +64,8 @@ export function SegmentControls({
             type="button"
             onClick={onAccept}
             disabled={disabled}
-            title={why}
+            aria-keyshortcuts={ARIA_SHORTCUTS.accept}
+            title={why ?? shortcutLabel("accept")}
           >
             Accept
           </button>

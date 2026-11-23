@@ -57,16 +57,21 @@ export function RequestSlip({
   const { generation } = useServices();
   const active = useStore(generation.active(slip.documentId));
   const profile = useStore(generation.profile);
+  // The text of the block the request continues from: null for the end,
+  // undefined once the block is gone (deleted, or a segment accepted).
   const after = useEditorSelector(
     (editor) => {
       const id = slip.record.after;
+      if (id === null) return null;
       const block = editor.children.find(
         (node) => ElementApi.isElement(node) && node.id === id,
       );
-      return block ? NodeApi.string(block) : null;
+      return block ? NodeApi.string(block) : undefined;
     },
     [slip.record.after],
   );
+  // Sending in place of a segment doesn't need the block.
+  const placeGone = after === undefined && slip.replaces === null;
   // The editor's tree is immutable: a new one means the text changed.
   const stale = useEditorSelector(
     (editor) =>
@@ -85,7 +90,11 @@ export function RequestSlip({
         const inField =
           event.target instanceof HTMLTextAreaElement ||
           event.target instanceof HTMLInputElement;
-        if (event.key === "Escape" && !slip.sending && !inField) onClose();
+        if (event.key === "Escape" && !slip.sending && !inField) {
+          // Closing is what Escape did here; it stops nothing else.
+          event.preventDefault();
+          onClose();
+        }
       }}
     >
       <header className="request-slip-head">
@@ -105,17 +114,32 @@ export function RequestSlip({
       <p className="request-slip-where">
         {slip.replaces
           ? "This made the AI text beside it. Sending it again replaces that text."
-          : after
-            ? `Sending it continues the text after “${excerpt(after)}”.`
-            : "Sending it continues the text at the end."}
+          : placeGone
+            ? "The text this request continues from is no longer in the document."
+            : after === null
+              ? "Sending it continues the text at the end."
+              : after?.trim()
+                ? `Sending it continues the text after “${excerpt(after)}”.`
+                : "Sending it continues the text after an empty paragraph."}
       </p>
+      {placeGone && !slip.sending && (
+        <p className="request-slip-stale">
+          <button
+            type="button"
+            onClick={() => void generation.openRequest(slip.documentId)}
+          >
+            Put it together at the caret
+          </button>
+        </p>
+      )}
       {slip.retargeted && (
         <p className="request-slip-stale">
           The model settings have changed since this request was made, so it now
-          goes to the server set there.
+          goes to the server and model set there, without parameters only
+          another kind of server reads.
         </p>
       )}
-      {stale && !slip.sending && (
+      {stale && !slip.sending && !placeGone && (
         <p className="request-slip-stale">
           The text has changed since this request was put together; it is sent
           as shown.{" "}
@@ -133,7 +157,7 @@ export function RequestSlip({
         record={slip.record}
         breakdown={slip.breakdown}
         onSend={(edited) => void generation.sendSlip(edited)}
-        disabled={active !== null && !slip.sending}
+        disabled={(active !== null && !slip.sending) || placeGone}
         sending={slip.sending}
         onStop={() => void generation.stop(slip.documentId)}
         {...(profile?.name === slip.record.request.profile

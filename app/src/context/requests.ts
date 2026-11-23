@@ -15,7 +15,12 @@
  */
 
 import { err, ok, type Result, type ResultAsync } from "neverthrow";
-import type { JsonObject, LlmRequest } from "../llm/types";
+import type {
+  BackendKind,
+  JsonObject,
+  LlmRequest,
+  ProfileTarget,
+} from "../llm/types";
 import type { JsonValue, StorageAdapter, StorageError } from "../storage/types";
 import type {
   AssembledRequest,
@@ -38,6 +43,12 @@ type RequestCommon = {
    * there unless told otherwise. A revision keeps its parent's.
    */
   after: string | null;
+  /**
+   * The profile's server, kind and model when the request was assembled or
+   * last retargeted; a writer's revision keeps its parent's. Absent on
+   * requests stored before it was recorded.
+   */
+  madeFor?: ProfileTarget;
 };
 
 /** A request as the builder assembled it. */
@@ -63,19 +74,25 @@ export type RequestStoreError =
   | { kind: "invalid_request_record"; id: string; reason: string };
 
 export interface RequestStore {
-  /** Stores an assembled request, continuing after block `after`, under a new ID. */
+  /**
+   * Stores an assembled request, continuing after block `after`, under a
+   * new ID; `madeFor` is its profile's target as it was assembled.
+   */
   save(
     assembled: AssembledRequest,
     after: string | null,
+    madeFor?: ProfileTarget,
   ): ResultAsync<AssembledRecord, RequestStoreError>;
   load(id: string): ResultAsync<ContextRequest, RequestStoreError>;
   /**
    * Stores `request` as a new revision of `parentId`, which is kept as it
-   * was. The revision belongs to the parent's document.
+   * was. The revision belongs to the parent's document. It keeps the
+   * parent's `madeFor` unless given another (a retargeted revision).
    */
   revise(
     parentId: string,
     request: LlmRequest,
+    madeFor?: ProfileTarget,
   ): ResultAsync<RevisionRecord, RequestStoreError>;
 }
 
@@ -92,9 +109,10 @@ export interface RequestStoreOptions {
  */
 export const REQUEST_RECORD_VERSION = 3;
 
+type Stored = "after" | "madeFor";
 type Body =
-  | Omit<AssembledRecord, Exclude<keyof RequestCommon, "after">>
-  | Omit<RevisionRecord, Exclude<keyof RequestCommon, "after">>;
+  | Omit<AssembledRecord, Exclude<keyof RequestCommon, Stored>>
+  | Omit<RevisionRecord, Exclude<keyof RequestCommon, Stored>>;
 
 export function createRequestStore(
   storage: StorageAdapter,
@@ -106,13 +124,17 @@ export function createRequestStore(
   function store<T extends ContextRequest>(
     record: T,
   ): ResultAsync<T, RequestStoreError> {
-    const { id, documentId, createdAt, ...body } = record;
+    const { id, documentId, createdAt, madeFor, ...body } = record;
     return storage.requests
       .save({
         id,
         documentId,
         createdAt,
-        request: { version: REQUEST_RECORD_VERSION, ...body },
+        request: {
+          version: REQUEST_RECORD_VERSION,
+          ...body,
+          ...(madeFor ? { madeFor } : {}),
+        },
       })
       .map(() => record);
   }
@@ -139,31 +161,34 @@ export function createRequestStore(
     });
 
   return {
-    save: ({ documentId, request, breakdown }, after) =>
+    save: ({ documentId, request, breakdown }, after, madeFor) =>
       store<AssembledRecord>({
         id: newId(),
         documentId,
         createdAt: now(),
         request,
         after,
+        ...(madeFor ? { madeFor } : {}),
         origin: "assembled",
         breakdown,
       }),
     load,
-    revise: (parentId, request) =>
-      load(parentId).andThen((parent) =>
-        store<RevisionRecord>({
+    revise: (parentId, request, madeFor) =>
+      load(parentId).andThen((parent) => {
+        const target = madeFor ?? parent.madeFor;
+        return store<RevisionRecord>({
           id: newId(),
           documentId: parent.documentId,
           createdAt: now(),
           request,
           after: parent.after,
+          ...(target ? { madeFor: target } : {}),
           origin: "revision",
           parentId,
           assembledFrom:
             parent.origin === "assembled" ? parent.id : parent.assembledFrom,
-        }),
-      ),
+        });
+      }),
   };
 }
 
@@ -201,11 +226,14 @@ function parseRecordBody(
   if (after !== null && !isString(after)) {
     return err("request record must have after, a block ID or null");
   }
+  const target = parseTarget(value.madeFor);
+  if (target.isErr()) return err(target.error);
+  const madeFor = target.value ? { madeFor: target.value } : {};
   return parseLlmRequest(value.request).andThen((request) => {
     if (value.origin === "assembled") {
       return parseBreakdown(value.breakdown).map((breakdown) => ({
         request,
-        body: { after, origin: "assembled" as const, breakdown },
+        body: { after, ...madeFor, origin: "assembled" as const, breakdown },
       }));
     }
     if (
@@ -217,6 +245,7 @@ function parseRecordBody(
         request,
         body: {
           after,
+          ...madeFor,
           origin: "revision" as const,
           parentId: value.parentId,
           assembledFrom: value.assembledFrom,
@@ -227,6 +256,22 @@ function parseRecordBody(
       "request record must be assembled with a breakdown, or a revision with parentId and assembledFrom",
     );
   });
+}
+
+/** A stored `madeFor`; null when absent (stored before it was recorded). */
+function parseTarget(
+  value: JsonValue | undefined,
+): Check<ProfileTarget | null> {
+  if (value === undefined) return ok(null);
+  if (
+    !isRecord(value) ||
+    !isString(value.baseUrl) ||
+    !oneOf<BackendKind>("llamacpp", "openrouter", "generic")(value.kind) ||
+    (value.model !== null && !isString(value.model))
+  ) {
+    return err("madeFor must have a baseUrl, a kind and a model (or null)");
+  }
+  return ok({ baseUrl: value.baseUrl, kind: value.kind, model: value.model });
 }
 
 function parseLlmRequest(value: JsonValue | undefined): Check<LlmRequest> {
