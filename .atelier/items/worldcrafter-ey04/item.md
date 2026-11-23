@@ -28,6 +28,7 @@ Sumeet's answers needed first: are 14 days (keep all) and 90 days (one a day, th
 - [ ] Sumeet has approved the rule and its trigger, recorded in `docs/rebuild/data-model-boundaries.md`, and `needs-human` is removed.
 - [ ] `SnapshotCollection` has a delete of many snapshots in one transaction, covered by the storage contract tests for both adapters.
 - [ ] Thinning runs only in the writer tab, as approved, and tests show it never removes the newest snapshot of a document, an `accepted_ai_change`, `repaired_on_load` or sync pre-overwrite snapshot (worldcrafter-ji5d), or anything under the keep-all age.
+- [ ] `planSnapshotThinning` counts a document's protected newest `periodic` snapshot as its day's or week's kept copy, so a document untouched for 14 days keeps one copy in that bucket, not two; tested with a dormant document whose last two snapshots share a bucket (review finding worldcrafter-my9t/1-igoh.1).
 - [ ] Settings shows storage used against quota, snapshot count and size per document, and what thinning would free before it runs.
 
 ## Scope
