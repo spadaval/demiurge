@@ -9,12 +9,13 @@ import type {
   SnapshotCollection,
   StorageAdapter,
   StorageError,
+  TalkRecordCollection,
 } from "~/storage/types";
 import type { StorageConnection } from "./connection";
 
 /**
  * A `StorageAdapter` for stores that take an adapter (world facts, outline,
- * timeline, story bible), so they follow the workspace's connection without depending on
+ * timeline, story bible, talk pages), so they follow the workspace's connection without depending on
  * the workspace:
  * - Every operation runs through `connection`, so it uses the live adapter,
  *   and a failure it sees reopens the store and retries once, as document
@@ -82,6 +83,18 @@ export function createConnectedStorage(
       run((storage) => storage.agentRecords.listForSession(sessionId)),
   };
 
+  const talkRecords: TalkRecordCollection = {
+    ...keyed(
+      "talkRecords",
+      (storage) => storage.talkRecords,
+      (r) => r.id,
+    ),
+    listForTopic: (topicId) =>
+      run((storage) => storage.talkRecords.listForTopic(topicId)),
+    listOfKind: (kind) =>
+      run((storage) => storage.talkRecords.listOfKind(kind)),
+  };
+
   const snapshots: SnapshotCollection = {
     save: (snapshot) =>
       write(
@@ -126,6 +139,7 @@ export function createConnectedStorage(
       (r) => r.id,
     ),
     agentRecords,
+    talkRecords,
     batch: (writes) => {
       const { collection = "documents", id, operation } = batchContext(writes);
       return write(

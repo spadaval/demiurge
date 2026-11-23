@@ -94,6 +94,12 @@ export function batchContext(writes: readonly BatchWrite[]): FailureContext {
         collection: "agentRecords",
         id: first.record.id,
       };
+    case "saveTalkRecord":
+      return {
+        operation: "save",
+        collection: "talkRecords",
+        id: first.record.id,
+      };
   }
 }
 

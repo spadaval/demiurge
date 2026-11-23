@@ -426,7 +426,7 @@ describe("IndexedDB persistence", () => {
     const upgraded = await open(factory);
     const dumped = (await upgraded.dump())._unsafeUnwrap();
     const { snapshots, ...keyed } = dumped;
-    expect(keyed).toEqual(records);
+    expect(keyed).toEqual({ ...records, talkRecords: [] });
     expect(snapshots).toEqual([
       { ...snapshot, id: expect.any(Number), content: contentFixture },
     ]);
@@ -447,6 +447,58 @@ describe("IndexedDB persistence", () => {
     expect(
       (await reopened.storyRecords.listTombstones())._unsafeUnwrap(),
     ).toEqual([{ key: "actor/mara", deletedAt: expect.any(Number) }]);
+    reopened.close();
+  });
+
+  test("upgrading from version 4 keeps agent records and adds talk records", async () => {
+    const factory = new IDBFactory();
+    const session = {
+      id: "s1/session",
+      sessionId: "s1",
+      kind: "session",
+      data: { role: "plan" },
+      updatedAt: 3,
+    };
+    // The database as a version 4 release left it, written without the adapter.
+    await new Promise<void>((resolve, reject) => {
+      const request4 = factory.open("worldcrafter", 4);
+      request4.onupgradeneeded = (event) =>
+        upgrade(request4.result, event.oldVersion, 4);
+      request4.onsuccess = () => {
+        const db = request4.result;
+        expect([...db.objectStoreNames]).not.toContain("talkRecords");
+        const tx = db.transaction(["agentRecords"], "readwrite");
+        tx.objectStore("agentRecords").put(session);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onabort = () => reject(tx.error);
+      };
+      request4.onerror = () => reject(request4.error);
+    });
+
+    const upgraded = await open(factory);
+    expect(
+      (await upgraded.agentRecords.listForSession("s1"))._unsafeUnwrap(),
+    ).toEqual([session]);
+    const topic = {
+      id: "t1/topic",
+      topicId: "t1",
+      kind: "topic",
+      data: { title: "Ferry" },
+      updatedAt: 4,
+    };
+    (await upgraded.talkRecords.save(topic))._unsafeUnwrap();
+    upgraded.close();
+
+    const reopened = await open(factory);
+    expect(
+      (await reopened.talkRecords.listOfKind("topic"))._unsafeUnwrap(),
+    ).toEqual([topic]);
+    expect(
+      (await reopened.talkRecords.listForTopic("t1"))._unsafeUnwrap(),
+    ).toEqual([topic]);
     reopened.close();
   });
 

@@ -28,6 +28,7 @@ export const COLLECTION_NAMES = [
   "timelines",
   "storyRecords",
   "agentRecords",
+  "talkRecords",
 ] as const;
 
 /** Names a collection, for errors and for the world dump. */
@@ -54,6 +55,7 @@ export const SYNC_FIELDS = {
   timelines: { key: "id", changedAt: "updatedAt" },
   storyRecords: { key: "id", changedAt: "updatedAt" },
   agentRecords: { key: "id", changedAt: "updatedAt" },
+  talkRecords: { key: "id", changedAt: "updatedAt" },
 } as const satisfies {
   readonly [Name in SyncedCollectionName]: {
     readonly key: string;
@@ -202,6 +204,22 @@ export interface StoredAgentRecord {
   readonly updatedAt: number;
 }
 
+/**
+ * One record of a talk page: a topic, or one message (turn) in it. The talk
+ * module (`src/talk/`) owns the kinds, how `id` is built, and the shape of
+ * `data`; storage keeps `data` as JSON.
+ */
+export interface StoredTalkRecord {
+  /** `<topicId>/<part>/...`; see `src/talk/records.ts`. */
+  readonly id: string;
+  readonly topicId: string;
+  /** `topic` or `message`. */
+  readonly kind: string;
+  readonly data: JsonValue;
+  /** Epoch milliseconds, set by the caller when the record last changed. */
+  readonly updatedAt: number;
+}
+
 /** An assembled LLM request, kept so it can be viewed and debugged. */
 export interface StoredRequest {
   readonly id: string;
@@ -278,6 +296,13 @@ export interface AgentRecordCollection extends Collection<StoredAgentRecord> {
   ): ResultAsync<StoredAgentRecord[], StorageError>;
 }
 
+export interface TalkRecordCollection extends Collection<StoredTalkRecord> {
+  /** The records of one topic, ascending by ID. */
+  listForTopic(topicId: string): ResultAsync<StoredTalkRecord[], StorageError>;
+  /** The records of one kind (every topic, say), ascending by ID. */
+  listOfKind(kind: string): ResultAsync<StoredTalkRecord[], StorageError>;
+}
+
 /**
  * Revision history of documents. Snapshots are append-only and kept on
  * purpose, including after their document is deleted, so it can be recovered.
@@ -293,7 +318,8 @@ export interface SnapshotCollection {
  * One write in a `StorageAdapter.batch`. The kinds are the ones accepting an
  * AI segment needs together (the document, its provenance record, and the
  * revision snapshot), the story-bible record writes that saving a story
- * makes together, and the agent records a session step updates together; add
+ * makes together, the agent records a session step updates together, and
+ * the talk records a turn updates together (its message and its topic); add
  * a kind when another flow needs one.
  */
 export type BatchWrite =
@@ -302,7 +328,8 @@ export type BatchWrite =
   | { readonly kind: "saveSnapshot"; readonly snapshot: NewSnapshot }
   | { readonly kind: "saveStoryRecord"; readonly record: StoredStoryRecord }
   | { readonly kind: "deleteStoryRecord"; readonly id: string }
-  | { readonly kind: "saveAgentRecord"; readonly record: StoredAgentRecord };
+  | { readonly kind: "saveAgentRecord"; readonly record: StoredAgentRecord }
+  | { readonly kind: "saveTalkRecord"; readonly record: StoredTalkRecord };
 
 /** The record type each collection holds; snapshots with their content. */
 export interface CollectionRecords {
@@ -315,6 +342,7 @@ export interface CollectionRecords {
   readonly timelines: StoredTimeline;
   readonly storyRecords: StoredStoryRecord;
   readonly agentRecords: StoredAgentRecord;
+  readonly talkRecords: StoredTalkRecord;
 }
 
 /**
@@ -353,6 +381,11 @@ export interface StorageAdapter {
    * `src/agent/records.ts`, kept so a session can be inspected and replayed.
    */
   readonly agentRecords: AgentRecordCollection;
+  /**
+   * Keyed by `id`. Talk-page topics and their messages, written through
+   * `src/talk/records.ts`.
+   */
+  readonly talkRecords: TalkRecordCollection;
   /**
    * Applies `writes` in order as one atomic step: either all take effect or
    * none does. Resolves with the info of each snapshot saved, in order. A
