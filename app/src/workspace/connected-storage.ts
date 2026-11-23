@@ -1,6 +1,7 @@
 import { errAsync, type ResultAsync } from "neverthrow";
-import { batchContext } from "~/storage/internal";
+import { batchContext, restoreContext } from "~/storage/internal";
 import type {
+  AgentRecordCollection,
   AnnotationCollection,
   Collection,
   CollectionName,
@@ -13,7 +14,7 @@ import type { StorageConnection } from "./connection";
 
 /**
  * A `StorageAdapter` for stores that take an adapter (world facts, outline,
- * timeline), so they follow the workspace's connection without depending on
+ * timeline, story bible), so they follow the workspace's connection without depending on
  * the workspace:
  * - Every operation runs through `connection`, so it uses the live adapter,
  *   and a failure it sees reopens the store and retries once, as document
@@ -58,6 +59,7 @@ export function createConnectedStorage(
       write(refused("delete", name, key), (storage) =>
         select(storage).delete(key),
       ),
+    listTombstones: () => run((storage) => select(storage).listTombstones()),
   });
 
   const annotations: AnnotationCollection = {
@@ -68,6 +70,16 @@ export function createConnectedStorage(
     ),
     listForDocument: (documentId) =>
       run((storage) => storage.annotations.listForDocument(documentId)),
+  };
+
+  const agentRecords: AgentRecordCollection = {
+    ...keyed(
+      "agentRecords",
+      (storage) => storage.agentRecords,
+      (r) => r.id,
+    ),
+    listForSession: (sessionId) =>
+      run((storage) => storage.agentRecords.listForSession(sessionId)),
   };
 
   const snapshots: SnapshotCollection = {
@@ -108,16 +120,30 @@ export function createConnectedStorage(
       (storage) => storage.timelines,
       (r) => r.id,
     ),
+    storyRecords: keyed(
+      "storyRecords",
+      (storage) => storage.storyRecords,
+      (r) => r.id,
+    ),
+    agentRecords,
     batch: (writes) => {
-      const { collection = "documents", id } = batchContext(writes);
+      const { collection = "documents", id, operation } = batchContext(writes);
       return write(
         {
           kind: "read_only",
-          operation: "save",
+          operation: operation === "delete" ? "delete" : "save",
           collection,
           ...(id === undefined ? {} : { id: String(id) }),
         },
         (storage) => storage.batch(writes),
+      );
+    },
+    dump: () => run((storage) => storage.dump()),
+    restore: (records) => {
+      const { collection = "documents" } = restoreContext(records);
+      return write(
+        { kind: "read_only", operation: "save", collection },
+        (storage) => storage.restore(records),
       );
     },
     close: () => connection.close(),

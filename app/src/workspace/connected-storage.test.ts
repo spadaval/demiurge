@@ -39,6 +39,8 @@ async function contents(storage: StorageAdapter) {
     snapshots: (await storage.snapshots.list("d1"))._unsafeUnwrap(),
     outlines: (await storage.outlines.list())._unsafeUnwrap(),
     timelines: (await storage.timelines.list())._unsafeUnwrap(),
+    storyRecords: (await storage.storyRecords.list())._unsafeUnwrap(),
+    agentRecords: (await storage.agentRecords.list())._unsafeUnwrap(),
   };
 }
 
@@ -118,6 +120,37 @@ test("a read-only tab's writes are refused before they reach storage; reads work
       storage.timelines.delete("t1"),
       { operation: "delete", collection: "timelines", id: "t1" },
     ],
+    [
+      storage.storyRecords.save({
+        id: "actor/mara",
+        kind: "actor",
+        data: {},
+        updatedAt: 1,
+      }),
+      { operation: "save", collection: "storyRecords", id: "actor/mara" },
+    ],
+    [
+      storage.storyRecords.delete("actor/mara"),
+      { operation: "delete", collection: "storyRecords", id: "actor/mara" },
+    ],
+    [
+      storage.agentRecords.save({
+        id: "s1/session",
+        sessionId: "s1",
+        kind: "session",
+        data: {},
+        updatedAt: 1,
+      }),
+      { operation: "save", collection: "agentRecords", id: "s1/session" },
+    ],
+    [
+      storage.agentRecords.delete("s1/session"),
+      { operation: "delete", collection: "agentRecords", id: "s1/session" },
+    ],
+    [
+      storage.batch([{ kind: "deleteStoryRecord", id: "actor/mara" }]),
+      { operation: "delete", collection: "storyRecords", id: "actor/mara" },
+    ],
   ];
   for (const [write, expected] of writes) {
     expect((await write)._unsafeUnwrapErr()).toEqual({
@@ -140,5 +173,24 @@ test("a writer tab's operations reach storage through the connection", async () 
   (await storage.documents.save(document))._unsafeUnwrap();
   expect((await backing.documents.load("d1"))._unsafeUnwrap()).toEqual(
     document,
+  );
+});
+
+test("tombstones are listed through the connection", async () => {
+  const { backing, storage } = setup(false);
+  (await storage.documents.save(document))._unsafeUnwrap();
+  (await storage.documents.delete("d1"))._unsafeUnwrap();
+  const tombstones = (await storage.documents.listTombstones())._unsafeUnwrap();
+  expect(tombstones).toEqual([{ key: "d1", deletedAt: expect.any(Number) }]);
+  expect(tombstones).toEqual(
+    (await backing.documents.listTombstones())._unsafeUnwrap(),
+  );
+});
+
+test("a read-only tab still lists tombstones", async () => {
+  const { backing, storage } = setup(true);
+  (await backing.storyRecords.delete("actor/mara"))._unsafeUnwrap();
+  expect((await storage.storyRecords.listTombstones())._unsafeUnwrap()).toEqual(
+    [{ key: "actor/mara", deletedAt: expect.any(Number) }],
   );
 });

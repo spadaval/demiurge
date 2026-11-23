@@ -31,6 +31,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LIST_KINDS } from "../../src/story/queries";
+import { KIND_NAMES } from "../../src/story/refs";
 import { parseStory, type Story } from "../../src/story/story";
 import { buildTool } from "../comparison/comparison";
 import {
@@ -63,7 +65,6 @@ import {
   refuseIfSessionsRunning,
   type Termination,
 } from "../judging/terminate";
-import { KIND_NAMES, LIST_KINDS } from "../story";
 
 export const MODEL = "claude-opus-5-5";
 

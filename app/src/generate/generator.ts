@@ -121,7 +121,11 @@ import type {
   StorageError,
 } from "~/storage/types";
 import type { TimelineStoreError } from "~/time/store";
-import type { DocumentSession, SaveStatus } from "~/workspace/document-session";
+import type {
+  DocumentSession,
+  ReadOnlyReason,
+  SaveStatus,
+} from "~/workspace/document-session";
 import { createStore, type Store } from "~/workspace/store";
 import {
   type Archive,
@@ -143,7 +147,7 @@ export type GenerateError =
   /** The request failed `checkRequest`; it was not sent. */
   | InvalidRequestError
   | { kind: "world_context_failed"; error: TimelineStoreError }
-  | { kind: "read_only"; documentId: string }
+  | { kind: "read_only"; documentId: string; reason: ReadOnlyReason }
   /** A generation is already running in this document (its segment is null while it loads). */
   | { kind: "busy"; documentId: string; segmentId: string | null }
   | { kind: "unknown_profile"; profile: string }
@@ -333,7 +337,9 @@ export function createGenerator(options: GeneratorOptions): Generator {
     validateDocument(canonicalize(editor.children));
 
   const refuse = (): GenerateError | null => {
-    if (session.readOnly) return { kind: "read_only", documentId };
+    if (session.readOnlyReason) {
+      return { kind: "read_only", documentId, reason: session.readOnlyReason };
+    }
     const running = active.get();
     if (running) {
       return { kind: "busy", documentId, segmentId: running.segmentId };
@@ -832,7 +838,13 @@ export function createGenerator(options: GeneratorOptions): Generator {
       controller?.abort();
     },
     accept(segmentId) {
-      if (session.readOnly) return errAsync({ kind: "read_only", documentId });
+      if (session.readOnlyReason) {
+        return errAsync({
+          kind: "read_only",
+          documentId,
+          reason: session.readOnlyReason,
+        });
+      }
       const ready = readySegment(segmentId);
       if (ready.isErr()) return errAsync(ready.error);
       return loadProvenance(segmentId).andThen((stored) => {

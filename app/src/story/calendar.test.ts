@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  describeBetween,
   describeMismatch,
   describeMoment,
   describeSpan,
@@ -179,4 +180,35 @@ test("describeMoment says a moment as a date when it can", () => {
     describeMoment(parseWhen("1131-06-08 21:00")._unsafeUnwrap().start),
   ).toBe("8 June 1131, 21:00");
   expect(describeMoment(1954.800001)).toBe("year 1954.800001");
+});
+
+test("describeBetween counts the calendar days between whole-day events", () => {
+  const at = (when: string) => parseWhen(when)._unsafeUnwrap().start;
+  expect(describeBetween(at("1187-10-30"), at("1187-11-01"))).toBe("2 days");
+  expect(describeBetween(at("1187-11-01"), at("1187-10-30"))).toBe("2 days");
+  expect(describeBetween(at("1187-10-14"), at("1187-10-16"))).toBe("2 days");
+  expect(describeBetween(at("1187-10-24"), at("1187-11-01"))).toBe("8 days");
+  // Past a day it counts dates, not 24-hour stretches; under one, hours.
+  expect(describeBetween(at("1187-10-30 23:00"), at("1187-11-01 01:00"))).toBe(
+    "2 days",
+  );
+  expect(describeBetween(at("1187-10-30 23:00"), at("1187-10-31 01:00"))).toBe(
+    "2 hours",
+  );
+  // Every pair of midnights over two years, either way round: a midnight
+  // stored as a fraction of a year must not floor into the day before.
+  const days: number[] = [];
+  for (let ms = Date.UTC(1187, 0, 1); ms < Date.UTC(1189, 0, 1); ms += 864e5) {
+    days.push(at(new Date(ms).toISOString().slice(0, 10)));
+  }
+  const wrong: string[] = [];
+  for (let i = 0; i < days.length; i += 1) {
+    for (let j = i + 1; j < Math.min(days.length, i + 56); j += 1) {
+      const said = describeBetween(days[i] ?? 0, days[j] ?? 0);
+      const back = describeBetween(days[j] ?? 0, days[i] ?? 0);
+      const want = `${j - i} day${j - i === 1 ? "" : "s"}`;
+      if (said !== want || back !== want) wrong.push(`${i} to ${j}: ${said}`);
+    }
+  }
+  expect(wrong).toEqual([]);
 });

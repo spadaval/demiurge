@@ -1113,17 +1113,28 @@ for (const [name, open] of [
       });
     });
 
+    // CPU time, not elapsed time: on a busy host the elapsed time is mostly
+    // waiting for a core (8 s of work took 40 s at load 27). CPU time grows
+    // under load too, as cores shared between hyperthreads run slower, so
+    // each case's limit is at least 2.5 times its CPU time at load 25, and
+    // at most about half of what a parser that parses everything again on
+    // every delta takes (21 s, 34 s and 54 s here). Quadratic rendering
+    // took minutes.
     test.each([
       [
         "prose",
         "The salt wind rose over the flats, and Mara walked on. ".repeat(18) +
           "\n\n",
+        // 0.1-0.3 s idle, up to 0.3 s at load 25.
+        5_000,
       ],
-      ["unclosed emphasis on one line", "*a **a x _a [a](b "],
-      ["markup on many lines", "# h\n- *a* **b\n<p>x</p> :::\n"],
+      // 0.2-0.5 s idle, up to 0.5 s at load 25.
+      ["unclosed emphasis on one line", "*a **a x _a [a](b ", 5_000],
+      // 1-5 s idle, up to 12 s at load 25.
+      ["markup on many lines", "# h\n- *a* **b\n<p>x</p> :::\n", 30_000],
     ])(
       "streaming 50 KB of %s in 4-character deltas stays fast",
-      async (_, unit) => {
+      async (_, unit, cpuLimitMs) => {
         const output = unit.repeat(Math.ceil(50_000 / unit.length));
         const events = [...pieces(output, 4).map(chunk), finish];
         // Like a network: many events per read.
@@ -1145,19 +1156,20 @@ for (const [name, open] of [
             ),
         );
         const assembled = await prepare();
-        const started = performance.now();
+        const started = process.cpuUsage();
         const result = (
           await generator.send(assembled.id, { kind: "after", blockId: "p2" })
         )._unsafeUnwrap();
-        const elapsed = performance.now() - started;
+        const { user, system } = process.cpuUsage(started);
+        const cpuMs = (user + system) / 1000;
         expect(result.outcome).toBe("complete");
         const segment = segmentAt(content(session), 3);
         expect(textOf(segment).join("\n").length).toBeGreaterThan(40_000);
         expect(content(session).slice(0, 3)).toEqual(ORIGINAL);
-        // Measured at ~1 s; quadratic rendering took minutes.
-        expect(elapsed).toBeLessThan(10_000);
+        expect(cpuMs).toBeLessThan(cpuLimitMs);
       },
-      30_000,
+      // Only a guard against a hang: the CPU limit is the test.
+      180_000,
     );
 
     test("a request edited to another host or endpoint shape is refused before sending", async () => {

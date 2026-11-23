@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { IDBFactory } from "fake-indexeddb";
-import { errAsync, type ResultAsync } from "neverthrow";
+import { errAsync, okAsync, type ResultAsync } from "neverthrow";
 import { openIndexedDbStorage } from "~/storage/indexeddb";
 import { createMemoryStorage } from "~/storage/memory";
 import type {
@@ -255,8 +255,14 @@ describe("document session", () => {
       readOnly: true,
     });
     session.setTitle("Renamed");
-    expect(session.status.get()).toEqual({ kind: "read_only" });
-    expect(await session.flush()).toEqual({ kind: "read_only" });
+    expect(session.status.get()).toEqual({
+      kind: "read_only",
+      reason: { kind: "other_tab" },
+    });
+    expect(await session.flush()).toEqual({
+      kind: "read_only",
+      reason: { kind: "other_tab" },
+    });
     expect((await storage.documents.load("doc1"))._unsafeUnwrap()).toEqual(
       document(duplicated),
     );
@@ -407,6 +413,100 @@ describe("document session", () => {
       expect((await storage.annotations.load("seg"))._unsafeUnwrap()).toEqual(
         record,
       );
+    });
+
+    describe("when the snapshot on open can't be written", () => {
+      const quota: StorageError = {
+        kind: "failure",
+        operation: "save",
+        collection: "snapshots",
+        message: "Storage save snapshots failed: QuotaExceededError",
+        cause: null,
+      };
+      /** A disk with room to read but none to write snapshots. */
+      const fullDisk = (storage: StorageAdapter): StorageAdapter => {
+        const full: StorageAdapter = {
+          ...storage,
+          snapshots: { ...storage.snapshots, save: () => errAsync(quota) },
+          // The connection closes a failing adapter before reopening it.
+          close: () => undefined,
+        };
+        return full;
+      };
+      const options = (storage: StorageAdapter) =>
+        sessionOptions(storage, () => okAsync(storage));
+
+      test("the document opens read-only, with the reason, and writes nothing", async () => {
+        const storage = createMemoryStorage();
+        (await storage.documents.save(document()))._unsafeUnwrap();
+        const session = await open(options(fullDisk(storage)));
+
+        expect(session.readOnly).toBe(true);
+        expect(session.readOnlyReason).toEqual({
+          kind: "no_snapshot",
+          error: quota,
+        });
+        expect(session.status.get()).toEqual({
+          kind: "read_only",
+          reason: { kind: "no_snapshot", error: quota },
+        });
+        expect(session.editor.api.string([1])).toBe("Mara walked.");
+
+        session.setTitle("Renamed");
+        session.editor.tf.insertText("lost", {
+          at: { path: [1, 0], offset: 0 },
+        });
+        await tick();
+        expect(session.hasUnsavedChanges()).toBe(false);
+        expect(
+          await session.saveWith({ snapshot: "accepted_ai_change" }),
+        ).toEqual(session.status.get());
+        expect((await storage.documents.load("doc1"))._unsafeUnwrap()).toEqual(
+          document(),
+        );
+        expect(await contents(storage)).toEqual([]);
+      });
+
+      test("content needing repair stays as stored until a snapshot can keep it", async () => {
+        const storage = createMemoryStorage();
+        const duplicated: JsonValue = [
+          { type: "p", id: "a", children: [{ text: "one" }] },
+          { type: "p", id: "a", children: [{ text: "two" }] },
+        ];
+        (await storage.documents.save(document(duplicated)))._unsafeUnwrap();
+        const session = await open(options(fullDisk(storage)));
+        expect(session.readOnlyReason?.kind).toBe("no_snapshot");
+        expect(await session.flush()).toMatchObject({ kind: "read_only" });
+        expect((await storage.documents.load("doc1"))._unsafeUnwrap()).toEqual(
+          document(duplicated),
+        );
+
+        // With room again, reopening snapshots the original and repairs it.
+        const reopened = await open(options(storage));
+        expect(reopened.readOnlyReason).toBeNull();
+        expect(await reopened.flush()).toEqual({ kind: "saved" });
+        expect(await contents(storage)).toEqual([
+          { reason: "repaired_on_load", content: duplicated },
+        ]);
+      });
+
+      test("snapshots that can't be listed also open it read-only", async () => {
+        const storage = createMemoryStorage();
+        (await storage.documents.save(document()))._unsafeUnwrap();
+        const unreadable: StorageAdapter = {
+          ...storage,
+          snapshots: { ...storage.snapshots, list: () => errAsync(quota) },
+          close: () => undefined,
+        };
+        const session = await open(options(unreadable));
+        expect(session.readOnlyReason?.kind).toBe("no_snapshot");
+      });
+
+      test("a document that can't be loaded still fails to open", async () => {
+        const storage = createMemoryStorage();
+        const result = await openDocumentSession("doc1", options(storage));
+        expect(result._unsafeUnwrapErr()).toMatchObject({ kind: "not_found" });
+      });
     });
 
     test("a read-only session takes no snapshots", async () => {

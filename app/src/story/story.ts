@@ -10,9 +10,11 @@
  *
  * Actors and scenes are plain records here, not documents, and a scene has no
  * place in story time: `depicts` is its only link to events. The file is the
- * author's bible: a scene's prose is kept apart from it, in a file of its own
- * (`proseFile` in `scripts/story.ts`), and a scene record says only what the
- * scene does with the bible's records.
+ * author's bible: a scene's prose is kept apart from it, and a scene record
+ * says only what the scene does with the bible's records. In the app the
+ * prose is the Plate document the scene's `documentId` names, and the bible
+ * is stored record by record (`./store.ts`); the CLI keeps each scene's prose
+ * in a file of its own (`proseFile` in `scripts/story.ts`).
  */
 
 import { err, ok, Result } from "neverthrow";
@@ -171,6 +173,20 @@ export type Scene = {
    * Absent from the file when unset, so older files read the same.
    */
   viewpoint?: string;
+  /**
+   * The Plate document that holds the scene's prose (`StoredDocument.id`),
+   * once it has one. A scene can be sketched before any prose exists.
+   * Absent from the file when unset, so older files read the same.
+   */
+  documentId?: string;
+  /**
+   * The book and chapter the scene is packaged in, if the writer says.
+   * Packaging only: the telling order is the order of `Story.scenes`, and
+   * a run of scenes with the same book and chapter reads as one chapter.
+   * Absent from the file when unset.
+   */
+  book?: string;
+  chapter?: string;
   depicts: EventId[];
   pressures: string[];
 } & Record<SceneLinkKind, Ref[]>;
@@ -831,6 +847,9 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     "depicts",
     "pressures",
     "viewpoint",
+    "documentId",
+    "book",
+    "chapter",
     ...SCENE_LINK_KINDS,
   ]);
   if (known.isErr()) return err(known.error);
@@ -847,6 +866,9 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
     checkSceneLinks(v.plants, `${at}.plants`),
     checkSceneLinks(v.paysOff, `${at}.paysOff`),
     checkOptionalString(v.viewpoint, `${at}.viewpoint`),
+    checkOptionalString(v.documentId, `${at}.documentId`),
+    checkOptionalString(v.book, `${at}.book`),
+    checkOptionalString(v.chapter, `${at}.chapter`),
   ]).map(
     ([
       id,
@@ -861,12 +883,18 @@ function checkScene(v: JsonRecord, at: string): Check<Scene> {
       plants,
       paysOff,
       viewpoint,
+      documentId,
+      book,
+      chapter,
     ]) => ({
       id,
       title,
       summary,
       actors,
       ...(viewpoint === undefined ? {} : { viewpoint }),
+      ...(documentId === undefined ? {} : { documentId }),
+      ...(book === undefined ? {} : { book }),
+      ...(chapter === undefined ? {} : { chapter }),
       depicts,
       pressures,
       reveals,
@@ -1171,6 +1199,14 @@ export function parseStory(text: string): Result<Story, StoryError> {
   } catch (cause) {
     return err({ kind: "not_json", message: String(cause) });
   }
+  return storyFromJson(value);
+}
+
+/**
+ * Checks a story in the file's shape that is already JSON, such as one
+ * assembled from stored records (`./store.ts`), as `parseStory` checks text.
+ */
+export function storyFromJson(value: JsonValue): Result<Story, StoryError> {
   return checkStory(value).mapErr((message) => ({
     kind: "invalid_story",
     message,
@@ -1426,6 +1462,9 @@ const KEY_ORDER = [
   "origins",
   "relations",
   "title",
+  "documentId",
+  "book",
+  "chapter",
   "text",
   "question",
   "label",

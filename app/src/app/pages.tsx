@@ -114,8 +114,11 @@ function TitleField({ session }: { session: DocumentSession }) {
   );
 }
 
+/** A status the writer must act on: shown as an alert under the title. */
 const isProblem = (status: SaveStatus) =>
-  status.kind === "invalid" || status.kind === "failed";
+  status.kind === "invalid" ||
+  status.kind === "failed" ||
+  (status.kind === "read_only" && status.reason.kind === "no_snapshot");
 
 /** The short status, in the margin beside the title. */
 function SaveStatusLine({ session }: { session: DocumentSession }) {
@@ -126,7 +129,11 @@ function SaveStatusLine({ session }: { session: DocumentSession }) {
         isProblem(status) ? "save-status save-status-problem" : "save-status"
       }
     >
-      {isProblem(status) ? "Not saved" : describeSaveStatus(status)}
+      {status.kind === "read_only"
+        ? "Read-only"
+        : isProblem(status)
+          ? "Not saved"
+          : describeSaveStatus(status)}
     </output>
   );
 }

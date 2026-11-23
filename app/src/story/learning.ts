@@ -226,6 +226,32 @@ export function sceneNow(story: Story, scene: Scene): string | undefined {
 }
 
 /**
+ * The events a scene shows, first and last in story order. Unlike
+ * `sceneNow` it needs no positions: an event placed only by its
+ * constraints still has a place in story order. Undefined for a scene
+ * that shows no event.
+ */
+export function sceneSpan(
+  story: Story,
+  scene: Scene,
+): { opens: string; latest: string } | undefined {
+  return spanBy(scene, storyPlaces(story));
+}
+
+/** `sceneSpan` with the places in story order already worked out. */
+function spanBy(
+  scene: Scene,
+  place: (id: string) => number,
+): { opens: string; latest: string } | undefined {
+  const ordered = [...scene.depicts].sort((a, b) => place(a) - place(b));
+  const opens = ordered[0];
+  const latest = ordered[ordered.length - 1];
+  return opens === undefined || latest === undefined
+    ? undefined
+    : { opens, latest };
+}
+
+/**
  * How the viewpoint actor stands to a record the reader has been told: they
  * don't hold it now but will (`later`), held it once (`ended`, by how they
  * last held it), or never do; `believes` are the versions of it, for an
@@ -238,26 +264,29 @@ export type ViewpointGap = {
 };
 
 /**
- * Whether `actor` doesn't know `ref` at event `at`, in the scene at
- * `scene` in telling order. A record counts only when the story says who
- * knows it (someone holds knowledge of it or, for an event, of one of its
- * versions), so a story that tracks no knowledge of a thing marks nothing.
+ * Whether `actor` doesn't know `ref` as a scene opens at event `at`, before
+ * `at` happens, in the scene at `scene` in telling order. A record counts
+ * only when the story says who knows it (someone holds knowledge of it or,
+ * for an event, of one of its versions), so a story that tracks no
+ * knowledge of a thing marks nothing.
  *
  * The actor's own knowledge records of it decide, where there are any:
  * knowing and believing both count as holding it, from after the `since`
- * event until the `until` event, in story order. For an event, holding one
+ * event until the `until` event happens, in story order, so a record that
+ * ends at `at` still holds as the scene opens. For an event, holding one
  * of its versions at `at` is such a record too: they don't know it, and
- * believe that instead. Without them, the actor
- * holds it from what the story shows them doing: an event from the time
- * they take part in it, and an object in it; a version they tell, from its
- * event; what a scene told through their eyes shows, reveals, pays off or
- * implies; and what a scene through other eyes reveals or pays off when
- * they are in it or take part in what it shows, unless that scene's
- * viewpoint holds it by their own knowledge record (their secret, told
- * through their thoughts) and it isn't a version, which is an account. A scene tells them from its now (its
- * latest event) on, the scene being written aside. With `at` undefined (a
- * scene that shows no placed event) time is left out: any knowledge of it
- * counts, and any such scene told before this one. Undefined when the actor holds it, or it isn't tracked.
+ * believe that instead. Without them, the actor holds it from what the
+ * story shows them doing: an event from the time they take part in it, and
+ * an object in it; a version they tell, from its event; what a scene told
+ * through their eyes shows, reveals, pays off or implies; and what a scene
+ * through other eyes reveals or pays off when they are in it or take part
+ * in what it shows. A scene reveals what a knowledge record it reveals is
+ * of, as well as the record. A group's members take part in what it takes
+ * part in, and are in the scenes it is in, while they belong to it. A
+ * scene tells them from its latest event on, the scene being written
+ * aside. With `at` undefined (a scene that shows no event) time is left
+ * out: any knowledge of it counts, and any such scene told before this
+ * one. Undefined when the actor holds it, or it isn't tracked.
  */
 export function viewpointGap(
   story: Story,
@@ -282,12 +311,11 @@ export function viewpointGap(
       versions.some((version) => sameRef(k.what, version)),
   );
   if (!tracked) return undefined;
-  const index = new Map(eventsInStoryOrder(story).map((e, i) => [e.id, i]));
-  const place = (id: string) => index.get(id) ?? Number.POSITIVE_INFINITY;
+  const place = storyPlaces(story);
   const starts = (k: Knowledge) =>
     at === undefined || k.since === undefined || place(k.since) < place(at);
   const lasts = (k: Knowledge) =>
-    at === undefined || k.until === undefined || place(k.until) > place(at);
+    at === undefined || k.until === undefined || place(k.until) >= place(at);
   const holds = (k: Knowledge) => starts(k) && lasts(k);
   const theirs = story.knowledge.filter((k) => k.actor === actor);
   const of = theirs.filter((k) => sameRef(k.what, ref));
@@ -317,10 +345,65 @@ export function viewpointGap(
 }
 
 /**
+ * Where, during a scene, one of the actor's own knowledge records of `ref`,
+ * or for an event of one of its versions, starts or ends: at an event the
+ * scene shows. `viewpointGap` takes the
+ * scene as it opens, so this says what changes after.
+ */
+export type ViewpointTurn = {
+  /** What the record is of: `ref`, or for an event one of its versions. */
+  what: Ref;
+  event: string;
+  turn: "starts" | "ends";
+  how: KnowledgeHow;
+};
+
+/** The actor's own records of `ref` that start or end at an event `scene` shows, in story order. */
+export function viewpointTurns(
+  story: Story,
+  actor: string,
+  ref: Ref,
+  scene: Scene,
+): ViewpointTurn[] {
+  const place = storyPlaces(story);
+  const shown = new Set(scene.depicts);
+  const of = (what: Ref) =>
+    sameRef(what, ref) ||
+    (ref.kind === "event" &&
+      what.kind === "version" &&
+      story.versions.some((v) => v.id === what.id && v.event === ref.id));
+  return story.knowledge
+    .filter((k) => k.actor === actor && of(k.what))
+    .flatMap((k): ViewpointTurn[] => [
+      ...(k.since !== undefined && shown.has(k.since)
+        ? [
+            {
+              what: k.what,
+              event: k.since,
+              turn: "starts" as const,
+              how: k.how,
+            },
+          ]
+        : []),
+      ...(k.until !== undefined && shown.has(k.until)
+        ? [{ what: k.what, event: k.until, turn: "ends" as const, how: k.how }]
+        : []),
+    ])
+    .sort((a, b) => place(a.event) - place(b.event));
+}
+
+/** Each event's place in story order; an unknown one comes last. */
+function storyPlaces(story: Story): (id: string) => number {
+  const index = new Map(eventsInStoryOrder(story).map((e, i) => [e.id, i]));
+  return (id) => index.get(id) ?? Number.POSITIVE_INFINITY;
+}
+
+/**
  * Where in story order `actor` comes to hold `ref` by what the story shows:
  * taking part, telling, or being told it in a scene they see or are in.
- * A scene's place is just after its now, so the scene at its own time
- * hasn't yet told it; with no time, a scene told before `scene` comes first.
+ * A scene's place is just after its latest event, so the scene at its own
+ * time hasn't yet told it; with no time, a scene told before `scene` comes
+ * first.
  */
 function shownFrom(
   story: Story,
@@ -330,9 +413,29 @@ function shownFrom(
   place: (id: string) => number,
   at: string | undefined,
 ): number[] {
+  // Whether the actor belongs to `group` at some time from `from` to `to`;
+  // with no time, at any.
+  const belongs = (group: string, from?: string, to?: string) =>
+    story.memberships.some(
+      (m) =>
+        m.member === actor &&
+        m.group === group &&
+        (from === undefined ||
+          m.until === undefined ||
+          place(m.until) >= place(from)) &&
+        (to === undefined ||
+          m.since === undefined ||
+          place(m.since) <= place(to)),
+    );
+  // The actor, or a group they belong to then.
+  const isThem = (id: string, from?: string, to?: string) =>
+    id === actor || belongs(id, from, to);
   const takesPart = (event: string) =>
     story.participants.some(
-      (p) => p.event === event && p.who.kind === "actor" && p.who.id === actor,
+      (p) =>
+        p.event === event &&
+        p.who.kind === "actor" &&
+        isThem(p.who.id, event, event),
     );
   const parts =
     ref.kind === "event"
@@ -350,41 +453,38 @@ function shownFrom(
           .filter((v) => v.id === ref.id && v.by.includes(actor))
           .map((v) => place(v.event))
       : [];
+  // Knowledge records of it: a scene that reveals one reveals what it is of.
+  const records = story.knowledge
+    .filter((k) => sameRef(k.what, ref))
+    .map((k): Ref => ({ kind: "knowledge", id: k.id }));
+  const told = (r: Ref) =>
+    sameRef(r, ref) || records.some((record) => sameRef(r, record));
   // Paying something off brings it back before the people in the scene.
-  const reveals = (s: Scene) =>
-    s.reveals.some((r) => sameRef(r, ref)) ||
-    s.paysOff.some((r) => sameRef(r, ref));
+  const reveals = (s: Scene) => s.reveals.some(told) || s.paysOff.some(told);
   const implies = (s: Scene) => s.implies.some((r) => sameRef(r, ref));
   const seen = story.scenes.flatMap((s, i) => {
     if (i === scene) return [];
+    const span = spanBy(s, place);
     // Through their eyes: what the scene shows, reveals, pays off or
     // implies. In it or in what it shows, through other eyes: what it
-    // reveals or pays off, but not
-    // what it implies, which the reader may infer from the viewpoint's
-    // own thoughts.
+    // reveals or pays off, but not what it implies, which the reader may
+    // infer from the viewpoint's own thoughts. Someone overhearing what
+    // the viewpoint keeps to themselves has their own knowledge record,
+    // and that decides before this is asked.
     const own = s.viewpoint === actor;
     const present =
-      s.actors.includes(actor) || s.depicts.some((e) => takesPart(e));
-    // What that scene's viewpoint holds by their own knowledge record is
-    // told through their thoughts, not to the room; but a version is an
-    // account, made to be told.
-    const theirs = (s: Scene) =>
-      ref.kind !== "version" &&
-      s.viewpoint !== undefined &&
-      story.knowledge.some(
-        (k) => k.actor === s.viewpoint && sameRef(k.what, ref),
-      );
+      s.actors.some((a) => isThem(a, span?.opens, span?.latest)) ||
+      s.depicts.some((e) => takesPart(e));
     const shown = own
       ? (ref.kind === "event" && s.depicts.includes(ref.id)) ||
         reveals(s) ||
         implies(s)
-      : present && reveals(s) && !theirs(s);
+      : present && reveals(s);
     if (!shown) return [];
-    const now = sceneNow(story, s);
-    if (at === undefined || now === undefined) {
+    if (at === undefined || span === undefined) {
       return i < scene ? [Number.NEGATIVE_INFINITY] : [];
     }
-    return [place(now) + 0.5];
+    return [place(span.latest) + 0.5];
   });
   return [...parts, ...tells, ...seen];
 }

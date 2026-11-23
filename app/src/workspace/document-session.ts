@@ -28,8 +28,20 @@ export type SaveStatus =
   | { readonly kind: "invalid"; readonly error: ContentError }
   /** Storage failed. The save is retried, and again on the next change. */
   | { readonly kind: "failed"; readonly error: StorageError }
-  /** Another tab holds the world; this one never saves. */
-  | { readonly kind: "read_only" };
+  /** This session never saves; `reason` says why. */
+  | { readonly kind: "read_only"; readonly reason: ReadOnlyReason };
+
+/**
+ * Why a session is read-only.
+ * - `other_tab`: another tab holds the world, so this tab never saves.
+ * - `no_snapshot`: the snapshot taken before editing couldn't be written
+ *   (for example the disk is full). Editing without it would leave the
+ *   stored content unrecoverable, so the document opens to read only.
+ *   Reopening it tries again.
+ */
+export type ReadOnlyReason =
+  | { readonly kind: "other_tab" }
+  | { readonly kind: "no_snapshot"; readonly error: StorageError };
 
 export interface SessionOptions {
   readonly connection: StorageConnection;
@@ -79,6 +91,8 @@ export interface DocumentSession {
   readonly title: Store<string>;
   readonly status: Store<SaveStatus>;
   readonly readOnly: boolean;
+  /** Why the session is read-only; `null` when it saves. */
+  readonly readOnlyReason: ReadOnlyReason | null;
   setTitle(title: string): void;
   /** Saves now if anything is unsaved; resolves with the resulting status. */
   flush(): Promise<SaveStatus>;
@@ -109,7 +123,11 @@ export interface DocumentSession {
  *   state before every editing session can be recovered. The reason is
  *   `repaired_on_load` when the stored content is outside the schema (the
  *   editor is about to replace it with a repaired tree), else `periodic`.
- *   If that snapshot can't be written, the document doesn't open.
+ *   If that snapshot can't be written (or the snapshots can't be read to
+ *   decide), the document opens read-only with reason `no_snapshot`: the
+ *   writer can still read it, and nothing replaces the stored content
+ *   without a recoverable copy. A failure loading the document itself
+ *   still fails the open.
  * - While editing, after a successful save, the saved content is snapshotted
  *   (`periodic`) if it differs from the session's last snapshot and at least
  *   `snapshotIntervalMs` has passed since it. A failed periodic snapshot
@@ -126,9 +144,16 @@ export function openDocumentSession(
     .run((storage) => storage.documents.load(documentId))
     .andThen((stored) =>
       (options.readOnly
-        ? okAsync(undefined)
+        ? okAsync<ReadOnlyReason | null, never>({ kind: "other_tab" })
         : snapshotOnOpen(options, stored)
-      ).map(() => createSession(stored, options)),
+            .map((): ReadOnlyReason | null => null)
+            .orElse((error) =>
+              okAsync<ReadOnlyReason | null, never>({
+                kind: "no_snapshot",
+                error,
+              }),
+            )
+      ).map((readOnly) => createSession(stored, options, readOnly)),
     );
 }
 
@@ -165,8 +190,10 @@ function snapshotOnOpen(
 function createSession(
   stored: StoredDocument,
   options: SessionOptions,
+  readOnlyReason: ReadOnlyReason | null,
 ): DocumentSession {
-  const { connection, readOnly } = options;
+  const { connection } = options;
+  const readOnly = readOnlyReason !== null;
   const original = stored.content;
   // Content changed when Slate replaced the root array; selection-only
   // batches keep it.
@@ -181,7 +208,9 @@ function createSession(
   seen = editor.children;
   const title = createStore(stored.title);
   const status = createStore<SaveStatus>(
-    readOnly ? { kind: "read_only" } : { kind: "saved" },
+    readOnlyReason
+      ? { kind: "read_only", reason: readOnlyReason }
+      : { kind: "saved" },
   );
 
   /** Bumped on every change; a save records the version it wrote. */
@@ -346,6 +375,7 @@ function createSession(
     title,
     status,
     readOnly,
+    readOnlyReason,
     setTitle(next) {
       if (readOnly || next === title.get()) return;
       title.set(next);

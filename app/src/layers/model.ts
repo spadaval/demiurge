@@ -12,6 +12,8 @@
  * That is what keeps the prose from reflowing when a layer is turned on.
  */
 
+import { writerNotes } from "~/content/writer-notes";
+
 export const LAYERS = [
   "speakers",
   "world",
@@ -161,19 +163,11 @@ export function locate(text: string, anchor: TextAnchor): Span | null {
 /**
  * Fountain notes the writer typed into the prose: `[[ like this ]]`. They are
  * the writer's own text, so they always show; the Notes layer lifts them into
- * the gloss.
+ * the gloss. The same matcher decides what the `prose` projection cuts, so a
+ * note painted here is never sent to a model.
  */
 export function fountainNotes(text: string): (Span & { note: string })[] {
-  const found: (Span & { note: string })[] = [];
-  for (const match of text.matchAll(/\[\[([^\]]*)\]\]/g)) {
-    const start = match.index;
-    found.push({
-      start,
-      end: start + match[0].length,
-      note: (match[1] ?? "").trim(),
-    });
-  }
-  return found;
+  return writerNotes(text);
 }
 
 /** A name the prose may use for a world entry. */

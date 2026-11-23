@@ -5,6 +5,7 @@ import type { StorageConnection } from "./connection";
 import {
   type DocumentSession,
   openDocumentSession,
+  type ReadOnlyReason,
   type SaveStatus,
   type Scheduler,
 } from "./document-session";
@@ -34,6 +35,15 @@ export type CommandError =
     }
   /** This tab is read-only (another tab holds the world). */
   | { readonly kind: "read_only" }
+  /**
+   * The document opened read-only in a tab that saves (it couldn't be
+   * snapshotted before editing), so it can't be changed.
+   */
+  | {
+      readonly kind: "document_read_only";
+      readonly documentId: string;
+      readonly reason: ReadOnlyReason;
+    }
   /** The tab was closed while the document was still opening. */
   | { readonly kind: "closed"; readonly documentId: string }
   /**
@@ -300,6 +310,14 @@ export function createWorkspace(options: WorkspaceOptions): Workspace {
       if (readOnly) return errAsync({ kind: "read_only" as const });
       const { lease, session: loaded } = acquire(documentId);
       return loaded.andThen((session) => {
+        if (session.readOnlyReason) {
+          lease.release();
+          return errAsync({
+            kind: "document_read_only" as const,
+            documentId,
+            reason: session.readOnlyReason,
+          });
+        }
         session.setTitle(title.trim() || UNTITLED);
         return flushed(session)
           .map(() => lease.release())

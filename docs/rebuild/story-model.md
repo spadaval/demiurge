@@ -125,6 +125,8 @@ Adopted on 2026-10-29 (worldcrafter-uicb). The rebuild mission (`.atelier/missio
 
 The first version is headless: a CLI and a skill over one readable file per story, tested by a comparison against the same agent with plain notes (decision worldcrafter-2y4g). A screen comes after a verdict supports it, since how jumping around feels is the part of fluidity a conversation can't test. If a judging panel decides the best stories don't need one, it doesn't get built (decisions worldcrafter-45an and worldcrafter-zybl).
 
+On 2026-11-22 Sumeet directed that the story live in a typed store rather than in files on disk (mission worldcrafter-r7vd). The bible in `app/src/story/` is now the app's story schema, persisted through `StorageAdapter` (memory and IndexedDB) by `app/src/story/store.ts`, and each scene links to the Plate document that holds its prose. The readable file stays the CLI's and the skill's format, and parses into the same `Story`. `app/src/world/`, `app/src/outline/` and `app/src/time/` stay in place until their UI consumers move over (missions worldcrafter-mtkn and worldcrafter-3z9j).
+
 ## Records
 
 Decision worldcrafter-ddha settled how the primitives are stored:
@@ -133,7 +135,15 @@ Decision worldcrafter-ddha settled how the primitives are stored:
 - Beats are optional, inside scenes. A passage anchors to a beat if there is one, otherwise to its scene.
 - A scene is a telling unit that depicts one or more events. `depicts` is descriptive: the scene's own event, placed in story time, alone says when the scene happens. A flashback is placed earlier, and also depicts the earlier events it shows.
 
-That is how the app will store things. In the headless version's file, actors and scenes are plain records and not documents, a scene has no place in story time beyond the events it depicts, and facts don't change at events. A keep verdict has to map one onto the other (decision worldcrafter-2y4g).
+In the headless version's file, actors and scenes are plain records and not documents, a scene has no place in story time beyond the events it depicts, and facts don't change at events (decision worldcrafter-2y4g).
+
+The unification rule of mission worldcrafter-r7vd (approved by Sumeet on 2026-11-22) takes the file's side for the app, superseding ddha's entry-document split:
+
+- Actors and scenes are plain records in the bible, not entry documents. Kinds of world entry other than actors (places, cultures, magic systems and so on) stay world facts and `worldEntries` documents until the UI migration settles whether they need a document link of their own.
+- A `Scene` names the Plate document that holds its prose with `documentId`: a `StoredDocument` whose content tree keeps its block IDs and AI segments. A scene sketched before any prose exists has none, and two scenes never share one (`setSceneDocument`). `sceneDocuments` in `app/src/story/store.ts` reports each scene's prose as linked, unlinked or missing, and any document two scenes share.
+- A scene's optional `book` and `chapter` name the packaging it sits in (`setSceneChapter`). Packaging only: the telling order is the order of the scenes, and a run of scenes with the same book and chapter reads as one chapter.
+
+`StorageAdapter.storyRecords` stores the bible one record per item, so devices can sync and merge it record by record (`worldcrafter-4t98`, `worldcrafter-ji5d`). Each record's ID is built from the item's own identity, with its parts URI-encoded: `actor/mara`, `cause/storm/wreck`, `participant/wreck/actor/ivo`, `position/wreck/log`. Drive turns and relations stay inside their drive, and candidates inside their open question. Three records are singletons: `story` (version and premise), `timeline` (its version and world unit) and `sceneOrder` (the scene IDs in telling order). A save writes only the records whose content changed, stamped with the caller's `updatedAt`, and deletes the records of items the story no longer has, in one atomic batch. A load assembles the records into the file's shape and checks them with the file's own checks, so a bad record fails the load and names itself. A scene that `sceneOrder` doesn't name loads after the ones it does, by ID, so a bible whose records arrive apart still loads. Adding the collection moved the IndexedDB schema to version 2; a version 1 database upgrades with its records kept. Deleting a record leaves a tombstone with its `deletedAt`, as in every synced collection, so another device can learn of the delete; tombstones moved the schema to version 4.
 
 ## Sources
 

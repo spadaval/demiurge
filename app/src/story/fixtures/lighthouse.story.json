@@ -1,0 +1,499 @@
+{
+  "version": 1,
+  "premise": "A lighthouse keeper must choose between the light and the man the guild wants drowned.",
+  "actors": [
+    {
+      "id": "guild",
+      "kind": "organization",
+      "name": "Kestrel Guild",
+      "notes": "Owns the shipping lane."
+    },
+    {
+      "id": "ivo",
+      "kind": "person",
+      "name": "Ivo",
+      "notes": ""
+    },
+    {
+      "id": "mara",
+      "kind": "person",
+      "name": "Mara",
+      "notes": "Keeper of the Salt Light."
+    }
+  ],
+  "drives": [
+    {
+      "id": "keep-light",
+      "actorId": "mara",
+      "want": "Keep the lamp lit",
+      "stakes": "Ships founder on the reef",
+      "method": "Rations the oil",
+      "origins": ["storm"],
+      "relations": [
+        {
+          "to": "sell-light",
+          "type": "opposes"
+        }
+      ],
+      "turns": [
+        {
+          "how": "flipped",
+          "at": "wreck",
+          "into": "leave-island",
+          "note": "The wreck breaks her faith in the light."
+        }
+      ]
+    },
+    {
+      "id": "leave-island",
+      "actorId": null,
+      "want": "Leave the island",
+      "stakes": "",
+      "method": "",
+      "origins": ["wreck"],
+      "relations": [
+        {
+          "to": "sell-light",
+          "type": "allies"
+        }
+      ],
+      "turns": [
+        {
+          "how": "satisfied",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "sell-light",
+      "actorId": "guild",
+      "want": "Sell the light to the crown",
+      "stakes": "The guild's charter",
+      "method": "Starve the keeper of oil",
+      "origins": [],
+      "relations": []
+    }
+  ],
+  "facts": [
+    {
+      "id": "oil-runs-out",
+      "text": "The lamp burns a barrel a week.",
+      "about": [
+        {
+          "id": "oil",
+          "kind": "count"
+        },
+        {
+          "id": "lamp",
+          "kind": "object"
+        }
+      ]
+    }
+  ],
+  "readerQuestions": [
+    {
+      "id": "light-out",
+      "question": "Will the light go out?"
+    },
+    {
+      "id": "why-ivo",
+      "question": "Why does Ivo come back?",
+      "opensAt": "arrival",
+      "answeredAt": "confession"
+    }
+  ],
+  "scenes": [
+    {
+      "actors": ["ivo", "mara"],
+      "id": "arrival",
+      "title": "Arrival",
+      "documentId": "doc-arrival",
+      "book": "The Salt Light",
+      "chapter": "The Lamp",
+      "summary": "Ivo rows in at dusk.",
+      "depicts": ["storm"],
+      "plants": [
+        {
+          "id": "lamp",
+          "kind": "object"
+        }
+      ],
+      "pressures": ["keep-light"],
+      "viewpoint": "mara",
+      "withholds": [
+        {
+          "id": "why-leave",
+          "kind": "openQuestion"
+        }
+      ]
+    },
+    {
+      "actors": ["mara"],
+      "id": "storm-night",
+      "title": "The night the light failed",
+      "documentId": "doc-storm-night",
+      "book": "The Salt Light",
+      "chapter": "The Lamp",
+      "summary": "",
+      "depicts": ["wreck"],
+      "implies": [
+        {
+          "id": "oil-runs-out",
+          "kind": "fact"
+        }
+      ],
+      "pressures": ["keep-light", "sell-light"],
+      "reveals": [
+        {
+          "id": "guild-account",
+          "kind": "version"
+        }
+      ]
+    },
+    {
+      "actors": ["ivo", "mara"],
+      "id": "confession",
+      "title": "Confession",
+      "documentId": "doc-confession",
+      "chapter": "Ashore",
+      "summary": "Ivo tells her about the debt.",
+      "depicts": [],
+      "paysOff": [
+        {
+          "id": "lamp",
+          "kind": "object"
+        }
+      ],
+      "pressures": ["leave-island"],
+      "reveals": [
+        {
+          "id": "debt",
+          "kind": "candidate",
+          "questionId": "why-leave"
+        }
+      ],
+      "viewpoint": "ivo"
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "who-lit",
+      "question": "Who relit the lamp on the last night?",
+      "about": [],
+      "candidates": [],
+      "conflict": true,
+      "leftOpen": "The reader decides."
+    },
+    {
+      "id": "why-leave",
+      "question": "Why did Ivo leave the guild?",
+      "about": [
+        {
+          "id": "ivo",
+          "kind": "actor"
+        }
+      ],
+      "candidates": [
+        {
+          "id": "debt",
+          "answer": "He owes the guild a ship.",
+          "touches": [
+            {
+              "id": "sell-light",
+              "kind": "drive"
+            }
+          ]
+        },
+        {
+          "id": "grief",
+          "answer": "His brother drowned on the reef.",
+          "touches": [],
+          "rejected": "Too neat."
+        },
+        {
+          "id": "wanderlust",
+          "answer": "He wanted adventure.",
+          "touches": []
+        }
+      ],
+      "answer": "debt",
+      "conflict": false,
+      "superseded": [
+        {
+          "candidate": "wanderlust",
+          "answer": "He wanted adventure.",
+          "by": "debt"
+        }
+      ]
+    }
+  ],
+  "causes": [
+    {
+      "cause": "storm",
+      "effect": "wreck"
+    }
+  ],
+  "deliberateGaps": [
+    {
+      "gap": "drive_without_origin",
+      "ref": {
+        "id": "sell-light",
+        "kind": "drive"
+      },
+      "reason": "The guild has always wanted it."
+    },
+    {
+      "gap": "no_reader_question",
+      "ref": null,
+      "reason": "Kept to show a story-wide mark."
+    }
+  ],
+  "versions": [
+    {
+      "id": "guild-account",
+      "text": "The guild says the keeper let the lamp go dark.",
+      "by": ["guild"],
+      "event": "wreck"
+    }
+  ],
+  "knowledge": [
+    {
+      "id": "ivo-believes",
+      "actor": "ivo",
+      "how": "believes",
+      "what": {
+        "id": "guild-account",
+        "kind": "version"
+      },
+      "since": "wreck"
+    },
+    {
+      "id": "mara-knows",
+      "actor": "mara",
+      "how": "knows",
+      "what": {
+        "id": "debt",
+        "kind": "candidate",
+        "questionId": "why-leave"
+      },
+      "until": "tide"
+    }
+  ],
+  "objects": [
+    {
+      "id": "lamp",
+      "name": "The lamp",
+      "notes": "Brass, older than the tower."
+    }
+  ],
+  "participants": [
+    {
+      "event": "storm",
+      "role": "fails",
+      "who": {
+        "id": "lamp",
+        "kind": "object"
+      }
+    },
+    {
+      "event": "wreck",
+      "role": "survivor",
+      "who": {
+        "id": "ivo",
+        "kind": "actor"
+      }
+    }
+  ],
+  "counts": [
+    {
+      "id": "berths",
+      "label": "Berths",
+      "notes": "",
+      "values": [
+        {
+          "at": "storm",
+          "note": "",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "id": "hands",
+      "label": "Hands at the light",
+      "notes": "Out of the berths.",
+      "of": "berths",
+      "threshold": "more_than_half",
+      "values": [
+        {
+          "at": "storm",
+          "note": "",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "oil",
+      "label": "Barrels of oil",
+      "notes": "",
+      "direction": "falls",
+      "threshold": 2,
+      "total": 12,
+      "values": [
+        {
+          "at": "storm",
+          "note": "",
+          "value": 9
+        },
+        {
+          "at": "wreck",
+          "note": "Spent in one night.",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "memberships": [
+    {
+      "id": "ivo-in-guild",
+      "member": "ivo",
+      "group": "guild",
+      "since": "storm",
+      "until": "wreck"
+    }
+  ],
+  "timeline": {
+    "version": 1,
+    "constraints": [
+      {
+        "id": "storm-before-tide",
+        "a": "storm",
+        "authority": {
+          "level": "asserted"
+        },
+        "b": "tide",
+        "duration": {
+          "amount": 10,
+          "frame": "world",
+          "tolerance": 1
+        },
+        "relation": "before"
+      },
+      {
+        "id": "wreck-during-storm",
+        "a": "wreck",
+        "authority": {
+          "level": "asserted"
+        },
+        "b": "storm",
+        "duration": null,
+        "relation": "during"
+      }
+    ],
+    "correspondences": [
+      {
+        "id": "log-stops",
+        "authority": {
+          "level": "asserted"
+        },
+        "frame": "log",
+        "from": "wreck",
+        "rate": 0,
+        "to": "tide"
+      }
+    ],
+    "events": [
+      {
+        "id": "storm",
+        "label": "The storm",
+        "summary": "Three days of gale."
+      },
+      {
+        "id": "tide",
+        "label": "The spring tide",
+        "summary": "The causeway opens."
+      },
+      {
+        "id": "wreck",
+        "label": "The wreck",
+        "summary": ""
+      }
+    ],
+    "follows": [
+      {
+        "entity": "mara",
+        "frame": "log"
+      }
+    ],
+    "frames": [
+      {
+        "id": "log",
+        "label": "The keeper's log",
+        "rate": 6,
+        "reference": "world",
+        "unit": "watch"
+      }
+    ],
+    "placements": [
+      {
+        "authority": {
+          "level": "asserted"
+        },
+        "constraints": [
+          {
+            "duration": {
+              "amount": 2,
+              "frame": "world"
+            },
+            "event": "tide",
+            "relation": "after"
+          }
+        ],
+        "continues": true,
+        "scene": "confession"
+      }
+    ],
+    "positions": [
+      {
+        "authority": {
+          "level": "asserted"
+        },
+        "end": 6,
+        "event": "storm",
+        "frame": "world",
+        "precision": "day",
+        "start": 3
+      },
+      {
+        "authority": {
+          "level": "inferred",
+          "provenance": {
+            "model": "local",
+            "requestId": "req-1",
+            "sourceBlockId": "b_storm2"
+          }
+        },
+        "end": 40,
+        "event": "wreck",
+        "frame": "log",
+        "precision": null,
+        "start": 40
+      }
+    ],
+    "reveals": [
+      {
+        "id": "oil-shown",
+        "authority": {
+          "level": "asserted"
+        },
+        "entry": "lamp",
+        "fact": {
+          "kind": "field",
+          "name": "oil"
+        },
+        "scene": "storm-night",
+        "since": "storm"
+      }
+    ],
+    "worldUnit": "day"
+  }
+}

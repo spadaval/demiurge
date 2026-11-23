@@ -5,7 +5,10 @@ import type { GenerateError, GenerationResult } from "./generator";
 export function describeGenerateError(error: GenerateError): string {
   switch (error.kind) {
     case "read_only":
-      return "This tab is read-only because Demiurge is open in another tab.";
+      // A storage refusal (no reason) also means another tab holds the world.
+      return !("reason" in error) || error.reason.kind === "other_tab"
+        ? "This tab is read-only because Demiurge is open in another tab."
+        : "This document is read-only because Demiurge couldn't save a copy of it before editing. Free up disk space, then close and reopen it.";
     case "busy":
       return "A generation is already running in this document. Stop it first.";
     case "unknown_profile":

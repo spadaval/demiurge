@@ -13,6 +13,8 @@ Audience and job: one person drafting and planning in the same sitting; they wri
 
 Constraints: browser-only; per-speaker tints are assigned per scene, only to speakers present, always paired with the margin cue; Subtext is opt-in per scene until its inference proves accurate; default layer state is Speakers only.
 
+Sheets beside the manuscript (worldcrafter-if6h): the World inspector, Topics talk pages and the agent prompt/tool-trace slip are specified in `DESIGN.md` (Sheets, Ledger, World Inspector, Topics, Agent Slip). They open as sheets in tabs or as a gloss-column slip, never as a third pane or a chat panel, so the thesis below holds for them.
+
 Unresolved: a two-pane split (scene beside an entry) on top of tabs; how the subtext layer is produced (bookkeeping pass, increment worldcrafter-8agg); Fountain-style notes, synopses and boneyard in the content schema (worldcrafter-3lho).
 
 ## Direction contract

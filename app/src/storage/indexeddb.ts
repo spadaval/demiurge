@@ -4,26 +4,40 @@ import {
   type FailureContext,
   failure,
   notFound,
+  restoreContext,
 } from "./internal";
-import type {
-  AnnotationCollection,
-  AnnotationRecord,
-  Collection,
-  CollectionName,
-  Snapshot,
-  SnapshotCollection,
-  SnapshotInfo,
-  StorageAdapter,
-  StorageError,
+import {
+  type AgentRecordCollection,
+  type AnnotationCollection,
+  type AnnotationRecord,
+  COLLECTION_NAMES,
+  type Collection,
+  type CollectionName,
+  type Snapshot,
+  type SnapshotCollection,
+  type SnapshotInfo,
+  type StorageAdapter,
+  type StorageError,
+  type StoredAgentRecord,
+  type SyncedCollectionName,
+  type Tombstone,
+  type WorldRecords,
 } from "./types";
 
 /**
  * Bump when the stores or indexes change, and add a step to `upgrade` that
  * moves version N-1 data forward. Never edit an existing step.
+ *
+ * 1: documents, world entries, annotations, requests, snapshots, outlines,
+ *    timelines. 2: story-bible records (`storyRecords`). 3: story agent
+ *    sessions (`agentRecords`). 4: tombstones of deleted records
+ *    (`tombstones`).
  */
-export const DB_VERSION = 1;
+export const DB_VERSION = 4;
 
 const DOCUMENT_INDEX = "byDocument";
+const SESSION_INDEX = "bySession";
+const COLLECTION_INDEX = "byCollection";
 
 /**
  * Snapshot content lives apart from snapshot metadata so listing history
@@ -32,15 +46,71 @@ const DOCUMENT_INDEX = "byDocument";
  */
 const SNAPSHOT_CONTENT = "snapshotContent";
 
-type StoreName = CollectionName | typeof SNAPSHOT_CONTENT;
+/**
+ * Tombstones of every synced collection, keyed by `[collection, key]`. A
+ * delete writes one in the same transaction as it removes the record, and a
+ * save removes it in the same transaction as it writes the record, so a key
+ * never has both. The records' own stores and indexes hold live records only.
+ * Its `byCollection` index lists one collection's tombstones.
+ */
+const TOMBSTONES = "tombstones";
+
+type StoreName = CollectionName | typeof SNAPSHOT_CONTENT | typeof TOMBSTONES;
 
 interface SnapshotContentRecord {
   readonly id: number;
   readonly content: Snapshot["content"];
 }
 
-function upgrade(db: IDBDatabase, oldVersion: number): void {
-  if (oldVersion < 1) {
+interface TombstoneRecord extends Tombstone {
+  readonly collection: SyncedCollectionName;
+}
+
+/** The tombstone store's key for `key` of `collection`. */
+const tombstoneKey = (collection: SyncedCollectionName, key: string) => [
+  collection,
+  key,
+];
+
+/** Writes `record` to its store and removes its key's tombstone. */
+function putLive(
+  tx: IDBTransaction,
+  collection: SyncedCollectionName,
+  key: string,
+  record: unknown,
+): void {
+  tx.objectStore(collection).put(record);
+  tx.objectStore(TOMBSTONES).delete(tombstoneKey(collection, key));
+}
+
+/** Removes `key` from its store and leaves a tombstone for it. */
+function putTombstone(
+  tx: IDBTransaction,
+  collection: SyncedCollectionName,
+  key: string,
+  deletedAt: number,
+): void {
+  tx.objectStore(collection).delete(key);
+  tx.objectStore(TOMBSTONES).put({
+    collection,
+    key,
+    deletedAt,
+  } satisfies TombstoneRecord);
+}
+
+/**
+ * Moves a database from `oldVersion` to `newVersion` by running each step in
+ * between. `newVersion` is `DB_VERSION` except in tests that build a database
+ * as an older release left it.
+ */
+export function upgrade(
+  db: IDBDatabase,
+  oldVersion: number,
+  newVersion: number = DB_VERSION,
+): void {
+  const step = (version: number) =>
+    oldVersion < version && version <= newVersion;
+  if (step(1)) {
     db.createObjectStore("documents", { keyPath: "id" });
     db.createObjectStore("worldEntries", { keyPath: "documentId" });
     db.createObjectStore("annotations", { keyPath: "id" }).createIndex(
@@ -58,6 +128,20 @@ function upgrade(db: IDBDatabase, oldVersion: number): void {
     // release, schema changes bump DB_VERSION instead.
     db.createObjectStore("outlines", { keyPath: "id" });
     db.createObjectStore("timelines", { keyPath: "id" });
+  }
+  if (step(2)) {
+    db.createObjectStore("storyRecords", { keyPath: "id" });
+  }
+  if (step(3)) {
+    db.createObjectStore("agentRecords", { keyPath: "id" }).createIndex(
+      SESSION_INDEX,
+      "sessionId",
+    );
+  }
+  if (step(4)) {
+    db.createObjectStore(TOMBSTONES, {
+      keyPath: ["collection", "key"],
+    }).createIndex(COLLECTION_INDEX, "collection");
   }
 }
 
@@ -197,26 +281,54 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
   }
 
   function keyed<T>(
-    collection: CollectionName,
+    collection: SyncedCollectionName,
     keyOf: (record: T) => string,
   ): Collection<T> {
     return {
       save: (record) =>
-        run<IDBValidKey>(
+        runIn(
           { operation: "save", collection, id: keyOf(record) },
+          [collection, TOMBSTONES],
           "readwrite",
-          (store) => store.put(record),
-        ).map(() => undefined),
+          (tx) => {
+            putLive(tx, collection, keyOf(record), record);
+            return () => undefined;
+          },
+        ),
       load: (key) => load<T>(collection, key),
       list: () =>
         run<T[]>({ operation: "list", collection }, "readonly", (store) =>
           store.getAll(),
         ),
-      delete: (key) =>
-        run<undefined>(
+      delete: (key) => {
+        const deletedAt = Date.now();
+        return runIn(
           { operation: "delete", collection, id: key },
+          [collection, TOMBSTONES],
           "readwrite",
-          (store) => store.delete(key),
+          (tx) => {
+            putTombstone(tx, collection, key, deletedAt);
+            return () => undefined;
+          },
+        );
+      },
+      listTombstones: () =>
+        runIn(
+          { operation: "list", collection },
+          [TOMBSTONES],
+          "readonly",
+          (tx) => {
+            // The index orders one collection's tombstones by primary key,
+            // `[collection, key]`, so this is by key.
+            const request = tx
+              .objectStore(TOMBSTONES)
+              .index(COLLECTION_INDEX)
+              .getAll(collection);
+            return () =>
+              (request.result as TombstoneRecord[]).map(
+                ({ key, deletedAt }): Tombstone => ({ key, deletedAt }),
+              );
+          },
         ),
     };
   }
@@ -232,6 +344,17 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         { operation: "list", collection: "annotations", id: documentId },
         "readonly",
         (store) => store.index(DOCUMENT_INDEX).getAll(documentId),
+      ),
+  };
+
+  const agentRecords: AgentRecordCollection = {
+    ...keyed<StoredAgentRecord>("agentRecords", (record) => record.id),
+    // The index orders equal session IDs by primary key, so this is by ID.
+    listForSession: (sessionId) =>
+      run<StoredAgentRecord[]>(
+        { operation: "list", collection: "agentRecords", id: sessionId },
+        "readonly",
+        (store) => store.index(SESSION_INDEX).getAll(sessionId),
       ),
   };
 
@@ -316,15 +439,25 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
     snapshots,
     outlines: keyed("outlines", (record) => record.id),
     timelines: keyed("timelines", (record) => record.id),
+    storyRecords: keyed("storyRecords", (record) => record.id),
+    agentRecords,
     batch: (writes) => {
       const stores = new Set<StoreName>();
       for (const write of writes) {
+        if (write.kind !== "saveSnapshot") stores.add(TOMBSTONES);
         if (write.kind === "saveDocument") stores.add("documents");
         if (write.kind === "saveAnnotation") stores.add("annotations");
         if (write.kind === "saveSnapshot") {
           stores.add("snapshots");
           stores.add(SNAPSHOT_CONTENT);
         }
+        if (
+          write.kind === "saveStoryRecord" ||
+          write.kind === "deleteStoryRecord"
+        ) {
+          stores.add("storyRecords");
+        }
+        if (write.kind === "saveAgentRecord") stores.add("agentRecords");
       }
       // A transaction needs at least one store.
       if (stores.size === 0) return okAsync([]);
@@ -335,13 +468,14 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         (tx, abort) => {
           const added: { info: Omit<SnapshotInfo, "id">; add: IDBRequest }[] =
             [];
+          const now = Date.now();
           for (const write of writes) {
             switch (write.kind) {
               case "saveDocument":
-                tx.objectStore("documents").put(write.record);
+                putLive(tx, "documents", write.record.id, write.record);
                 break;
               case "saveAnnotation":
-                tx.objectStore("annotations").put(write.record);
+                putLive(tx, "annotations", write.record.id, write.record);
                 break;
               case "saveSnapshot": {
                 const { content, ...rest } = write.snapshot;
@@ -360,6 +494,15 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
                 added.push({ info, add });
                 break;
               }
+              case "saveStoryRecord":
+                putLive(tx, "storyRecords", write.record.id, write.record);
+                break;
+              case "deleteStoryRecord":
+                putTombstone(tx, "storyRecords", write.id, now);
+                break;
+              case "saveAgentRecord":
+                putLive(tx, "agentRecords", write.record.id, write.record);
+                break;
             }
           }
           return () =>
@@ -367,6 +510,97 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         },
       );
     },
+    dump: () =>
+      runIn(
+        { operation: "list" },
+        [...COLLECTION_NAMES, SNAPSHOT_CONTENT],
+        "readonly",
+        (tx) => {
+          const all = (store: StoreName) => tx.objectStore(store).getAll();
+          const requests = {
+            documents: all("documents"),
+            worldEntries: all("worldEntries"),
+            annotations: all("annotations"),
+            requests: all("requests"),
+            snapshots: all("snapshots"),
+            snapshotContent: all(SNAPSHOT_CONTENT),
+            outlines: all("outlines"),
+            timelines: all("timelines"),
+            storyRecords: all("storyRecords"),
+            agentRecords: all("agentRecords"),
+          };
+          return () => {
+            const read = <T>(request: IDBRequest) => request.result as T[];
+            return {
+              records: {
+                documents: read(requests.documents),
+                worldEntries: read(requests.worldEntries),
+                annotations: read(requests.annotations),
+                requests: read(requests.requests),
+                outlines: read(requests.outlines),
+                timelines: read(requests.timelines),
+                storyRecords: read(requests.storyRecords),
+                agentRecords: read(requests.agentRecords),
+              } as Omit<WorldRecords, "snapshots">,
+              infos: read<SnapshotInfo>(requests.snapshots),
+              contents: read<SnapshotContentRecord>(requests.snapshotContent),
+            };
+          };
+        },
+      ).andThen(({ records, infos, contents }) => {
+        const byId = new Map(contents.map((record) => [record.id, record]));
+        const snapshots: Snapshot[] = [];
+        for (const info of infos) {
+          const record = byId.get(info.id);
+          if (record === undefined) {
+            return errAsync(
+              failure(
+                { operation: "list", collection: "snapshots", id: info.id },
+                new Error(
+                  "snapshot metadata exists but its content is missing",
+                ),
+              ),
+            );
+          }
+          snapshots.push({ ...info, content: record.content });
+        }
+        return okAsync<WorldRecords>({ ...records, snapshots });
+      }),
+    restore: (records) =>
+      runIn(
+        restoreContext(records),
+        [...COLLECTION_NAMES, SNAPSHOT_CONTENT, TOMBSTONES],
+        "readwrite",
+        (tx) => {
+          const putAll = <T>(
+            collection: SyncedCollectionName,
+            list: readonly T[],
+            keyOf: (record: T) => string,
+          ) => {
+            for (const record of list) {
+              putLive(tx, collection, keyOf(record), record);
+            }
+          };
+          putAll("documents", records.documents, (r) => r.id);
+          putAll("worldEntries", records.worldEntries, (r) => r.documentId);
+          putAll("annotations", records.annotations, (r) => r.id);
+          putAll("requests", records.requests, (r) => r.id);
+          putAll("outlines", records.outlines, (r) => r.id);
+          putAll("timelines", records.timelines, (r) => r.id);
+          putAll("storyRecords", records.storyRecords, (r) => r.id);
+          putAll("agentRecords", records.agentRecords, (r) => r.id);
+          // An explicit key above the key generator's moves it past that
+          // key, so later snapshot saves get higher IDs.
+          for (const { content, ...info } of records.snapshots) {
+            tx.objectStore("snapshots").put(info);
+            tx.objectStore(SNAPSHOT_CONTENT).put({
+              id: info.id,
+              content,
+            } satisfies SnapshotContentRecord);
+          }
+          return () => undefined;
+        },
+      ),
     close: () => db.close(),
   };
 }

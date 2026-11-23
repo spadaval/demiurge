@@ -187,6 +187,7 @@ describe("non-streaming", () => {
     expect(received[0]?.path).toBe("/v1/chat/completions");
     expect(result._unsafeUnwrap()).toEqual({
       text: "The end.",
+      toolCalls: [],
       model: "qwen-7b",
       finishReason: "stop",
       logprobs: [
@@ -323,6 +324,7 @@ describe("streaming", () => {
     expect(result._unsafeUnwrap()).toEqual({
       text: "Once upon a time",
       logprobs: null,
+      toolCalls: [],
       finishReason: "stop",
       model: "qwen",
     });
@@ -715,9 +717,9 @@ describe("checking a request before sending", () => {
       "a chat message with an unknown role",
       () => ({
         ...chat(),
-        body: { messages: [{ role: "tool", content: "x" }] },
+        body: { messages: [{ role: "narrator", content: "x" }] },
       }),
-      "needs messages",
+      'has role "narrator"',
     ],
     [
       "a completion body with messages instead of a prompt",
