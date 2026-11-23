@@ -63,3 +63,11 @@ The writer can now read the whole story bible in the app: the rail's World view 
 - `generate.app.test.tsx` prints four "update to Rail not wrapped in act" warnings, with or without this change. `worldcrafter-d93c` covers those tests.
 - The bible reloads when the inspector is shown, not when the agent or a command changes it. `worldcrafter-hqca` adds live updates for scene apparatus, and should call `bible.refresh()`, or replace it with a subscription, so the inspector follows too.
 
+Round 2: the four round 1 findings are fixed in ff5ab78, each with a component test. I confirmed the drawer and notice tests fail without their fix. The inspector now says story time through `describePosition`, moved out of `app/src/story/render.ts`, so the bible's rendered text and the inspector agree. A failed read is now only the Notice: the World sheet and the rail no longer print their own copy of the message. `cd app && bun run check` passes: 1618 tests.
+
+### Responses
+
+1-0xsb.1: fixed in ff5ab78
+1-0xsb.2: fixed in ff5ab78
+1-0xsb.3: fixed in ff5ab78
+1-0xsb.4: fixed in ff5ab78
