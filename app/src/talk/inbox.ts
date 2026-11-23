@@ -33,23 +33,3 @@ export function worldInbox(
     ),
   ];
 }
-
-/** A contradiction's kind as the inbox labels it. */
-export function contradictionKind(contradiction: Contradiction): string {
-  switch (contradiction.source) {
-    case "timeline":
-      return "Timeline";
-    case "openQuestion":
-      return "Noted conflict";
-    case "cause":
-      return contradiction.kind === "cycle"
-        ? "Circle of causes"
-        : "Cause after effect";
-    case "knowledge":
-      return "Knowledge";
-    case "membership":
-      return "Membership";
-    case "count":
-      return "Count";
-  }
-}

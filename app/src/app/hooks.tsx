@@ -5,9 +5,10 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { LayerStore } from "~/layers/state";
-import type { Store } from "~/workspace/store";
+import type { Store, WritableStore } from "~/workspace/store";
 import type { Workspace } from "~/workspace/workspace";
 import type { WorldStore } from "~/world/store";
+import type { Bible } from "./bible";
 import type { Environment } from "./environment";
 import type { Generation } from "./generation";
 import type { LayerSource } from "./layers";
@@ -26,8 +27,22 @@ export interface AppServices {
   readonly layerSource: LayerSource;
   readonly environment: Environment;
   readonly generation: Generation;
+  /**
+   * The story bible, live: the World inspector, the scene apparatus and the
+   * stamp read it, and every writer of the bible goes through its storage.
+   */
+  readonly bible: Bible;
+  /** Whether the World tab is open, and what it last showed. */
+  readonly worldTab: WritableStore<WorldTab>;
   /** Talk pages: topics, the World inbox, and their turns. */
   readonly talk: AppTalk;
+}
+
+/** The World tab (DESIGN.md, Sheets): one tab for every inspector sheet. */
+export interface WorldTab {
+  readonly open: boolean;
+  /** The view or record it last showed, as the URL's `at`. */
+  readonly at: string;
 }
 
 const ServicesContext = createContext<AppServices | null>(null);

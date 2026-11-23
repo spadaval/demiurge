@@ -1,4 +1,10 @@
-import { Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+  useRouterState,
+} from "@tanstack/react-router";
 import {
   type Dispatch,
   type SetStateAction,
@@ -13,6 +19,7 @@ import {
   shortcutLabel,
   shortcutOf,
 } from "~/generate/shortcuts";
+import { bibleScene } from "~/layers/bible";
 import { LAYER_LABELS, LAYERS, layersForScene, mentions } from "~/layers/model";
 import { createStore } from "~/workspace/store";
 import { isSheetTab } from "~/workspace/tabs";
@@ -20,6 +27,8 @@ import type { CommandError } from "~/workspace/workspace";
 import { KIND_DEFINITIONS } from "~/world/kinds";
 import { describeCommandError, describeReadOnly } from "./environment";
 import { useEnvironment, useServices, useStore, useWorkspace } from "./hooks";
+import { worldTabTitle } from "./inspector";
+import { parseAt } from "./inspector-model";
 import { formatStoryTime } from "./manuscript";
 import { Rail } from "./rail";
 import {
@@ -47,9 +56,10 @@ export function Shell() {
   // Narrow screens only: the rail opens over the page.
   const [railOpen, setRailOpen] = useState(false);
   const active = useActiveDocumentId();
-  const activeTab = useActiveTab();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: opening a document or sheet closes the rail
-  useEffect(() => setRailOpen(false), [activeTab]);
+  // Any navigation (a document, an inspector view or record) closes it.
+  const href = useRouterState({ select: (router) => router.location.href });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: following a link closes the rail
+  useEffect(() => setRailOpen(false), [href]);
   const onError = (error: CommandError) => setMessage({ kind: "error", error });
   const info = (text: string) => setMessage({ kind: "info", text });
   return (
@@ -86,6 +96,7 @@ export function Shell() {
       </header>
       <div className="notices" aria-live="polite">
         <Notices />
+        <BibleNotice />
         <GenerationNotice />
         {message && (
           <p
@@ -204,7 +215,7 @@ function TabStrip({
   };
 
   return (
-    <nav className="tab-strip" aria-label="Open documents">
+    <nav className="tab-strip" aria-label="Open tabs">
       {tabs.open.map((id) => {
         const scene = sceneOf(id);
         const isActive = id === active;
@@ -239,17 +250,87 @@ function TabStrip({
           </div>
         );
       })}
+      <WorldTabItem />
     </nav>
   );
 }
 
+/**
+ * The World tab (DESIGN.md, Sheets): every inspector view and bible record
+ * shows in this one tab, after the document tabs. It opens when a view or
+ * record is shown and stays until closed.
+ */
+function WorldTabItem() {
+  const { worldTab, bible } = useServices();
+  const tab = useStore(worldTab);
+  const state = useStore(bible.state);
+  const onWorld = useRouterState({
+    select: (router) => router.location.pathname === "/world",
+  });
+  const navigate = useNavigate();
+  if (!tab.open) return null;
+  const title = worldTabTitle(
+    state.kind === "ready" ? state.story : null,
+    parseAt(tab.at),
+  );
+  const close = async () => {
+    // Home returns to the last active document, if any.
+    if (onWorld) await navigate({ to: "/" });
+    worldTab.set({ ...worldTab.get(), open: false });
+  };
+  return (
+    <div className="tab" data-active={onWorld}>
+      <Link
+        to="/world"
+        search={{ at: tab.at }}
+        aria-current={onWorld ? "page" : undefined}
+      >
+        {onWorld && <span className="crumb">World › </span>}
+        <span className="tab-title">{title}</span>
+      </Link>
+      <button
+        type="button"
+        className="tab-close"
+        aria-label={`Close ${title}`}
+        onClick={() => void close()}
+      >
+        <CloseIcon />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * When the scene is: from the story bible when the document is a bible
+ * scene's prose and the bible places it, else from the outline's timeline.
+ */
 function StoryTimeStamp({ active }: { active: string | null }) {
-  const { manuscript } = useServices();
+  const { manuscript, bible } = useServices();
   const state = useStore(manuscript.state);
-  if (!active || state.kind !== "ready") return null;
-  const scene = state.view.scenes.get(active);
-  if (!scene) return null;
-  if (!scene.time) {
+  const bibleState = useStore(bible.state);
+  const fromBible = useMemo(
+    () =>
+      active !== null && bibleState.kind === "ready"
+        ? bibleScene(bibleState.story, active)
+        : null,
+    [bibleState, active],
+  );
+  if (!active) return null;
+  const scene =
+    state.kind === "ready" ? state.view.scenes.get(active) : undefined;
+  if (fromBible?.stamp) {
+    return (
+      <p className="stamp">
+        <span className="visually-hidden">Story time: </span>
+        {fromBible.stamp.text}
+        {fromBible.stamp.inferred && (
+          <span className="stamp-inferred">inferred</span>
+        )}
+      </p>
+    );
+  }
+  if (!fromBible && !scene) return null;
+  if (!scene?.time) {
     return (
       <p className="stamp stamp-undated">
         <span className="visually-hidden">Story time: </span>Not yet placed in
@@ -493,6 +574,31 @@ function GenerationShortcuts({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [generation, active]);
   return null;
+}
+
+/**
+ * Why the story bible could not be read, while it can't. After a good read
+ * the inspector keeps showing that, so this says it may be out of date.
+ */
+function BibleNotice() {
+  const { bible } = useServices();
+  const error = useStore(bible.error);
+  const state = useStore(bible.state);
+  if (error === null) return null;
+  return (
+    <p className="notice notice-error" role="alert">
+      {error}
+      {state.kind === "ready" &&
+        " The World inspector shows the bible as last read."}{" "}
+      <button
+        type="button"
+        className="notice-dismiss"
+        onClick={() => void bible.refresh()}
+      >
+        Try again
+      </button>
+    </p>
+  );
 }
 
 /** What the last generation command came to, when there is something to say. */

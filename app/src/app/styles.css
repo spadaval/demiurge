@@ -387,43 +387,6 @@ a {
 }
 
 a.topic-row:hover .topic-title {
-  text-decoration: underline;
-  text-decoration-color: var(--ink-3);
-  text-underline-offset: 3px;
-}
-
-.topic-row[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--ink);
-}
-
-.rail-count {
-  font-variant-numeric: tabular-nums;
-}
-
-.rail-more {
-  margin: 6px 0 0;
-  padding: 0 20px;
-}
-
-.rail-foot-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.rail-foot-link:hover {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--ink-3);
-  text-underline-offset: 3px;
-}
-
-.topic-title {
   font-size: 14px;
   color: var(--ink);
 }
@@ -961,7 +924,12 @@ a.topic-row:hover .topic-title {
   );
 }
 
-[data-layer-world] :is(.lm-entity, .lm-suggest) {
+/* Words naming a story-bible record a World note is about. */
+.lm-record {
+  --line: linear-gradient(var(--ink-3), var(--ink-3));
+}
+
+[data-layer-world] :is(.lm-entity, .lm-suggest, .lm-record) {
   --line-w: 100%;
 }
 
@@ -1570,6 +1538,273 @@ a.topic-row:hover .topic-title {
   border-color: var(--rule-strong);
 }
 
+/* ── Agent slip ───────────────────────────────────────────────────────── */
+
+/*
+ * The context viewer for a story agent turn (DESIGN.md, Agent Slip): the
+ * request slip's form, plus the tool trace, kept contradictions and trace
+ * suspects. Apparatus and neutrals throughout; nothing here is AI prose, so
+ * no vermilion, and raised umber only for a failure.
+ */
+.agent-slip {
+  font-family: var(--font-apparatus);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.agent-slip .context-viewer-header {
+  margin-bottom: 12px;
+}
+
+.agent-slip .request-slip-head {
+  margin-bottom: 2px;
+}
+
+/* A part as sent: its text in its setting, no field border. */
+.context-viewer-sent {
+  max-height: 16lh;
+  margin: 0 0 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  scrollbar-width: thin;
+}
+
+.agent-slip .context-viewer-cards {
+  margin: 0 0 10px;
+}
+
+.slip-field {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.agent-slip input[type="text"] {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--rail);
+  color: var(--ink);
+  caret-color: var(--ink);
+}
+
+.agent-slip input[type="text"]:hover,
+.agent-slip input[type="text"]:focus-visible {
+  border-color: var(--rule-strong);
+}
+
+.agent-slip input[type="text"]:disabled {
+  color: var(--ink-2);
+}
+
+.slip-scope {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+}
+
+.slip-reach {
+  margin: 0 0 10px;
+  color: var(--ink-2);
+}
+
+.context-viewer-actions .slip-reach {
+  margin: 0;
+}
+
+.slip-label {
+  display: flex;
+  align-items: baseline;
+  margin: 18px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.slip-label-count {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.slip-trace,
+.slip-rows,
+.slip-refs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slip-trace > li,
+.slip-rows > li {
+  border-top: 1px solid var(--rule);
+  animation: slip-arrive var(--fade) var(--ease-out);
+}
+
+.slip-trace > li:last-child,
+.slip-rows > li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+@keyframes slip-arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+.slip-call summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.slip-call summary::-webkit-details-marker {
+  display: none;
+}
+
+.slip-call summary::before {
+  content: "›";
+  width: 8px;
+  color: var(--ink-3);
+  transition: rotate var(--fade) var(--ease-out);
+}
+
+.slip-call[open] summary::before {
+  rotate: 90deg;
+}
+
+.slip-call summary:focus-visible {
+  outline-offset: -1px;
+}
+
+.slip-call-ordinal,
+.slip-call-state {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.slip-call-name {
+  font:
+    400 12.5px / 1.5 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  color: var(--ink);
+}
+
+.slip-call-args {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+
+.slip-call-state {
+  white-space: nowrap;
+}
+
+.slip-call[data-state="failed"] .slip-call-state {
+  color: var(--ink);
+}
+
+.slip-call-body {
+  padding: 0 0 10px 16px;
+}
+
+.slip-code {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    400 12.5px / 1.5 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  color: var(--ink-2);
+}
+
+.slip-refs {
+  margin-bottom: 10px;
+}
+
+.slip-refs li {
+  padding: 1px 0;
+}
+
+.slip-ref-plain {
+  color: var(--ink-3);
+}
+
+/* A reference: ink text on an ink-3 underline that lifts to ink. */
+.slip-reference {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.slip-reference:hover {
+  text-decoration-color: var(--ink);
+}
+
+.slip-rows > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 7px 0;
+}
+
+.slip-row-kind {
+  flex-basis: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.slip-row-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.slip-row-meta {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.slip-row-reason {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 /* ── Model settings ───────────────────────────────────────────────────── */
 
 .settings-sheet {
@@ -1732,6 +1967,447 @@ a.topic-row:hover .topic-title {
   }
 }
 
+/* ── World inspector ──────────────────────────────────────────────────── */
+/* DESIGN.md, World Inspector, Ledger and References: the story bible as
+   ledgers in hairlines, all apparatus, no fills and no cards. */
+
+.inspect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inspect-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 20px;
+  font-size: 14px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.inspect-row:hover,
+.inspect-row[aria-current="page"] {
+  color: var(--ink);
+}
+
+.inspect-row:focus-visible {
+  outline-offset: -3px;
+}
+
+.inspect-row[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--ink);
+}
+
+.inspect-count {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.time {
+  color: var(--time);
+}
+
+/* An `ink-3` phrase where the bible has nothing yet: not an error. */
+.gap {
+  color: var(--ink-3);
+}
+
+.ref {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.ref:hover {
+  text-decoration-color: var(--ink);
+}
+
+.ref-removed {
+  color: var(--ink-3);
+}
+
+.inspector-head {
+  margin-bottom: 8px;
+}
+
+.inspector-kind {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.inspector-authority {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sheet-title {
+  margin: 0;
+  font: 500 21px / 1.25 var(--font-apparatus);
+  color: var(--ink);
+}
+
+.inspector-lede {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+/* Ledger: rows between hairlines across the prose, gutter and gloss
+   columns; each row's number hangs in the left margin. */
+.ledger {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  max-width: 1000px;
+}
+
+.ledger-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.ledger-label h2 {
+  margin: 0;
+  font: inherit;
+}
+
+.ledger-group {
+  margin-top: 22px;
+}
+
+.ledger-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ledger-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.ledger-rows > .ledger-row:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.ledger-row[data-sub] {
+  padding-left: 20px;
+}
+
+.ledger-row:has(a):hover {
+  border-top-color: var(--rule-strong);
+}
+
+.ledger-body {
+  min-width: 0;
+}
+
+.ledger-lead,
+.ledger-kind {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.ledger-kind {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Hangs right-aligned in the margin, 22px clear, as a scene number does. */
+.ledger-number {
+  position: absolute;
+  right: calc(100% + 22px);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.ledger-number.time {
+  color: var(--time);
+}
+
+.ledger-line {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.ledger-meta {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+
+.ledger-meta .ref {
+  color: var(--ink-3);
+}
+
+.ledger-meta .ref:hover {
+  color: var(--ink);
+}
+
+.ledger-chosen {
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.ledger-row[data-candidate="live"] .ledger-lead .ref {
+  color: var(--ink-2);
+}
+
+.ledger-row[data-candidate="rejected"] .ledger-lead .ref,
+.ledger-row[data-candidate="rejected"] .ledger-line {
+  color: var(--ink-3);
+}
+
+.count-value {
+  color: var(--ink);
+}
+
+.ledger-empty {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+/* The superseded answers fold under one line, like a slip part. */
+.ledger-fold {
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.ledger-fold summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-3);
+}
+
+.ledger-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.ledger-fold summary:hover {
+  color: var(--ink);
+}
+
+.ledger-fold ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.ledger-fold li + li {
+  margin-top: 4px;
+}
+
+.ledger-meta-inline {
+  color: var(--ink-3);
+}
+
+/* Reader-Order: the scenes in the prose column, the spark beside them in
+   the gutter and gloss column, one point per 32px row. */
+.reader-order {
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;
+}
+
+.reader-order > .ledger-group:first-child,
+.reader-order > .ledger-empty {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.reader-questions {
+  grid-column: 1 / -1;
+}
+
+.scene-ledger-row {
+  height: 32px;
+  min-height: 0;
+  padding-block: 0;
+  align-items: center;
+}
+
+.scene-ledger-row .ledger-lead {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-spark {
+  grid-column: 3;
+  grid-row: 1;
+  width: 100%;
+  overflow: visible;
+}
+
+.sheet-spark .spark-line {
+  fill: none;
+  stroke: var(--time);
+  stroke-width: 1.5;
+}
+
+/* Record detail: fields in the prose column, touches in the gloss column. */
+.record-fields {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.record-group {
+  margin: 0;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--rule);
+}
+
+.record-group + .record-group {
+  margin-top: 14px;
+}
+
+.record-field {
+  margin-bottom: 12px;
+}
+
+.record-field dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.record-field dd {
+  max-width: 60ch;
+  margin: 3px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.record-list li + li {
+  margin-top: 4px;
+}
+
+.record-actions {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.record-touches {
+  grid-column: 4;
+  grid-row: 2;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.touch-section + .touch-section {
+  margin-top: 26px;
+}
+
+.touch-title {
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.touch-kind {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.touch-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.touch-group li + li {
+  margin-top: 6px;
+}
+
+.touch-how {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 /* ── Topics ───────────────────────────────────────────────────────────── */
 
 /* A text action: apparatus words that act, in the surrounding size. */
@@ -1757,30 +2433,7 @@ a.topic-row:hover .topic-title {
   cursor: default;
 }
 
-/* A reference to a record, scene, entry or topic. */
-.ref {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--ink-3);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
-}
-
-.ref:hover {
-  text-decoration-color: var(--ink);
-}
-
 .ref-plain {
-  color: var(--ink);
-}
-
-.ref-removed {
-  color: var(--ink-3);
-}
-
-.sheet-title {
-  margin: 0;
-  font: 500 21px / 1.25 var(--font-apparatus);
   color: var(--ink);
 }
 
@@ -1801,103 +2454,6 @@ a.topic-row:hover .topic-title {
     monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-/* Ledger sheets: the World inbox, resolved and archived topics. */
-/* The ledger spans the prose column, gutter and gloss column, up to 1000px. */
-.ledger-sheet {
-  max-width: 1000px;
-  margin: 0 32px 0 var(--margin-width);
-  padding: 52px 0 160px;
-}
-
-.ledger-head {
-  margin-bottom: 22px;
-}
-
-.ledger-lede {
-  margin: 6px 0 0;
-  font-size: 14px;
-  color: var(--ink-2);
-}
-
-.ledger,
-.turns {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.ledger {
-  border-bottom: 1px solid var(--rule);
-}
-
-.ledger-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 32px;
-  padding: 7px 0;
-  border-top: 1px solid var(--rule);
-  color: inherit;
-  text-decoration: none;
-}
-
-.ledger-link:hover {
-  border-top-color: var(--rule-strong);
-}
-
-.ledger-link:focus-visible {
-  outline: 1px solid var(--ink-2);
-  outline-offset: -3px;
-}
-
-.ledger-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.ledger-kind,
-.ledger-group,
-.turn-head {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-
-.ledger-lead {
-  font-size: 14px;
-  color: var(--ink);
-}
-
-.ledger-secondary {
-  font-size: 13.5px;
-  color: var(--ink-2);
-}
-
-.ledger-meta {
-  flex: none;
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-3);
-}
-
-.ledger-group {
-  display: flex;
-  justify-content: space-between;
-  margin: 22px 0 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.ledger-empty {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink-3);
 }
 
 /* The topic sheet: head, turns and composer on the prose column. */
@@ -2010,6 +2566,11 @@ a.topic-row:hover .topic-title {
 }
 
 .turn-head {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -2347,8 +2908,52 @@ a.topic-row:hover .topic-title {
     padding: 40px 20px;
   }
 
-  .topic-sheet,
-  .ledger-sheet {
+  /* Inspector: one column. Margin numbers move inline before the lead,
+     metadata drops under the row, the spark hides, and a record's touches
+     follow its fields under a hairline. */
+  .ledger,
+  .record-fields,
+  .record-touches {
+    grid-column: 1;
+  }
+
+  .reader-order {
+    display: block;
+  }
+
+  .sheet-spark {
+    display: none;
+  }
+
+  .ledger-row {
+    flex-wrap: wrap;
+    gap: 2px 16px;
+  }
+
+  .ledger-number,
+  .ledger-number.time {
+    position: static;
+    margin-right: 6px;
+    color: var(--ink-3);
+  }
+
+  .ledger-meta {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .scene-ledger-row {
+    flex-wrap: nowrap;
+  }
+
+  .record-touches {
+    grid-row: 3;
+    margin-top: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .topic-sheet {
     max-width: none;
     margin-left: 0;
     padding: 28px 20px 96px;
@@ -2360,10 +2965,5 @@ a.topic-row:hover .topic-title {
 
   .topic-title-row > :first-child {
     flex-basis: 100%;
-  }
-
-  .ledger-row {
-    flex-direction: column;
-    gap: 2px;
   }
 }

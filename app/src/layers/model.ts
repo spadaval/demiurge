@@ -62,7 +62,9 @@ export type MarkStyle =
   /** Implication, reveal or foreshadowing: a dotted underline. */
   | { readonly kind: "subtext" }
   /** A name the bookkeeping pass thinks should be a world entry. */
-  | { readonly kind: "suggestion" };
+  | { readonly kind: "suggestion" }
+  /** Words naming a story-bible record a World note is about: a hairline. */
+  | { readonly kind: "record" };
 
 export interface LayerMark {
   readonly id: string;
@@ -78,7 +80,9 @@ export type NoteAuthority =
   | "first in reading order"
   | "AI segment"
   | "suggested"
-  | "yours";
+  | "yours"
+  /** Computed from the story bible's records, as the writer or agent set them. */
+  | "story bible";
 
 /** Body text of a note; `strong` runs are set in full ink. */
 export type NoteRun = { readonly text: string; readonly strong?: true };
@@ -100,6 +104,12 @@ export interface GlossNote {
   readonly authority: NoteAuthority;
   readonly body: readonly NoteRun[];
   readonly actions: readonly NoteAction[];
+  /**
+   * `scene` for a note about the scene as a whole, with no words to sit
+   * beside: it is keyed after the notes on words and follows the scene's
+   * last line. Otherwise a note shows only while a mark's words are found.
+   */
+  readonly placement?: "scene";
 }
 
 /** Everything the layers draw for one scene, before anchors are resolved. */
@@ -117,6 +127,18 @@ export const NO_SCENE_LAYERS: SceneLayers = {
   marks: [],
   notes: [],
 };
+
+/** Both sources' layers for one scene: `a`'s speakers, marks and notes first. */
+export function mergeLayers(a: SceneLayers, b: SceneLayers): SceneLayers {
+  if (b === NO_SCENE_LAYERS) return a;
+  if (a === NO_SCENE_LAYERS) return b;
+  return {
+    speakers: [...a.speakers, ...b.speakers],
+    cues: new Map([...a.cues, ...b.cues]),
+    marks: [...a.marks, ...b.marks],
+    notes: [...a.notes, ...b.notes],
+  };
+}
 
 /**
  * Tints are assigned per scene, in order of first appearance, and only to

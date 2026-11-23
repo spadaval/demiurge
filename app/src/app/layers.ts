@@ -5,7 +5,9 @@ export type NoteResolution = "confirmed" | "dismissed";
 
 /**
  * Where a scene's layers come from, apart from what the text itself shows
- * (World mentions and the writer's Fountain notes are read from the text).
+ * (World mentions and the writer's Fountain notes are read from the text)
+ * and what the story bible says (`~/layers/bible.ts`, read live by the
+ * sheet).
  *
  * Speakers, time expressions and subtext are the bookkeeping pass's output
  * (increment worldcrafter-8agg), so the app's own source is empty; the demo

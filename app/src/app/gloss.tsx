@@ -20,12 +20,24 @@ import {
 import type { AiSegmentStatus } from "~/content/schema";
 import type { DocumentEditor } from "~/editor/document-editor";
 import { SegmentActionsContext, SegmentModelsContext } from "~/editor/elements";
-import { assignKeys, LayerPlugin, type NoteKey } from "~/editor/layer-plugin";
+import {
+  assignKeys,
+  LayerPlugin,
+  type NoteKey,
+  textBlocks,
+} from "~/editor/layer-plugin";
+import {
+  type BibleNote,
+  bibleLayers,
+  bibleScene,
+  sameBibleLayers,
+} from "~/layers/bible";
 import {
   type GlossNote,
   LAYER_LABELS,
   type LayerId,
   layersForScene,
+  mergeLayers,
   type NoteAction,
   stackNotes,
 } from "~/layers/model";
@@ -35,6 +47,8 @@ import { RequestSlip, SegmentActions } from "./generation-ui";
 import { useServices, useStore } from "./hooks";
 import type { NoteResolution } from "./layers";
 import { entryNames } from "./world";
+
+const NO_BIBLE_NOTES: readonly BibleNote[] = [];
 
 /** Space between stacked notes in the gloss column. */
 const NOTE_GAP = 14;
@@ -69,16 +83,45 @@ export function Sheet({
   session: DocumentSession;
   head: ReactNode;
 }) {
-  const { layers, layerSource, worldIndex, workspace, manuscript, generation } =
-    useServices();
+  const {
+    layers,
+    layerSource,
+    worldIndex,
+    workspace,
+    manuscript,
+    bible,
+    generation,
+  } = useServices();
   const editor = useEditorRef();
   const state = useStore(layers);
   const resolutions = useStore(layerSource.resolutions);
   const entries = useStore(worldIndex.entries);
   const documents = useStore(workspace.documents);
+  const storyState = useStore(bible.state);
   const documentId = session.documentId;
   const on = layersForScene(state.on, state.subtextScenes, documentId);
-  const sceneLayers = layerSource.scene(documentId);
+
+  // The bible's notes change when the bible does; where they sit (on words
+  // that name their record, or after the scene's last line) when the text
+  // does.
+  const bibleNotes = useMemo(
+    () =>
+      (storyState.kind === "ready"
+        ? bibleScene(storyState.story, documentId)?.notes
+        : undefined) ?? NO_BIBLE_NOTES,
+    [storyState, documentId],
+  );
+  const fromSource = layerSource.scene(documentId);
+  const fromBible = useEditorSelector(
+    (current) =>
+      bibleLayers(bibleNotes, textBlocks(current.children), fromSource.marks),
+    [bibleNotes, fromSource],
+    { equalityFn: sameBibleLayers },
+  );
+  const sceneLayers = useMemo(
+    () => mergeLayers(fromSource, fromBible),
+    [fromSource, fromBible],
+  );
 
   const names = useMemo(
     () =>
@@ -264,19 +307,14 @@ function Gloss({
   const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
   const version = useEditorVersion();
 
+  // In the order the keys were given (a … z, aa …), not by their letters,
+  // which sort `aa` before `b`.
+  const order = new Map([...keys.keys()].map((id, i) => [id, i]));
   const keyed = notes
     .filter(
       (note) => keys.has(note.id) && resolutions.get(note.id) !== "dismissed",
     )
-    .sort((a, b) =>
-      (keys.get(a.id)?.letter ?? "").localeCompare(
-        keys.get(b.id)?.letter ?? "",
-        "en",
-        {
-          numeric: true,
-        },
-      ),
-    );
+    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   // The slip has the column to itself while it is open.
   const visible = new Set(
     slip
@@ -294,15 +332,25 @@ function Gloss({
     const base = gloss.getBoundingClientRect().top;
     const anchors = new Map<string, number>();
     const placements = [];
+    // Notes about the whole scene follow its last line, so the notes on
+    // words keep their places beside them.
+    const last = sheet.querySelector(".prose")?.lastElementChild;
+    const end = last
+      ? Math.round(last.getBoundingClientRect().bottom - base)
+      : 0;
     for (const note of keyed) {
-      const anchor = sheet.querySelector(
-        `[data-anchor="${CSS.escape(note.id)}"]`,
-      );
       const element = noteRefs.current.get(note.id);
-      if (!anchor || !element) continue;
-      const rects = anchor.getClientRects();
-      const line = rects[rects.length - 1] ?? anchor.getBoundingClientRect();
-      const top = Math.round(line.top - base);
+      if (!element) continue;
+      let top = end;
+      if (note.placement !== "scene") {
+        const anchor = sheet.querySelector(
+          `[data-anchor="${CSS.escape(note.id)}"]`,
+        );
+        if (!anchor) continue;
+        const rects = anchor.getClientRects();
+        const line = rects[rects.length - 1] ?? anchor.getBoundingClientRect();
+        top = Math.round(line.top - base);
+      }
       anchors.set(note.id, top);
       if (visible.has(note.id)) {
         placements.push({
@@ -342,11 +390,15 @@ function Gloss({
     setLayout((previous) => (sameLayout(previous, next) ? previous : next));
   };
 
-  // Layer toggles and note changes: place before paint, so a note appears
-  // where it belongs in the same frame as its marks.
+  // Layer toggles and note changes (a bible note's text changes with the
+  // bible): place before paint, so a note appears where it belongs in the
+  // same frame as its marks.
   const slipKey = slip ? `${slip.record.id} ${slip.sending}` : "";
   // biome-ignore lint/correctness/useExhaustiveDependencies: these keys are what changes the layout
-  useLayoutEffect(() => measure.current(), [visibleKey, keyedKey, slipKey]);
+  useLayoutEffect(
+    () => measure.current(),
+    [visibleKey, keyedKey, slipKey, notes],
+  );
 
   // A new slip: bring it into view, ready to send, and follow its size.
   const slipId = slip?.record.id;
@@ -405,7 +457,8 @@ function Gloss({
       >
         {keyed.map((note) => {
           const top = layout.tops.get(note.id);
-          if (top === undefined) return null;
+          // A scene note has no words, so no key in the text to lead from.
+          if (top === undefined || note.placement === "scene") return null;
           return (
             <line
               key={note.id}

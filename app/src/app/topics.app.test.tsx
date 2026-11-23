@@ -381,11 +381,11 @@ test("resolve and archive close a topic to turns; reopen brings the composer bac
   );
   await click(control("Resolved and archived"));
   await until(() => query(".ledger-sheet") !== null, "the closed sheet");
-  expect(text(".ledger-group")).toBe("Resolved1");
+  expect(text(".ledger-label")).toBe("Resolved1");
   expect(text(".ledger-lead")).toBe("The log and the storm disagree");
 
   // Reopen, then archive.
-  await click(query(".ledger-link"));
+  await click(query(".ledger-lead a"));
   await until(() => query(".topic-sheet") !== null, "the topic sheet");
   await click(control("Reopen", ".topic-head"));
   await until(() => query(".composer") !== null, "the composer");
@@ -405,7 +405,7 @@ test("the World inbox sheet lists raised topics and kept contradictions", async 
   const rows = queryAll(".ledger-row").map((row) => ({
     kind: row.querySelector(".ledger-kind")?.textContent,
     lead: row.querySelector(".ledger-lead")?.textContent,
-    secondary: row.querySelector(".ledger-secondary")?.textContent,
+    secondary: row.querySelector(".ledger-line")?.textContent,
     meta: row.querySelector(".ledger-meta")?.textContent,
   }));
   expect(rows[0]).toMatchObject({
@@ -418,8 +418,14 @@ test("the World inbox sheet lists raised topics and kept contradictions", async 
     contradictions.map((c) => ["Contradiction", c.message]),
   );
   expect(text(".tab[data-active='true'] .tab-title")).toBe("World inbox");
+  // A contradiction opens the inspector's Contradictions view.
+  expect(
+    queryAll(".ledger-row")[1]
+      ?.querySelector(".ledger-lead a")
+      ?.getAttribute("href"),
+  ).toBe("/world?at=contradictions");
 
-  await click(query(".ledger-link"));
+  await click(query(".ledger-lead a"));
   await until(() => query(".topic-sheet") !== null, "the topic sheet");
   expect(router.state.location.pathname).toBe(`/topic/${topic.id}`);
 });
@@ -618,4 +624,30 @@ test("going away and back during a turn shows the writer's message once", async 
     "Which is it?",
     "Answered.",
   ]);
+});
+
+test("an edit the model makes in a topic shows in the bible at once", async () => {
+  const { topic } = await raise("The log and the storm disagree");
+  await render(`/topic/${topic.id}`);
+  await until(() => query(".composer") !== null, "the composer");
+  stub.script(
+    streamedToolCalls({
+      name: "describeEvent",
+      args: { id: "storm", summary: "One night of gale." },
+    }),
+    streamed(["Done."]),
+  );
+  await type(
+    query<HTMLTextAreaElement>(".composer textarea"),
+    "Make it one night.",
+  );
+  await click(send());
+  await until(() => !query("[aria-busy]") && turns().length === 3, "the turn");
+  const summary = () => {
+    const state = services.bible.state.get();
+    return state.kind === "ready"
+      ? state.story.timeline.events.find((e) => e.id === "storm")?.summary
+      : undefined;
+  };
+  await until(() => summary() === "One night of gale.", "the bible to update");
 });

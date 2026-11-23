@@ -7,10 +7,10 @@
  */
 
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { storyContradictions } from "~/story/contradictions";
 import type { Story } from "~/story/story";
-import { contradictionKind, type InboxItem, worldInbox } from "~/talk/inbox";
+import { type InboxItem, worldInbox } from "~/talk/inbox";
 import type {
   TalkAuthor,
   TalkMessage,
@@ -22,6 +22,14 @@ import type {
 import { SCOPE_GROUPS, scopeLine, scopeName } from "~/talk/scope";
 import type { TopicView, TurnStop } from "~/talk/talk";
 import { useServices, useStore } from "./hooks";
+import {
+  Empty,
+  LedgerGroup,
+  LedgerRow,
+  SheetHead,
+  ViewLink,
+} from "./inspector";
+import { contradictionKind } from "./inspector-model";
 import { CLOSED_TOPICS_TAB, INBOX_TAB, topicTab } from "./tab-routes";
 import type { RunningTurn } from "./talk";
 
@@ -258,111 +266,75 @@ export function InboxFoot() {
 
 // ----------------------------------------------------------------- ledgers
 
-function LedgerRow({
-  label,
-  lead,
-  secondary,
-  meta,
-  topic,
-}: {
-  label?: string;
-  lead: string;
-  secondary: string;
-  meta: string;
-  topic: string | null;
-}) {
-  const body = (
-    <>
-      <span className="ledger-main">
-        {label && <span className="ledger-kind">{label}</span>}
-        <span className="ledger-lead">{lead}</span>
-        <span className="ledger-secondary">{secondary}</span>
-      </span>
-      <span className="ledger-meta">{meta}</span>
-    </>
-  );
-  return (
-    <li>
-      {topic === null ? (
-        <div className="ledger-row">{body}</div>
-      ) : (
-        <Link
-          to="/topic/$topicId"
-          params={{ topicId: topic }}
-          className="ledger-row ledger-link"
-        >
-          {body}
-        </Link>
-      )}
-    </li>
-  );
-}
-
-function LedgerSheet({
-  title,
-  lede,
-  children,
-}: {
-  title: string;
-  lede: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="ledger-sheet">
-      <header className="ledger-head">
-        <h1 className="sheet-title">{title}</h1>
-        <p className="ledger-lede">{lede}</p>
-      </header>
-      {children}
-    </div>
-  );
-}
-
 const startedLine = (topic: Topic) =>
   `${topic.startedBy.kind === "model" ? `Model · ${topic.startedBy.profile}` : "You"}, ${formatDate(topic.createdAt)}`;
 
-/** Everything waiting on the writer. */
+const plural = (n: number, one: string, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
+
+/** A topic's title as a reference to its topic tab. */
+function TopicRef({ topic }: { topic: Topic }) {
+  return (
+    <Link to="/topic/$topicId" params={{ topicId: topic.id }} className="ref">
+      {topic.title}
+    </Link>
+  );
+}
+
+/** Everything waiting on the writer (DESIGN.md, World inbox sheet). */
 export function InboxPage() {
   useSheetTab(INBOX_TAB);
   const { story, inbox } = useTalk();
   const topics = inbox.filter((item) => item.kind === "topic").length;
   const kept = inbox.length - topics;
   return (
-    <LedgerSheet
-      title="World inbox"
-      lede={`${topics} ${topics === 1 ? "topic" : "topics"} the model raised, ${kept} ${kept === 1 ? "contradiction" : "contradictions"} kept.`}
-    >
-      {inbox.length === 0 ? (
-        <p className="ledger-empty">
-          Nothing is waiting on you. Topics the model raises and contradictions
-          the story keeps gather here.
-        </p>
-      ) : (
-        <ul className="ledger">
-          {inbox.map((item) =>
-            item.kind === "topic" ? (
-              <LedgerRow
-                key={item.key}
-                label="Topic"
-                lead={item.topic.title}
-                secondary={aboutLine(story, item.topic.scope)}
-                meta={startedLine(item.topic)}
-                topic={item.topic.id}
-              />
-            ) : (
-              <LedgerRow
-                key={item.key}
-                label="Contradiction"
-                lead={item.contradiction.message}
-                secondary={contradictionKind(item.contradiction)}
-                meta="Kept"
-                topic={null}
-              />
-            ),
-          )}
-        </ul>
-      )}
-    </LedgerSheet>
+    <article className="sheet ledger-sheet" aria-label="World inbox">
+      <SheetHead title="World inbox">
+        {`${plural(topics, "topic")} the model raised, ${plural(kept, "contradiction")} kept.`}
+      </SheetHead>
+      <div className="ledger">
+        {inbox.length === 0 ? (
+          <Empty>
+            Nothing is waiting on you. Topics the model raises and
+            contradictions the story keeps gather here.
+          </Empty>
+        ) : (
+          <LedgerGroup label="Waiting" count={inbox.length}>
+            {inbox.map((item) =>
+              item.kind === "topic" ? (
+                <li key={item.key} className="ledger-row">
+                  <div className="ledger-body">
+                    <p className="ledger-kind">Topic</p>
+                    <p className="ledger-lead">
+                      <TopicRef topic={item.topic} />
+                    </p>
+                    <p className="ledger-line">
+                      {aboutLine(story, item.topic.scope)}
+                    </p>
+                  </div>
+                  <span className="ledger-meta">{startedLine(item.topic)}</span>
+                </li>
+              ) : (
+                <li key={item.key} className="ledger-row">
+                  <div className="ledger-body">
+                    <p className="ledger-kind">Contradiction</p>
+                    <p className="ledger-lead">
+                      <ViewLink view="contradictions">
+                        {item.contradiction.message}
+                      </ViewLink>
+                    </p>
+                    <p className="ledger-line">
+                      {contradictionKind(item.contradiction)}
+                    </p>
+                  </div>
+                  <span className="ledger-meta">kept</span>
+                </li>
+              ),
+            )}
+          </LedgerGroup>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -373,44 +345,38 @@ export function ClosedTopicsPage() {
   const resolved = topics.filter((topic) => topic.status === "resolved");
   const archived = topics.filter((topic) => topic.status === "archived");
   const groups = [
-    { status: "resolved", topics: resolved },
-    { status: "archived", topics: archived },
-  ] as const;
-  const total = resolved.length + archived.length;
+    { label: "Resolved", topics: resolved },
+    { label: "Archived", topics: archived },
+  ];
   return (
-    <LedgerSheet
-      title="Resolved and archived"
-      lede={`${resolved.length} resolved, ${archived.length} archived.`}
-    >
-      {total === 0 ? (
-        <p className="ledger-empty">
-          No topics are resolved or archived yet. Topics you settle are kept
-          here.
-        </p>
-      ) : (
-        groups.map(({ status, topics: listed }) =>
-          listed.length === 0 ? null : (
-            <section key={status} aria-labelledby={`closed-${status}`}>
-              <h2 className="ledger-group" id={`closed-${status}`}>
-                <span>{status === "resolved" ? "Resolved" : "Archived"}</span>
-                <span>{listed.length}</span>
-              </h2>
-              <ul className="ledger">
+    <article className="sheet ledger-sheet" aria-label="Resolved and archived">
+      <SheetHead title="Resolved and archived">
+        {`${resolved.length} resolved, ${archived.length} archived.`}
+      </SheetHead>
+      <div className="ledger">
+        {resolved.length + archived.length === 0 ? (
+          <Empty>
+            No topics are resolved or archived yet. Topics you settle are kept
+            here.
+          </Empty>
+        ) : (
+          groups.map(({ label, topics: listed }) =>
+            listed.length === 0 ? null : (
+              <LedgerGroup key={label} label={label} count={listed.length}>
                 {listed.map((topic) => (
                   <LedgerRow
                     key={topic.id}
-                    lead={topic.title}
-                    secondary={aboutLine(story, topic.scope)}
+                    lead={<TopicRef topic={topic} />}
+                    lines={[aboutLine(story, topic.scope)]}
                     meta={formatDate(topic.closedAt ?? topic.updatedAt)}
-                    topic={topic.id}
                   />
                 ))}
-              </ul>
-            </section>
-          ),
-        )
-      )}
-    </LedgerSheet>
+              </LedgerGroup>
+            ),
+          )
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -480,7 +446,18 @@ function ScopeLine({ scope }: { scope: TopicScope }) {
               {name}
             </Link>
           ) : (
-            <span className="ref-plain">{name}</span>
+            <Link
+              to="/world"
+              search={{
+                at:
+                  scope.kind === "record"
+                    ? scope.ref
+                    : `scene:${scene?.id ?? ""}`,
+              }}
+              className="ref"
+            >
+              {name}
+            </Link>
           )}
         </>
       )}

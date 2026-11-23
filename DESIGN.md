@@ -322,7 +322,7 @@ Fountain-style speaker cue: 12px Source Sans 600, 0.1em, uppercase, right-aligne
 
 ### Layer Marks
 Painted behind the words as three background layers sized by width, so they draw left to right:
-- **World:** a 1px `ink-3` hairline under known entities (always 700); suggested names get a 3px-dash `ink-2` hairline.
+- **World:** a 1px `ink-3` hairline under known entities (always 700) and under words naming a story-bible record a World note is about (at the prose's own weight); suggested names get a 3px-dash `ink-2` hairline.
 - **Time:** a `time-band` wash over the lower 42% of the line.
 - **Subtext:** a 2px dotted gold rule (1.5px dots).
 - **Notes:** the writer's `[[ notes ]]` gain a faint bone wash and lift from `ink-3` to `ink-2`.
@@ -330,6 +330,8 @@ Painted behind the words as three background layers sized by width, so they draw
 
 ### Gloss Note (signature)
 A lettered key, not a card. The noted phrase ends in a raised 11px key letter in its layer's hue; beside it in the gloss column, a 26px `rule-strong` tick in the gutter leads to the note. The note is a head (letter · kind, 12px uppercase label in the layer hue) with its authority right-aligned in `ink-3` ("inferred", "suggested", "linked"), a 13.5px body in `ink-2` with key facts lifted to `ink`, and one-click text actions in `ink` ("Confirm", "Not implied") that underline on hover. Unavailable actions dim to `ink-3`. Notes and ticks appear only when their layer is on: the note fades, the tick draws.
+
+**Bible notes.** On a scene whose prose a story-bible scene names, the bible sets its own notes in the same grammar, with the authority "story bible" (or "inferred" for an inferred time): Time notes for when the scene is after the scene before it and when each event it shows happens; World notes for each count as the scene opens and as it changes, and for each version of an event beside what really happened; Subtext notes for what the scene plants and pays off, the viewpoint's dramatic irony, and what is still held back. A note sits on the first words in the prose that name its record (its name, a stated year, a count of ten or more). A note whose record the prose doesn't name is about the whole scene: it has no key in the text and no tick, is lettered after the notes on words, and follows the scene's last line, so notes on words keep their places beside them. The masthead stamp reads the bible's time for the scene (its latest placed event) before the outline's.
 
 ### AI Segment Plate (signature)
 AI-made prose inside a double-ruled vermilion frame (1px border, 1px outline offset 3px), padded 12px 16px. Its caption is a 12px vermilion uppercase label ("AI segment · model") with Regenerate and Accept at the right; while generating, the caption breathes between full and 55% opacity over 1.6s. The prose inside keeps the body setting; only the frame says who wrote it.

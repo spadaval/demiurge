@@ -57,6 +57,7 @@ interface LayerLeafProps {
   wcSay?: number;
   wcEntity?: true;
   wcSuggest?: true;
+  wcRecord?: true;
   wcTime?: true;
   wcSub?: true;
   wcNote?: true;
@@ -153,6 +154,7 @@ function LayerLeaf(props: PlateLeafProps) {
   const classes = ["lm"];
   if (leaf.wcEntity) classes.push("lm-entity");
   if (leaf.wcSuggest) classes.push("lm-suggest");
+  if (leaf.wcRecord) classes.push("lm-record");
   if (leaf.wcTime) classes.push("lm-time");
   if (leaf.wcSub) classes.push("lm-sub");
   if (leaf.wcNote) classes.push("lm-note");
@@ -257,6 +259,8 @@ function markProps(
       return { wcSub: true };
     case "suggestion":
       return { wcSuggest: true };
+    case "record":
+      return { wcRecord: true };
   }
 }
 
@@ -315,9 +319,10 @@ export function textBlocks(
 }
 
 /**
- * Note keys for the scene: lettered in the order their words appear, so the
- * gloss reads in the prose's order. Notes whose words aren't in the text get
- * no key and don't show.
+ * Note keys for the scene: notes on words, lettered in the order their words
+ * appear, so the gloss reads in the prose's order; then notes about the
+ * whole scene, in their order, since they follow its last line. Notes whose
+ * words aren't in the text get no key and don't show.
  */
 export function assignKeys(
   value: readonly unknown[],
@@ -339,6 +344,10 @@ export function assignKeys(
     const note = layers.notes.find((n) => n.id === noteId);
     if (!note || keys.has(noteId)) continue;
     keys.set(noteId, { letter: noteKey(keys.size), layer: note.layer });
+  }
+  for (const note of layers.notes) {
+    if (note.placement !== "scene" || keys.has(note.id)) continue;
+    keys.set(note.id, { letter: noteKey(keys.size), layer: note.layer });
   }
   return keys;
 }
