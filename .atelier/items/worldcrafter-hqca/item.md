@@ -67,3 +67,10 @@ A scene whose prose a story-bible scene names now shows the bible's view of it i
 
 `cd app && bun run check`: tsc and Biome clean, 1621 tests pass across 76 files. The 4 React act warnings it prints come from `generate.app.test.tsx` and predate this change (`worldcrafter-d93c`).
 
+Round 2: both findings were right, and both new component tests fail on round 1's code. `bibleLayers` now takes the scene's other marks and reserves the place of each keyed one that still locates, so a bible note whose only words end there becomes a note about the scene. The gloss orders notes by the order `assignKeys` gave their keys. `cd app && bun run check`: 1624 tests pass. `measure-layers`: 0 px movement, slowest 32.9 ms.
+
+### Responses
+
+1-ik8g.1: fixed in 52c3df9
+1-ik8g.2: fixed in 52c3df9
+
