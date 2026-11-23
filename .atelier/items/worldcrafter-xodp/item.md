@@ -61,3 +61,9 @@ Items 1, 3, 4 and 5 are built with tests. Item 2 is dropped: the stale pin it de
 
 **Separate fix** (`a496465`). On master too, `bun run check` failed when the host was loaded. The cause is the story CLI test "every example runs" in `app/scripts/story.test.ts`. It starts dozens of CLI processes one after another and took 9.5 s at a load average of 15, over bun's default 5 s timeout. It now has a 30 s budget. The generator's "stays fast" timing test can still fail under load; that is `worldcrafter-08kf`.
 
+**Round 2.** Each stored request now records the profile's server, kind and model it was made for (`madeFor`, an optional field in `app/src/context/requests.ts`). Retargeting compares that record with the profile as it is now, not with the editable request body. With the profile unchanged, nothing is retargeted, so the writer's model and parameters stay. A new server takes the profile's URL and model. A new model at the same server replaces the model only where the writer didn't choose one. A new kind drops the old kind's own parameters. Requests stored before this change have no `madeFor` and fall back to the round 1 guess.
+
+### Responses
+
+1-7x1e.1: fixed in 9e5bb39
+
