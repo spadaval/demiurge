@@ -318,4 +318,65 @@ describe("a turn's trace", () => {
       refsOf(await run("readerOrder", { before: "confession" })),
     ).toContain("open-question:why-leave");
   });
+
+  test("reads each field by what it means, whatever its ID holds", async () => {
+    const storage = createMemoryStorage();
+    const story = parseStory(
+      await Bun.file(
+        new URL("../story/fixtures/lighthouse.story.json", import.meta.url),
+      ).text(),
+    )._unsafeUnwrap();
+    (await saveStory(storage, story, 1))._unsafeUnwrap();
+    const run = async (name: string, args: JsonValue) =>
+      (
+        await executeStoryToolCall(
+          storage,
+          {
+            id: name,
+            type: "function",
+            function: { name, arguments: JSON.stringify(args) },
+          },
+          2,
+        )
+      )._unsafeUnwrap().result;
+    const refsOf = (result: StoryToolResult) => {
+      const [only] = turnTrace(
+        turn([step(1, [answered("a", result, 1)], 1, 2)]),
+      );
+      return only === undefined
+        ? []
+        : callNamed(only).flatMap((item) =>
+            item.kind === "reference" && item.reference.kind === "record"
+              ? [item.reference.ref]
+              : [],
+          );
+    };
+    // An ID with a space is still a ref under `ref`.
+    expect(
+      (
+        await run("addActor", {
+          id: "old man",
+          name: "The old man",
+          kind: "person",
+          notes: "",
+        })
+      ).ok,
+    ).toBe(true);
+    expect(refsOf(await run("show", { ref: "actor:old man" }))).toEqual([
+      "actor:old man",
+    ]);
+    // A scene's ID is a scene's, even when it holds a colon or reads like
+    // another kind's ref.
+    const scenes: StoryToolResult = {
+      ok: true,
+      tool: "scenes",
+      kind: "query",
+      lines: ["1. scene:act:one", "fact: free text that isn't a ref"],
+      data: [
+        { scene: "act:one", position: 1 },
+        { scene: "actor:mara", position: 2 },
+      ],
+    };
+    expect(refsOf(scenes)).toEqual(["scene:act:one", "scene:actor:mara"]);
+  });
 });
