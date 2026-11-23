@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-if6h
 title: Amend DESIGN.md for Night Edition bible inspector, Topics talk surface, and agent prompt/tool-trace slip
-status: in_review
+status: approved
 mission: worldcrafter-mtkn
 labels:
 - design
