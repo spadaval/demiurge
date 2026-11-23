@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-7r87
 title: Expose story commands as native typed LLM tools with validation and contradiction reporting
-status: approved
+status: in_review
 mission: worldcrafter-r7vd
 labels:
 - agent
@@ -50,3 +50,5 @@ Not done, and worth knowing:
 - Positions and constraints written by tools carry no `authority`, so they read as asserted, as the CLI's do. Whether AI-made timeline values should be `inferred` is a product call for the agent runner (`worldcrafter-667u`).
 - `scripts/story.test.ts` "every example runs" takes about 4s against its 5s default timeout, on master and on this branch alike. It timed out twice under a host load average of 23. That fragility predates this change and should be filed beside `worldcrafter-08kf`.
 
+
+Round 2: master was merged in (`fc067ab`). `worldcrafter-0pt4` had changed `toldBeforeLines` in `app/scripts/story.ts`, where it no longer lives. I ported its change (viewpoint marks as the scene opens via `sceneSpan`, with `viewpointTurns` for marks that change during the scene) into `app/src/story/queries.ts` as written, and kept master's new help text in the CLI. `cd app && bun run check` passes: 1344 tests across 60 files. Round 1's deferred findings are unchanged; the CLI timeout flake is filed as `worldcrafter-ko6g`.
