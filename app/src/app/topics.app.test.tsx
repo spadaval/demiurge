@@ -544,3 +544,78 @@ test("the writer's message shows while the model's turn runs", async () => {
   await until(() => !query("[aria-busy]"), "the answer");
   expect(turns().at(-1)?.body).toBe("Answered.");
 });
+
+/** Holds the next model reply until `release` is called. */
+function heldReply(text: string) {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  stub.script(async (body) => {
+    await held;
+    return streamed([text])(body);
+  });
+  return () => release();
+}
+
+test("text typed during a new topic's first turn stays in the composer", async () => {
+  await render("/inbox");
+  await click(query("#rail-tab-topics"));
+  await click(control("New topic", ".rail"));
+  await until(() => query(".topic-sheet") !== null, "the topic sheet");
+  await type(query<HTMLInputElement>(".topic-title-field"), "Lamp");
+  await type(
+    query<HTMLTextAreaElement>(".composer textarea"),
+    "First question",
+  );
+  const release = heldReply("First answer.");
+  await click(send());
+  await until(() => query("[aria-busy]") !== null, "the running turn");
+  await type(
+    query<HTMLTextAreaElement>(".composer textarea"),
+    "My next thought while I wait",
+  );
+  release();
+  await until(
+    () => !query("[aria-busy]") && turns().length === 2,
+    "the first answer",
+  );
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe(
+    "My next thought while I wait",
+  );
+  expect(query<HTMLInputElement>(".topic-title-field")?.value).toBe("Lamp");
+});
+
+test("going away and back during a turn shows the writer's message once", async () => {
+  const { topic } = await raise("The log and the storm disagree");
+  const router = await render(`/topic/${topic.id}`);
+  await until(() => query(".composer") !== null, "the composer");
+  const release = heldReply("Answered.");
+  await type(query<HTMLTextAreaElement>(".composer textarea"), "Which is it?");
+  await click(send());
+  await until(() => query("[aria-busy]") !== null, "the running turn");
+  await act(() => router.navigate({ to: "/inbox" }));
+  await until(() => query(".ledger-sheet") !== null, "the inbox");
+  await act(() =>
+    router.navigate({ to: "/topic/$topicId", params: { topicId: topic.id } }),
+  );
+  await until(
+    () => query("[aria-busy]") !== null && turns().length >= 3,
+    "the running topic",
+  );
+  // Let the reload of the stored writer message land.
+  await settle();
+  await settle();
+  expect(turns().map((t) => [t.author, t.body])).toEqual([
+    ["Model · Planner", "The log says calm; the scene says gale."],
+    ["You", "Which is it?"],
+    ["Model · Planner", ""],
+  ]);
+  release();
+  await until(() => !query("[aria-busy]"), "the answer");
+  expect(turns().map((t) => t.body)).toEqual([
+    "The log says calm; the scene says gale.",
+    "Which is it?",
+    "Answered.",
+  ]);
+});

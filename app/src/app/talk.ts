@@ -29,6 +29,12 @@ import { createStore, type Store, type WritableStore } from "~/workspace/store";
 export interface RunningTurn {
   /** The writer's message the turn answers; null when trying a turn again. */
   readonly message: string | null;
+  /**
+   * How many messages the topic held when the turn began. The writer's
+   * message is shown from here until a loaded view holds more than this,
+   * which means it has been stored and shows as a turn of its own.
+   */
+  readonly after: number;
   /** `Waiting for the model…`, `Running touches…`. */
   readonly status: string;
   /** The model's text so far, streamed. */
@@ -109,6 +115,7 @@ const TALK_SAMPLER = { max_tokens: 2000 };
 
 const IDLE: RunningTurn = {
   message: null,
+  after: 0,
   status: "Waiting for the model…",
   text: "",
   calls: [],
@@ -188,9 +195,10 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
     const controller = new AbortController();
     controllers.set(id, controller);
     setIn(errors, id, undefined);
-    setIn(running, id, { ...IDLE, message });
+    const after = views.get().get(id)?.messages.length ?? 0;
+    setIn(running, id, { ...IDLE, message, after });
     const onEvent = (event: AgentEvent) => {
-      const now = running.get().get(id) ?? { ...IDLE, message };
+      const now = running.get().get(id) ?? { ...IDLE, message, after };
       switch (event.kind) {
         case "delta":
           setIn(running, id, {
@@ -282,7 +290,9 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       if (topics.get().some((topic) => topic.id === id)) {
         // Stored once it got that far, whatever the turn came to.
         setIn(drafts, id, undefined);
-        setIn(unsent, id, undefined);
+        // The title is the topic's now; text typed during the turn is the
+        // writer's next message, so it stays.
+        setUnsent(id, { title: "" });
       } else {
         // Nothing was stored: the writer's text stays theirs to send.
         setUnsent(id, { text: message });

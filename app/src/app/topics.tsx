@@ -583,7 +583,7 @@ function DraftSheet({ id, scope }: { id: string; scope: TopicScope }) {
       </header>
       {running ? (
         <ol className="turns">
-          <RunningTurnView id={id} turn={running} label={label} />
+          <RunningTurnView id={id} turn={running} label={label} shown={0} />
         </ol>
       ) : (
         <p className="turns-empty">
@@ -656,7 +656,12 @@ function TopicSheet({ view }: { view: TopicView }) {
           <Turn key={message.id} message={message} />
         ))}
         {running && (
-          <RunningTurnView id={topic.id} turn={running} label={label} />
+          <RunningTurnView
+            id={topic.id}
+            turn={running}
+            label={label}
+            shown={messages.length}
+          />
         )}
         {!running && stop && <StoppedTurn id={topic.id} stop={stop} />}
       </ol>
@@ -789,15 +794,18 @@ function RunningTurnView({
   id,
   turn,
   label,
+  shown,
 }: {
   id: string;
   turn: RunningTurn;
   label: string | null;
+  /** How many stored messages the sheet shows above the running turn. */
+  shown: number;
 }) {
   const { talk } = useServices();
   return (
     <>
-      {turn.message !== null && (
+      {turn.message !== null && shown <= turn.after && (
         <li className="turn">
           <div className="turn-head">
             <span className="turn-author">You</span>
