@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ji5d
 title: Cloudflare Worker sync backend for laptop and phone
-status: changes_requested
+status: in_review
 mission: worldcrafter-3z9j
 labels:
 - sync
@@ -74,3 +74,5 @@ Laptop and phone can now sync one world through a Cloudflare Worker, and a devic
 ### Responses
 
 1-vant.1: fixed in 4799884
+2-gmrn.2: fixed in 93879c5
+2-gmrn.3: fixed in 93879c5
