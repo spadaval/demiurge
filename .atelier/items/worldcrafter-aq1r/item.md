@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-aq1r
 title: Feed unified story bible context into the scene prose Context Viewer
-status: in_review
+status: changes_requested
 mission: worldcrafter-3z9j
 labels:
 - context
