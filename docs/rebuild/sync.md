@@ -116,7 +116,9 @@ failures and without a provider key in the browser.
   the response, streamed or not. Only `Accept`, `X-Title` and
   `HTTP-Referer` are forwarded from the browser: never its cookies, Access
   token or `Authorization`. It doesn't follow redirects, which could carry a
-  key elsewhere, and takes secret values out of error bodies it passes back.
+  key elsewhere, and takes secret values out of every response as it
+  streams: providers report some errors inside a 200, and the client keeps
+  an error's text in the AI text's provenance.
 - **Cancel.** The Worker passes `request.signal` to the upstream fetch, and
   a streamed response is piped straight through, so a writer pressing Stop
   ends generation upstream. `enable_request_signal` in `wrangler.jsonc`

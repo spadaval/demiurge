@@ -8,7 +8,7 @@ import { buildRequest, send } from "../llm/client";
 import { UPSTREAM_HEADER } from "../llm/proxy";
 import type { BackendProfile, StreamDelta } from "../llm/types";
 import type { AccessVerifier } from "./access";
-import { parseUpstreams } from "./proxy";
+import { parseUpstreams, redactStream } from "./proxy";
 import { inProcessWorker } from "./testing";
 
 const OPENROUTER_KEY = "sk-or-v1-secret-value";
@@ -364,6 +364,88 @@ describe("inference proxy", () => {
     expect(sent[0]?.get(UPSTREAM_HEADER)).toBe(
       "https://openrouter.test/api/v1",
     );
+  });
+
+  test("takes the key out of errors a 200 response carries, which provenance keeps", async () => {
+    const request = (stream: boolean) =>
+      buildRequest(
+        router,
+        { kind: "chat", messages: [{ role: "user", content: "Hi" }] },
+        { stream },
+      );
+    // A JSON error inside a 200.
+    const json = await send(router, request(false), {
+      fetch: inProcessWorker(undefined, {
+        vars,
+        ...stub(() =>
+          Response.json({ error: { message: `failed: ${OPENROUTER_KEY}` } }),
+        ),
+      }).fetch,
+    });
+    expect(json._unsafeUnwrapErr()).toMatchObject({ kind: "server" });
+    expect(json._unsafeUnwrapErr().message).toContain("[redacted]");
+    expect(json._unsafeUnwrapErr().message).not.toContain(OPENROUTER_KEY);
+
+    // An SSE error part-way through, the key split across chunks.
+    const encoder = new TextEncoder();
+    const text = `data: ${JSON.stringify(chunk({ content: "Half a " }))}\n\ndata: ${JSON.stringify({ error: { message: `bad key ${OPENROUTER_KEY}` } })}\n\n`;
+    const cut = text.indexOf(OPENROUTER_KEY) + 6;
+    const deltas: string[] = [];
+    const streamed = await send(router, request(true), {
+      fetch: inProcessWorker(undefined, {
+        vars,
+        ...stub(
+          () =>
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(encoder.encode(text.slice(0, cut)));
+                  controller.enqueue(encoder.encode(text.slice(cut)));
+                  controller.close();
+                },
+              }),
+              { headers: { "content-type": "text/event-stream" } },
+            ),
+        ),
+      }).fetch,
+      onDelta: (d) => deltas.push(d.text),
+    });
+    expect(deltas).toEqual(["Half a "]);
+    expect(streamed._unsafeUnwrapErr()).toMatchObject({ kind: "server" });
+    expect(streamed._unsafeUnwrapErr().message).toContain("bad key [redacted]");
+  });
+
+  test("redacting holds back only what could start a secret", async () => {
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const chunks = ["data: one\n\n", "key: sk-a", "bc and sk-", "z", "é sk-"];
+    const pieces: string[] = [];
+    const reader = redactStream(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const piece of chunks) controller.enqueue(encoder.encode(piece));
+          controller.close();
+        },
+      }),
+      ["sk-abc", 'q"x'],
+    ).getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pieces.push(decoder.decode(value));
+    }
+    // The first event passes on at once; "sk-a" waits to be told apart.
+    expect(pieces[0]).toBe("data: one\n\n");
+    expect(pieces.join("")).toBe("data: one\n\nkey: [redacted] and sk-zé sk-");
+    // A secret as JSON escapes it is caught too.
+    const escaped = await new Response(
+      redactStream(
+        new Response(JSON.stringify({ m: 'q"x' }))
+          .body as ReadableStream<Uint8Array>,
+        ['q"x'],
+      ),
+    ).text();
+    expect(escaped).toBe('{"m":"[redacted]"}');
   });
 
   test("names a missing secret without showing any value", async () => {

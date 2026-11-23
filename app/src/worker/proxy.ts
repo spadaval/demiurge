@@ -119,9 +119,75 @@ export function parseUpstreams(
   return { ok: true, upstreams };
 }
 
+/**
+ * The forms a secret can take in a response: as is, and as JSON writes it
+ * inside a string, should it hold a character JSON escapes.
+ */
+const secretForms = (secrets: readonly string[]): string[] => [
+  ...new Set(
+    secrets.flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]),
+  ),
+];
+
 /** Replaces every secret value in `text`, so no response can echo one. */
 const redact = (text: string, secrets: readonly string[]) =>
   secrets.reduce((out, secret) => out.split(secret).join("[redacted]"), text);
+
+/**
+ * How much of the end of `text` could be the start of a secret, and so must
+ * wait for the next chunk before it can be told apart.
+ */
+function unsettledTail(text: string, secrets: readonly string[]): number {
+  let longest = 0;
+  for (const secret of secrets) {
+    for (let n = Math.min(secret.length - 1, text.length); n > longest; n--) {
+      if (text.endsWith(secret.slice(0, n))) {
+        longest = n;
+        break;
+      }
+    }
+  }
+  return longest;
+}
+
+/**
+ * `body` with every secret replaced, as it streams. A provider can report an
+ * error inside a 200 response, as JSON or as an SSE event part-way through,
+ * and the client keeps that message in the AI text's provenance, so every
+ * response is redacted, not only failed ones. Text is passed on as soon as
+ * it can't be the start of a secret, so streaming isn't held back; a secret
+ * split across chunks is still caught. Cancelling the result cancels `body`.
+ */
+export function redactStream(
+  body: ReadableStream<Uint8Array>,
+  secrets: readonly string[],
+): ReadableStream<Uint8Array> {
+  const forms = secretForms(secrets);
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  let held = "";
+  const pass = (
+    text: string,
+    controller: TransformStreamDefaultController<Uint8Array>,
+  ) => {
+    const redacted = redact(held + text, forms);
+    const keep = unsettledTail(redacted, forms);
+    held = redacted.slice(redacted.length - keep);
+    const ready = redacted.slice(0, redacted.length - keep);
+    if (ready !== "") controller.enqueue(encoder.encode(ready));
+  };
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        pass(decoder.decode(chunk, { stream: true }), controller);
+      },
+      flush(controller) {
+        pass(decoder.decode(), controller);
+        if (held !== "") controller.enqueue(encoder.encode(held));
+      },
+    }),
+  );
+}
 
 /**
  * Answers one `/api/llm/...` request, already let through by Access:
@@ -198,7 +264,10 @@ export async function handleLlmProxy(
     );
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause);
-    return refuse(502, redact(`could not reach ${target}: ${reason}`, secrets));
+    return refuse(
+      502,
+      redact(`could not reach ${target}: ${reason}`, secretForms(secrets)),
+    );
   }
 
   if (response.status >= 300 && response.status < 400) {
@@ -211,17 +280,10 @@ export async function handleLlmProxy(
   const contentType = response.headers.get("content-type");
   const responseHeaders = new Headers({ "cache-control": "no-store" });
   if (contentType !== null) responseHeaders.set("content-type", contentType);
-  if (!response.ok) {
-    // An error body is small; read it to take out any echoed credential.
-    const text = await response.text().catch(() => "");
-    return new Response(redact(text, secrets), {
-      status: response.status,
-      headers: responseHeaders,
-    });
-  }
-  // Streamed through as it arrives; cancelling it cancels the upstream body.
-  return new Response(response.body, {
-    status: response.status,
-    headers: responseHeaders,
-  });
+  // Streamed through as it arrives, redacted; cancelling it cancels the
+  // upstream body.
+  return new Response(
+    response.body === null ? null : redactStream(response.body, secrets),
+    { status: response.status, headers: responseHeaders },
+  );
 }
