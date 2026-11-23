@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-t163
 title: Add app/ bun run check as an Atelier merge check
-status: in_review
+status: approved
 mission: worldcrafter-k7uh
 labels:
 - atelier
