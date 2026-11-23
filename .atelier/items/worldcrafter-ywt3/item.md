@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ywt3
 title: 'Host the agent slip on topic sheets: Request, Context and the next-turn slip'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -66,4 +66,16 @@ Every model turn on a topic sheet now shows the request it sent and the tool cal
 **Not done, for the lead:**
 - A running turn's slip. DESIGN.md's Agent Slip describes one ("read-only and live"); Request appears once the turn is recorded, not on the running turn. The Done-when doesn't ask for it, and `docs/rebuild/story-agent.md` now lists it as not built. It is worth its own item.
 - I didn't look at the layout in a browser (AGENTS.md rules out a dev server here). The placement relies on `grid-template-columns: subgrid` and an absolutely placed grid child taking its grid area as containing block; the stylesheet tests check the rules, not the rendering.
+
+Round 1 (`7549fa5`, `d4c0024`). Both fix-now findings held, and I reproduced each with an app test before fixing it.
+- *Refused default (1-warp.1).* The cause was the order: `take()` stored the writer's message, then saved the default and changed the session. `sendNextTurn` is now two halves, `prepareNextTurn` (default, then session) and the send. A topic prepares before it stores the message and sends the context edit with `runner.send`. A refused default or session change therefore stores nothing: the composer keeps the text, the slip keeps the edits, and Send delivers the message once. If a turn fails after the message is stored, the app reads the request again and keeps whatever the session doesn't hold yet, such as an edited context. The draft is dropped only when the turn ran. The test covers a new topic and an existing one, refusing and then accepting. That test also exposed an existing bug, fixed separately in `7549fa5`: after a failed turn, a new topic with nothing stored showed "This topic doesn't exist (any more)." in place of the turn's error.
+- *Appended instructions (1-warp.2).* `profilePrompt(edited, before, generated)` now removes exactly the topic's own part and keeps the writer's text on both sides. It finds the part as `topicPrompt` writes it now, or, for a topic renamed since its session started, as the session's prompt holds it. An edit inside the part is refused with a reason ("Keep that part as it is, or keep the edit for this session."), since it can't be told from the writer's own text. The app test appends an instruction after the part, saves it as the default, and checks the next topic gets the instruction with its own part only.
+
+Still open, and not new: a stored message whose `runner.send` fails before the run is recorded (a storage error, say) stays in the topic without an answer. Sending again adds a second message. This change makes that path rarer (a refused default no longer takes it) but doesn't remove it.
+
+`cd app && bun run check`: 1761 pass, 0 fail. The topic tests print no act() warnings.
+
+### Responses
+1-warp.1: fixed in d4c0024
+1-warp.2: fixed in d4c0024
 
