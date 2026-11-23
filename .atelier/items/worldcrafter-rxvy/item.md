@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-rxvy
 title: 'Anchored conversation: open a scoped talk topic from any scene, passage, or bible record'
-status: in_review
+status: approved
 mission: worldcrafter-mtkn
 labels:
 - ui
