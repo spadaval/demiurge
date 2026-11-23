@@ -47,5 +47,6 @@ This code predates round 2, but the finding blocks because a valid stale-push re
 
 ## Finding 3: Correct the documented SQLite row limit
 Recommendation: defer
+Taken: worldcrafter-w1q0 by mcp:7d857dc0-4a0b-4b45-94fa-b528d1f91a2b
 
 `app/src/sync/protocol.ts:47–48`, `docs/rebuild/sync.md:38`, and the Report describe the Durable Object SQLite row limit as 2 MB. [Cloudflare's current limits](https://developers.cloudflare.com/durable-objects/platform/limits/#sql-storage-limits) specify an 8 MB maximum string, BLOB, or table row. Keeping `MAX_RECORD_BYTES = 1_900_000` is a safe application limit and need not change; the platform-limit explanation should distinguish it from Cloudflare's current limit. This is documentation accuracy and does not block the backend's behavior.
