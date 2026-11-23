@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ywt3
 title: 'Host the agent slip on topic sheets: Request, Context and the next-turn slip'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -77,7 +77,14 @@ Still open, and not new: a stored message whose `runner.send` fails before the r
 
 Round 2 (`c3265cd`): 2-nd1g.2 held. After a rename, the topic's part in the session no longer matched what `topicPrompt` writes now, so the fallback took everything after the last heading, including an instruction appended in an earlier turn. `findTopicPrompt` (`talk/scope.ts`) now finds the part by its exact shape: the same template as `topicPrompt`, with the title and scope name left open and a passage's quote exact. The part therefore ends where it ends, whatever follows it. A heading with nothing of that shape under it (the writer edited the part in an earlier this-session edit) is refused with the same reason, not guessed. The app regression appends an instruction and saves it as the default, renames the topic, prepends another and saves again, then checks that a new topic gets both with only its own part. Restoring the old fallback fails it. `talk.test.ts` adds the rename case, a passage quote with regex characters, and both refusals. `bun run check`: 1762 pass, 0 fail.
 
+Round 3 (`402c267`), on the lead's ruling to fix 3-cnvn.2: the finding held. `findTopicPrompt` wanted a blank line or the end of the prompt after the part, so an instruction on the very next line was saved once and every later default edit of that topic was refused. The part is now found on lines of its own wherever it stands: at the start or after a newline, and before a newline or at the end. `profilePrompt` removes it with the newlines around it and keeps the writer's text on both sides, joined the way the text after the part was set off from it. A part sharing a line with the writer's text is still refused. The new app test saves an instruction added with one newline, saves a second default edit from the same topic, and checks that a new topic gets both with only its own part. Restoring the two-newline match fails it and the matching unit test.
+
+Merged master (`d1821b0`) for `worldcrafter-rxvy`. The conflicts were imports, the talk-pages status line, and `scope.ts`, where both `findTopicPrompt` and rxvy's new `passageStale` are kept. `findTopicPrompt` builds its shape from rxvy's new `topicPromptText`, so it follows rxvy's multi-line passage quotes. rxvy's app tests selected turns with `.turns > .turn`, and now use `.turns > .turn-entry > .turn`, as the topic tests do.
+
+`cd app && bun run check`: tsc and Biome clean, 1789 pass, 0 fail.
+
 ### Responses
 1-warp.1: fixed in d4c0024
 1-warp.2: fixed in d4c0024
 2-nd1g.2: fixed in c3265cd
+3-cnvn.2: fixed in 402c267
