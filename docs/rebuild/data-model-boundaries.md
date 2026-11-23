@@ -9,7 +9,7 @@ Plate wants a rich JSON tree: nodes, marks and custom elements carrying arbitrar
 The old codebase kept losing data at that seam:
 
 - **Persistence.** It originally stored markdown, then switched to saving the editor model ("Replace markdown with editor model persistence"). The open bugs in the backlog are still "Preserve AI segments during sync" and "Prevent conversion to plain text". Whole-document round trips through markdown dropped whatever markdown couldn't express.
-- **Entity candidates.** These were stored as marks inside the content tree. Each detection rerun rewrote the content, so it could clobber links. `docs/NER_OVERHAUL.md` exists because of this.
+- **Entity candidates.** These were stored as marks inside the content tree. Each detection rerun rewrote the content, so it could clobber links. The old app's `docs/NER_OVERHAUL.md` (removed with it, in Git history) exists because of this.
 - **Generation.** "Generate Next" serializes the whole document to markdown and streams markdown back into the tree. Output structure is never constrained, which is why we got the stray `<callout>` tag bug.
 - **No stable block IDs.** Nothing in the tree can be addressed reliably, so there's no safe way for an LLM to say "change *this* paragraph".
 
