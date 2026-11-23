@@ -288,7 +288,7 @@ const wordsPattern = (text: string) =>
   );
 
 /** A number as written, not part of a longer one: 17 but not 117 or 17.5. */
-const numberPattern = (value: number) =>
+export const numberPattern = (value: number) =>
   new RegExp(`(?<![\\d.])${escaped(String(value))}(?!\\d|\\.\\d)`, "g");
 
 const ONES = [
@@ -355,7 +355,7 @@ function numberWords(n: number): string {
 }
 
 /** A number written in words, not part of a longer one. */
-const numberWordsPattern = (value: number) =>
+export const numberWordsPattern = (value: number) =>
   new RegExp(
     `(?<![\\p{L}-])${numberWords(value)}(?![\\p{L}-]|,?\\s+(?:and\\s+)?(?:${[...ONES.slice(1), ...TENS.slice(2), "hundred", "thousand"].join("|")})\\b)`,
     "giu",

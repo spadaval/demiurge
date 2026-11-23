@@ -26,7 +26,10 @@ export interface AppServices {
   readonly layerSource: LayerSource;
   readonly environment: Environment;
   readonly generation: Generation;
-  /** The story bible, which the World inspector reads. */
+  /**
+   * The story bible, live: the World inspector, the scene apparatus and the
+   * stamp read it, and every writer of the bible goes through its storage.
+   */
   readonly bible: Bible;
   /** Whether the World tab is open, and what it last showed. */
   readonly worldTab: WritableStore<WorldTab>;

@@ -509,6 +509,30 @@ describe("the World inspector, in review", () => {
     expect(workspace()?.hasAttribute("data-rail-open")).toBe(false);
   });
 
+  test("the open inspector follows the bible as a command changes it", async () => {
+    const { view, services } = await render(await setup(), "/world?at=cast");
+    const cast = () =>
+      [...view.querySelectorAll(".inspect-row")]
+        .find((row) => row.firstChild?.textContent === "Cast & Drives")
+        ?.querySelector(".inspect-count")?.textContent;
+    expect(cast()).toBe("3");
+    // Written through the app's bible storage, as an agent's tool calls are.
+    (
+      await services.bible.execute({
+        type: "addActor",
+        id: "brine",
+        kind: "person",
+        name: "Brine",
+        notes: "",
+      })
+    )._unsafeUnwrap();
+    await until(() => cast() === "4");
+    await until(
+      () =>
+        view.querySelector(".page")?.textContent?.includes("Brine") === true,
+    );
+  });
+
   test("a failed read of the bible is a notice, until a read succeeds", async () => {
     const { view, services } = await render(await setup(), "/world?at=cast");
     const notice = () => view.querySelector(".notices .notice-error");

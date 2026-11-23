@@ -2,8 +2,8 @@
  * The Ninefold: a synthetic demo world for looking at the workspace without
  * a real one (open the app with `?demo`). It lives in memory and nothing is
  * saved. Seeding goes through the real stores (documents, outline, world
- * facts, timeline), so the rail, stamp and chronology are computed exactly as
- * for a real world. Layers with no data source yet (speakers, time
+ * facts, timeline, story bible), so the rail, stamp, chronology and the
+ * bible's apparatus are computed exactly as for a real world. Layers with no data source yet (speakers, time
  * expressions, subtext, entry suggestions, topics) come from the fixtures
  * below. Only `main.tsx` imports this, and only when the flag is set.
  */
@@ -25,11 +25,13 @@ import type { Fetch } from "~/llm/types";
 import { runOutlineCommand } from "~/outline/store";
 import { createMemoryStorage } from "~/storage/memory";
 import type { JsonValue, StorageAdapter } from "~/storage/types";
+import { saveStory } from "~/story/store";
 import { createTimelineStore } from "~/time/store";
 import { sceneEventId } from "~/time/timeline";
 import type { KeyValueStore } from "~/workspace/tabs";
 import { createWorldStore, directRenameDocument } from "~/world/store";
 import { DEMO_PROFILE, demoFetch } from "./model";
+import { ninefoldStory } from "./ninefold-story";
 
 export const DEMO_WORLD_NAME = "The Ninefold";
 export const DEMO_SCENE = "scene-4-2";
@@ -441,6 +443,8 @@ export async function seedDemoWorld(
       `document ${document.id}`,
     );
   }
+
+  await unwrap(saveStory(storage, ninefoldStory(), now), "story bible");
 
   const roman = ["I", "II", "III", "IV", "V"];
   await unwrap(

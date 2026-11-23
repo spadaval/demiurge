@@ -51,7 +51,7 @@ export async function createAppServices(
     worldTab: createStore({ open: false, at: "cast" }),
     generation: createGeneration({
       workspace,
-      storage: createConnectedStorage(workspace.connection, workspace.readOnly),
+      storage: bible.storage,
       world,
       manuscript,
       profile: createProfileStore(keyValue, workspace.worldId),
