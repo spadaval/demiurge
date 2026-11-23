@@ -1,7 +1,12 @@
 /**
  * A command line for sketching and reworking a story held in one file
  * (`src/story/`). It's a thin wrapper: each edit is one `StoryCommand`, and
- * the file is written only if the command succeeds. Run it with `--help`.
+ * the file is written only if the command succeeds; each read is a query in
+ * `src/story/queries.ts`, and what an edit prints after it comes from
+ * `src/story/edit-report.ts`, which the story tools (`src/story/tools.ts`)
+ * share. What stays here is the command line itself and the files: the
+ * story file, the prose in `scenes/*.md`, and the batch. Run it with
+ * `--help`.
  *
  * Exit codes: 0 on success (including an edit that adds a timeline problem,
  * which is kept and printed), 1 when a command is refused or a file can't be
@@ -20,160 +25,54 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { err, ok, Result } from "neverthrow";
-import {
-  describeBetween,
-  describeSpan,
-  describeSpanRange,
-  describeYears,
-  isYear,
-  parseSpan,
-  parseWhen,
-  type Span,
-  spanRange,
-} from "../src/story/calendar";
+import { parseSpan, parseWhen, type Span } from "../src/story/calendar";
 import {
   applyStoryCommand,
   type StoryCommand,
   type StoryCommandType,
 } from "../src/story/commands";
 import {
-  storyContradictions,
-  timelineProblemMessage,
-} from "../src/story/contradictions";
+  allRefs,
+  changedRef,
+  editReport,
+  editReportLines,
+  recordText,
+} from "../src/story/edit-report";
 import {
-  type CountStep,
-  countSeries,
-  noteCountingAcross,
-  seriesTexts,
-  stepAt,
-  stepsAround,
-  stepText,
-} from "../src/story/counts";
-import { deliberateGaps, storyGaps } from "../src/story/gaps";
+  contradictionsQuery,
+  gapsQuery,
+  LIST_KINDS,
+  listQuery,
+  mentionsQuery,
+  type ProseSource,
+  type QueryError,
+  type QueryResult,
+  readerOrderQuery,
+  renderQuery,
+  scenesQuery,
+  showQuery,
+  spanQuery,
+  touchesQuery,
+  traceQuery,
+} from "../src/story/queries";
+import { formatRef, gapName, KIND_NAMES, parseRef } from "../src/story/refs";
+import { RENDER_SECTION_NAMES, wordCount } from "../src/story/render";
 import {
-  type FirstTold,
-  knowledgeAlways,
-  sceneNow,
-  sceneSpan,
-  type Telling,
-  type TellingHow,
-  type ToldSoFar,
-  tellingOrder,
-  tellingWords,
-  toldBefore,
-  trueOrder,
-  viewpointGap,
-  viewpointTurns,
-} from "../src/story/learning";
-import { type Mention, storyTexts, whatMentions } from "../src/story/mentions";
-import { membershipsInStoryOrder } from "../src/story/order";
-import {
-  countTime,
-  eventTime,
-  RENDER_SECTION_NAMES,
-  renderStory,
-  wordCount,
-} from "../src/story/render";
-import { scenesTouching } from "../src/story/scenes";
-import {
-  type Candidate,
   COUNT_DIRECTIONS,
   type CountDirection,
   DRIVE_TURN_HOWS,
   GAP_KINDS,
   type GapKind,
   KNOWLEDGE_HOWS,
-  type Knowledge,
-  type Membership,
   newStory,
-  type OpenQuestion,
-  PARTICIPANT_KEY,
-  type Participant,
   parseStory,
-  type QuestionState,
-  questionState,
   type Ref,
-  type RefKind,
-  refExists,
   SCENE_LINK_KINDS,
-  type Scene,
   type Story,
   serializeStory,
 } from "../src/story/story";
-import {
-  refLabel,
-  TOUCH_KINDS,
-  type TouchGroups,
-  whatThisTouches,
-} from "../src/story/touches";
-import {
-  contentStems,
-  type Prose,
-  type Suspect,
-  traceDependents,
-} from "../src/story/trace";
-import {
-  compileChronology,
-  type TimelineProblem,
-} from "../src/time/chronology";
-import { timelineProblems } from "../src/time/commands";
+import { contentStems, type Prose } from "../src/story/trace";
 import { WORLD_FRAME } from "../src/time/timeline";
-
-// ---------------------------------------------------------------------------
-// Refs as text: `drive:shut`, `candidate:why/ferryman`.
-
-export const KIND_NAMES: Record<Ref["kind"], string> = {
-  actor: "actor",
-  drive: "drive",
-  fact: "fact",
-  readerQuestion: "reader-question",
-  event: "event",
-  scene: "scene",
-  openQuestion: "open-question",
-  candidate: "candidate",
-  version: "version",
-  knowledge: "knowledge",
-  object: "object",
-  count: "count",
-};
-
-const REF_KIND_BY_NAME = new Map(
-  Object.entries(KIND_NAMES).map(([kind, name]) => [name, kind]),
-);
-
-const isRefKind = (kind: string | undefined): kind is RefKind =>
-  kind !== undefined && kind !== "candidate" && kind in KIND_NAMES;
-
-export function formatRef(ref: Ref): string {
-  const name = KIND_NAMES[ref.kind];
-  return ref.kind === "candidate"
-    ? `${name}:${ref.questionId}/${ref.id}`
-    : `${name}:${ref.id}`;
-}
-
-export function parseRef(text: string): Result<Ref, string> {
-  const colon = text.indexOf(":");
-  const kind = REF_KIND_BY_NAME.get(text.slice(0, colon));
-  const id = text.slice(colon + 1);
-  if (colon === -1 || kind === undefined || id === "") {
-    return err(
-      `"${text}" is not a ref: write kind:id, with kind one of ${Object.values(KIND_NAMES).join(", ")} (a candidate is candidate:question/candidate)`,
-    );
-  }
-  if (kind === "candidate") {
-    const slash = id.indexOf("/");
-    return slash <= 0 || slash === id.length - 1
-      ? err(
-          `"${text}" is not a candidate ref: write candidate:question/candidate`,
-        )
-      : ok({
-          kind: "candidate",
-          questionId: id.slice(0, slash),
-          id: id.slice(slash + 1),
-        });
-  }
-  return isRefKind(kind) ? ok({ kind, id }) : err(`unknown kind in "${text}"`);
-}
 
 // ---------------------------------------------------------------------------
 // Command-line specs and parsing.
@@ -386,13 +285,6 @@ class Reader {
     return refs;
   }
 }
-
-/** `drive_without_origin` as the command line writes it: `drive-without-origin`. */
-const gapName = (kind: GapKind) => kind.replaceAll("_", "-");
-
-/** Printed above the gaps, so a list of them doesn't read as a to-do list. */
-const GAPS_ADVISORY =
-  "Optional prompts, not problems: places you could add a link or a record. None is a reason to cut or merge anything true; a record can stay unlinked.";
 
 type EditSpec<C extends StoryCommand> = Spec & {
   build: (a: Reader, story: Story) => C;
@@ -1808,22 +1700,6 @@ type ReadName =
   | "contradictions"
   | "render";
 
-export const LIST_KINDS = [
-  "actor",
-  "drive",
-  "event",
-  "constraint",
-  "scene",
-  "fact",
-  "reader-question",
-  "open-question",
-  "candidate",
-  "version",
-  "knowledge",
-  "object",
-  "count",
-] as const;
-
 export const READS: Record<ReadName, Spec> = {
   init: {
     group: "Start and read",
@@ -2070,882 +1946,8 @@ function proseLine(storyPath: string, sceneId: string): string {
   return `prose: ${path} (${words})`;
 }
 
-function showRecord(story: Story, ref: Ref, storyPath: string): string[] {
-  const field = (name: string, value: string) =>
-    value.trim() === "" ? [] : [`${name}: ${value}`];
-  const ids = (name: string, kind: RefKind, values: readonly string[]) =>
-    values.length === 0
-      ? []
-      : [
-          `${name}: ${values.map((id) => describe(story, { kind, id })).join(", ")}`,
-        ];
-  const refs = (name: string, values: readonly Ref[]) =>
-    values.length === 0
-      ? []
-      : [`${name}: ${values.map((r) => describe(story, r)).join(", ")}`];
-  const head = [formatRef(ref)];
-  switch (ref.kind) {
-    case "actor": {
-      const actor = story.actors.find((a) => a.id === ref.id);
-      if (actor === undefined) return head;
-      return [
-        ...head,
-        `name: ${actor.name}`,
-        `kind: ${actor.kind}`,
-        ...field("notes", actor.notes),
-        ...ids(
-          "drives",
-          "drive",
-          story.drives.filter((d) => d.actorId === actor.id).map((d) => d.id),
-        ),
-        ...participations(story, ref),
-        ...membershipLines(story, actor.id),
-        ...ids(
-          "knows or believes",
-          "knowledge",
-          story.knowledge.filter((k) => k.actor === actor.id).map((k) => k.id),
-        ),
-        ...ids(
-          "tells",
-          "version",
-          story.versions
-            .filter((v) => v.by.includes(actor.id))
-            .map((v) => v.id),
-        ),
-      ];
-    }
-    case "drive": {
-      const drive = story.drives.find((d) => d.id === ref.id);
-      if (drive === undefined) return head;
-      return [
-        ...head,
-        `want: ${drive.want}`,
-        drive.actorId === null
-          ? "actor: none"
-          : `actor: ${describe(story, { kind: "actor", id: drive.actorId })}`,
-        ...field("stakes", drive.stakes),
-        ...field("method", drive.method),
-        ...ids("origins", "event", drive.origins),
-        ...drive.relations.map(
-          (r) => `${r.type}: ${describe(story, { kind: "drive", id: r.to })}`,
-        ),
-        ...(drive.turns.length === 0
-          ? ["life: live, no turns yet"]
-          : ["life, in order:"]),
-        ...drive.turns.map(
-          (turn, i) =>
-            `  ${i + 1}. ${turn.how}${turn.into === undefined ? "" : ` ${turn.how === "replaced" ? "by" : "into"} ${describe(story, { kind: "drive", id: turn.into })}`}${turn.at === undefined ? "" : ` at ${describe(story, { kind: "event", id: turn.at })}`}${turn.note.trim() === "" ? "" : `: ${turn.note}`}`,
-        ),
-        ...story.drives.flatMap((other) =>
-          other.turns
-            .filter((turn) => turn.into === drive.id)
-            .map(
-              (turn) =>
-                `${turn.how === "replaced" ? "replaces" : "flipped from"}: ${describe(story, { kind: "drive", id: other.id })}`,
-            ),
-        ),
-      ];
-    }
-    case "fact": {
-      const fact = story.facts.find((f) => f.id === ref.id);
-      if (fact === undefined) return head;
-      return [...head, `text: ${fact.text}`, ...refs("about", fact.about)];
-    }
-    case "readerQuestion": {
-      const q = story.readerQuestions.find((r) => r.id === ref.id);
-      if (q === undefined) return head;
-      return [
-        ...head,
-        `question: ${q.question}`,
-        ...ids("opens at", "scene", q.opensAt === undefined ? [] : [q.opensAt]),
-        ...ids(
-          "answered at",
-          "scene",
-          q.answeredAt === undefined ? [] : [q.answeredAt],
-        ),
-      ];
-    }
-    case "event": {
-      const event = story.timeline.events.find((e) => e.id === ref.id);
-      if (event === undefined) return head;
-      const position = story.timeline.positions.find(
-        (p) => p.event === event.id && p.frame === WORLD_FRAME,
-      );
-      return [
-        ...head,
-        `label: ${event.label}`,
-        ...field("summary", event.summary),
-        ...(position === undefined
-          ? ["position: none"]
-          : [`position: ${eventTime(story, event.id) ?? ""}`]),
-        ...story.participants
-          .filter((p) => p.event === event.id)
-          .map(
-            (p) =>
-              `participant: ${describe(story, p.who)}${p.role.trim() === "" ? "" : ` (${p.role})`}`,
-          ),
-        ...turnsAt(story, event.id),
-        ...countsAt(story, event.id),
-        ...story.timeline.constraints
-          .filter((c) => c.a === event.id || c.b === event.id)
-          .map((c) => `constraint ${constraintLine(story, c)}`),
-        ...ids(
-          "because of",
-          "event",
-          story.causes.filter((c) => c.effect === event.id).map((c) => c.cause),
-        ),
-        ...ids(
-          "caused",
-          "event",
-          story.causes.filter((c) => c.cause === event.id).map((c) => c.effect),
-        ),
-        ...ids(
-          "versions",
-          "version",
-          story.versions.filter((v) => v.event === event.id).map((v) => v.id),
-        ),
-        ...ids(
-          "knowledge from then",
-          "knowledge",
-          story.knowledge.filter((k) => k.since === event.id).map((k) => k.id),
-        ),
-        ...ids(
-          "knowledge until then",
-          "knowledge",
-          story.knowledge.filter((k) => k.until === event.id).map((k) => k.id),
-        ),
-        ...story.memberships.flatMap((m) =>
-          [
-            ...(m.since === event.id ? ["joins"] : []),
-            ...(m.until === event.id ? ["leaves"] : []),
-          ].map(
-            (how) =>
-              `membership ${m.id}: ${describe(story, { kind: "actor", id: m.member })} ${how} ${describe(story, { kind: "actor", id: m.group })}`,
-          ),
-        ),
-      ];
-    }
-    case "scene": {
-      const index = story.scenes.findIndex((s) => s.id === ref.id);
-      const scene = story.scenes[index];
-      if (scene === undefined) return head;
-      return [
-        ...head,
-        `title: ${scene.title}`,
-        `telling order: ${index + 1} of ${story.scenes.length}`,
-        ...field("summary", scene.summary),
-        ...ids(
-          "viewpoint",
-          "actor",
-          scene.viewpoint === undefined ? [] : [scene.viewpoint],
-        ),
-        ...ids("actors", "actor", scene.actors),
-        ...ids("depicts", "event", scene.depicts),
-        ...ids("pressures", "drive", scene.pressures),
-        ...SCENE_LINK_KINDS.flatMap((how) => refs(how, scene[how])),
-        proseLine(storyPath, scene.id),
-      ];
-    }
-    case "openQuestion": {
-      const q = story.openQuestions.find((o) => o.id === ref.id);
-      if (q === undefined) return head;
-      return [
-        ...head,
-        `question: ${q.question}`,
-        ...(q.conflict ? ["conflict: yes"] : []),
-        `state: ${stateText(questionState(story, q))}`,
-        ...(q.leftOpen === undefined
-          ? []
-          : [
-              `left open for the reader${q.leftOpen.trim() === "" ? "" : `: ${q.leftOpen}`}`,
-            ]),
-        ...refs("about", q.about),
-        ...(q.candidates.length === 0 ? ["candidates: none"] : ["candidates:"]),
-        ...q.candidates.map(
-          (c) =>
-            `  ${formatRef({ kind: "candidate", questionId: q.id, id: c.id })}${candidateMark(q, c)}: ${c.answer}`,
-        ),
-        ...((q.superseded ?? []).length === 0
-          ? []
-          : ["superseded answers, oldest first:"]),
-        ...(q.superseded ?? []).map(
-          (old) =>
-            `  ${old.candidate}: ${old.answer} (${old.by === undefined ? "unanswered" : `replaced by ${formatRef({ kind: "candidate", questionId: q.id, id: old.by })}`})`,
-        ),
-      ];
-    }
-    case "count": {
-      const count = story.counts.find((c) => c.id === ref.id);
-      if (count === undefined) return head;
-      const threshold =
-        count.threshold === "more_than_half"
-          ? "more than half of the total"
-          : count.threshold === undefined
-            ? ""
-            : `${count.threshold}`;
-      const series = countSeries(story, count);
-      return [
-        ...head,
-        `label: ${count.label}`,
-        ...field("notes", count.notes),
-        ...(count.total === undefined ? [] : [`total: ${count.total}`]),
-        ...ids("of", "count", count.of === undefined ? [] : [count.of]),
-        ...field("threshold", threshold),
-        ...field("direction", count.direction ?? ""),
-        series.length === 0 ? "values: none yet" : "values, in story order:",
-        ...seriesTexts(count, series).map(
-          (text, i) => `  ${countStepLine(story, series[i], text)}`,
-        ),
-      ];
-    }
-    case "object": {
-      const object = story.objects.find((o) => o.id === ref.id);
-      if (object === undefined) return head;
-      const scenesWith = (how: "plants" | "paysOff") =>
-        story.scenes
-          .filter((scene) =>
-            scene[how].some((r) => r.kind === "object" && r.id === object.id),
-          )
-          .map((scene) => scene.id);
-      return [
-        ...head,
-        `name: ${object.name}`,
-        ...field("notes", object.notes),
-        ...ids("planted in", "scene", scenesWith("plants")),
-        ...ids("paid off in", "scene", scenesWith("paysOff")),
-        ...participations(story, ref),
-      ];
-    }
-    case "version": {
-      const version = story.versions.find((v) => v.id === ref.id);
-      if (version === undefined) return head;
-      return [
-        ...head,
-        `text: ${version.text}`,
-        `event: ${describe(story, { kind: "event", id: version.event })}`,
-        ...ids("told by", "actor", version.by),
-        ...ids(
-          "held by",
-          "knowledge",
-          story.knowledge
-            .filter(
-              (k) => k.what.kind === "version" && k.what.id === version.id,
-            )
-            .map((k) => k.id),
-        ),
-      ];
-    }
-    case "knowledge": {
-      const k = story.knowledge.find((x) => x.id === ref.id);
-      if (k === undefined) return head;
-      return [
-        ...head,
-        `actor: ${describe(story, { kind: "actor", id: k.actor })}`,
-        `${k.how}: ${describe(story, k.what)}`,
-        k.since === undefined
-          ? "since: the start"
-          : `since: ${describe(story, { kind: "event", id: k.since })}`,
-        ...ids("until", "event", k.until === undefined ? [] : [k.until]),
-      ];
-    }
-    case "candidate": {
-      const q = story.openQuestions.find((o) => o.id === ref.questionId);
-      const c = q?.candidates.find((x) => x.id === ref.id);
-      if (q === undefined || c === undefined) return head;
-      return [
-        ...head,
-        `answer: ${c.answer}`,
-        `question: ${describe(story, { kind: "openQuestion", id: q.id })}`,
-        ...(c.id === q.answer ? ["chosen: yes"] : []),
-        ...(c.rejected === undefined ? [] : [`ruled out: ${c.rejected}`]),
-        ...refs("touches", c.touches),
-      ];
-    }
-  }
-}
-
-/** `revealed in scene:docks`, `left open for the reader`, and so on. */
-function stateText(state: QuestionState): string {
-  switch (state.state) {
-    case "undecided":
-      return "undecided";
-    case "decided":
-      return "decided, not revealed yet";
-    case "left_open":
-      return "left open for the reader";
-    case "revealed":
-      return `revealed in scene:${state.scene}`;
-  }
-}
-
-/** ` (chosen)`, ` (ruled out: reason)` or nothing. */
-function candidateMark(q: OpenQuestion, c: Candidate): string {
-  if (c.id === q.answer) return " (chosen)";
-  return c.rejected === undefined
-    ? ""
-    : ` (ruled out${c.rejected.trim() === "" ? "" : `: ${c.rejected}`})`;
-}
-
-/** `in event: event:wreck ("The wreck") (at the helm)`, for each event it's in. */
-/** `event:wreck ("The wreck") at 12 October 1954: 3 of 12 (Nine drowned)`. */
-function countStepLine(
-  story: Story,
-  step: CountStep | undefined,
-  text: string,
-): string {
-  if (step === undefined) return text;
-  const at = countTime(story, step.at);
-  return `${describe(story, { kind: "event", id: step.at })}${at === undefined ? "" : ` at ${at}`}: ${text}${step.note.trim() === "" ? "" : ` (${step.note})`}`;
-}
-
-/** `name: a, b`, or nothing for an empty list. */
-const listLine = (name: string, items: readonly string[]) =>
-  items.length === 0 ? [] : [`${name}: ${items.join(", ")}`];
-
-/** The counts set at an event, with the value they take then. */
-function countsAt(story: Story, event: string): string[] {
-  return story.counts.flatMap((count) =>
-    countSeries(story, count)
-      .filter((step) => step.at === event)
-      .map(
-        (step) =>
-          `count: ${describe(story, { kind: "count", id: count.id })} = ${stepText(count, step)}${step.note.trim() === "" ? "" : ` (${step.note})`}`,
-      ),
-  );
-}
-
-/**
- * `member of: actor:crew ("The crew") since event:signs-on ("Signs on")
- * (membership ivo-crew)` for each group the actor belongs to, and `member:`
- * for each member of the actor as a group, each in story order.
- */
-function membershipLines(story: Story, actor: string): string[] {
-  const line = (name: string, m: Membership, who: string) =>
-    `${name}: ${describe(story, { kind: "actor", id: who })}${m.since === undefined ? "" : ` since ${describe(story, { kind: "event", id: m.since })}`}${m.until === undefined ? "" : ` until ${describe(story, { kind: "event", id: m.until })}`} (membership ${m.id})`;
-  const sorted = membershipsInStoryOrder(story);
-  return [
-    ...sorted
-      .filter((m) => m.member === actor)
-      .map((m) => line("member of", m, m.group)),
-    ...sorted
-      .filter((m) => m.group === actor)
-      .map((m) => line("member", m, m.member)),
-  ];
-}
-
-function participations(story: Story, ref: Ref): string[] {
-  return story.participants
-    .filter((p) => p.who.kind === ref.kind && p.who.id === ref.id)
-    .map(
-      (p) =>
-        `in event: ${describe(story, { kind: "event", id: p.event })}${p.role.trim() === "" ? "" : ` (${p.role})`}`,
-    );
-}
-
-/** `drive turn: drive:find-sender satisfied`, for each drive that turns at it. */
-function turnsAt(story: Story, event: string): string[] {
-  return story.drives.flatMap((drive) =>
-    drive.turns
-      .filter((turn) => turn.at === event)
-      .map(
-        (turn) =>
-          `drive turn: ${describe(story, { kind: "drive", id: drive.id })} ${turn.how}`,
-      ),
-  );
-}
-
-/** The record's deliberate gaps, with their reasons. */
-function markLines(story: Story, ref: Ref): string[] {
-  return story.deliberateGaps
-    .filter((m) => m.ref !== null && formatRef(m.ref) === formatRef(ref))
-    .map((m) => `deliberate gap: ${gapName(m.gap)} (${m.reason})`);
-}
-
-/** `drive:find-sender ("Learn who wrote the letter")`. */
-function describe(story: Story, ref: Ref): string {
-  if (!refExists(story, ref)) return `${formatRef(ref)} (missing)`;
-  const label = refLabel(story, ref);
-  return label === ref.id ? formatRef(ref) : `${formatRef(ref)} ("${label}")`;
-}
-
-function constraintLine(
-  story: Story,
-  c: {
-    id: string;
-    a: string;
-    relation: string;
-    b: string;
-    duration: { amount: number; tolerance?: number } | null;
-  },
-): string {
-  // A gap given in a unit (2w) is stored in years; say it in the unit.
-  const amount = (years: number) =>
-    story.timeline.worldUnit === "year" ? describeYears(years) : `${years}`;
-  const gap =
-    c.duration === null
-      ? ""
-      : ` (gap ${amount(c.duration.amount)}${c.duration.tolerance === undefined ? "" : ` ± ${amount(c.duration.tolerance)}`})`;
-  return `${c.id}: ${c.a} ${c.relation} ${c.b}${gap}`;
-}
-
-function listLines(story: Story, kind: (typeof LIST_KINDS)[number]): string[] {
-  const line = (ref: Ref) => describe(story, ref);
-  switch (kind) {
-    case "actor":
-      return story.actors.map(
-        (a) => `${line({ kind: "actor", id: a.id })} ${a.kind}`,
-      );
-    case "drive":
-      return story.drives.map((d) => line({ kind: "drive", id: d.id }));
-    case "event":
-      return story.timeline.events.map((e) => {
-        const p = story.timeline.positions.find(
-          (x) => x.event === e.id && x.frame === WORLD_FRAME,
-        );
-        return `${line({ kind: "event", id: e.id })}${p === undefined ? "" : ` at ${eventTime(story, e.id) ?? ""}`}`;
-      });
-    case "constraint":
-      return story.timeline.constraints.map((c) => constraintLine(story, c));
-    case "scene":
-      return story.scenes.map(
-        (s, i) => `${i + 1}. ${line({ kind: "scene", id: s.id })}`,
-      );
-    case "fact":
-      return story.facts.map((f) => line({ kind: "fact", id: f.id }));
-    case "reader-question":
-      return story.readerQuestions.map((q) =>
-        line({ kind: "readerQuestion", id: q.id }),
-      );
-    case "open-question":
-      return story.openQuestions.map(
-        (q) =>
-          `${line({ kind: "openQuestion", id: q.id })} (${stateText(questionState(story, q))})${q.conflict ? " (conflict)" : ""}`,
-      );
-    case "version":
-      return story.versions.map(
-        (v) =>
-          `${line({ kind: "version", id: v.id })} of ${formatRef({ kind: "event", id: v.event })}`,
-      );
-    case "knowledge":
-      return story.knowledge.map((k) => line({ kind: "knowledge", id: k.id }));
-    case "object":
-      return story.objects.map((o) => line({ kind: "object", id: o.id }));
-    case "count":
-      return story.counts.map(
-        (c) =>
-          `${line({ kind: "count", id: c.id })} (${c.values.length} value${c.values.length === 1 ? "" : "s"})`,
-      );
-    case "candidate":
-      return story.openQuestions.flatMap((q) =>
-        q.candidates.map(
-          (c) =>
-            `${line({ kind: "candidate", questionId: q.id, id: c.id })}${candidateMark(q, c)}`,
-        ),
-      );
-  }
-}
-
-/** ` at year 30`, or nothing for a record with no place in story time. */
-function storyTime(story: Story, ref: Ref): string {
-  const at = (id: string | undefined) => {
-    if (id === undefined) return undefined;
-    return eventTime(story, id) ?? "an unplaced time";
-  };
-  switch (ref.kind) {
-    case "event": {
-      const time = at(ref.id);
-      return time === undefined ? "" : ` at ${time}`;
-    }
-    case "version": {
-      const event = story.versions.find((v) => v.id === ref.id)?.event;
-      return event === undefined
-        ? ""
-        : `, of ${formatRef({ kind: "event", id: event })} at ${at(event)}`;
-    }
-    case "knowledge": {
-      const since = story.knowledge.find((k) => k.id === ref.id)?.since;
-      return since === undefined
-        ? ", held from the start"
-        : `, held from ${formatRef({ kind: "event", id: since })} at ${at(since)}`;
-    }
-    default:
-      return "";
-  }
-}
-
-function firstToldText(story: Story, first: FirstTold | undefined): string {
-  if (first === undefined) return "no scene tells the reader";
-  const scene = `${first.index + 1}. ${describe(story, { kind: "scene", id: first.scene.id })}`;
-  const account =
-    first.via.kind === "version"
-      ? " (an account, maybe not what happened)"
-      : "";
-  return `first told in ${scene}, which ${tellingWords(first.how)} ${formatRef(first.via)}${account}`;
-}
-
-/** Telling order, then true order, as `reader-order` prints them. */
-function readerOrderLines(story: Story): string[] {
-  const telling = tellingOrder(story).flatMap(({ scene, index, told }) => [
-    `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}`,
-    ...(told.length === 0
-      ? ["   (tells nothing yet)"]
-      : told.map(
-          ({ how, ref }) =>
-            `   ${tellingWords(how)} ${describe(story, ref)}${storyTime(story, ref)}`,
-        )),
-  ]);
-  const knowledgeLine = ({
-    knowledge,
-    first,
-  }: {
-    knowledge: Knowledge;
-    first?: FirstTold;
-  }) =>
-    `${describe(story, { kind: "knowledge", id: knowledge.id })}: ${firstToldText(story, first)}`;
-  const always = knowledgeAlways(story);
-  const truth = trueOrder(story).flatMap(({ event, first, knowledgeFrom }) => [
-    `- ${describe(story, { kind: "event", id: event.id })}${storyTime(story, { kind: "event", id: event.id })}: ${firstToldText(story, first)}`,
-    ...knowledgeFrom.map((k) => `    from then, ${knowledgeLine(k)}`),
-  ]);
-  return [
-    "In telling order, what each scene puts before the reader:",
-    ...(telling.length === 0 ? ["(no scenes yet)"] : telling),
-    "",
-    "In story order, where the reader first learns of each event:",
-    ...(truth.length === 0 ? ["(no events yet)"] : truth),
-    ...(always.length === 0
-      ? []
-      : [
-          "",
-          "Held from the start:",
-          ...always.map((k) => `- ${knowledgeLine(k)}`),
-        ]),
-  ];
-}
-
-/** `event:wreck ("The wreck") at 12 October 1954`. */
-function placedEvent(story: Story, id: string): string {
-  const at = eventTime(story, id);
-  return `${shortDescribe(story, { kind: "event", id })}${at === undefined ? "" : ` at ${at}`}`;
-}
-
-/** The world position's start of an event, if it has one. */
-const startOf = (story: Story, id: string) =>
-  story.timeline.positions.find(
-    (p) => p.event === id && p.frame === WORLD_FRAME,
-  )?.start;
-
-/** The world position of an event, if it has one. */
-const positionOf = (story: Story, id: string) =>
-  story.timeline.positions.find(
-    (p) => p.event === id && p.frame === WORLD_FRAME,
-  );
-
-/**
- * `11.7 to 12.7 years before`-style words for the time from one placed
- * event to another when either is placed by a month or more, else undefined.
- * `back` and `on` say the two directions.
- */
-function rangeText(
-  story: Story,
-  from: string,
-  to: string,
-  back: string,
-  on: string,
-): string | undefined {
-  const a = positionOf(story, from);
-  const b = positionOf(story, to);
-  if (a === undefined || b === undefined) return undefined;
-  const range = spanRange(a, b);
-  if (range === undefined) return undefined;
-  const said = describeSpanRange(range);
-  return said === undefined
-    ? "either way round"
-    : `${said}${range.max <= 0 ? back : on}`;
-}
-
-/** `From … to …: 27 days.`, saying which way it runs. */
-function spanLine(story: Story, from: string, to: string): string {
-  const a = startOf(story, from) ?? 0;
-  const b = startOf(story, to) ?? 0;
-  const ranged = [from, to].some((id) => {
-    const p = positionOf(story, id);
-    return p !== undefined && describeSpan(p) === undefined && p.end > p.start;
-  });
-  const years = rangeText(story, from, to, ", going back", "");
-  if (years !== undefined) {
-    return `From ${placedEvent(story, from)} to ${placedEvent(story, to)}: ${years} (an event placed by its month or year may be any part of it).`;
-  }
-  const gap =
-    a === b
-      ? "they start at the same time"
-      : `${describeBetween(a, b)}${b < a ? ", going back" : ""}`;
-  return `From ${placedEvent(story, from)} to ${placedEvent(story, to)}: ${gap}${ranged ? " (start to start)" : ""}.`;
-}
-
-/** A ref with its label cut short: `fact:reef ("Nobody fishes the…")`. */
-function shortDescribe(story: Story, ref: Ref): string {
-  const label = refLabel(story, ref);
-  return label === ref.id
-    ? formatRef(ref)
-    : `${formatRef(ref)} ("${excerpt(label)}")`;
-}
-
-/** The event a told record happens at: itself, a version's, knowledge's start. */
-function eventOf(story: Story, ref: Ref): string | undefined {
-  switch (ref.kind) {
-    case "event":
-      return ref.id;
-    case "version":
-      return story.versions.find((v) => v.id === ref.id)?.event;
-    case "knowledge":
-      return story.knowledge.find((k) => k.id === ref.id)?.since;
-    default:
-      return undefined;
-  }
-}
-
-/** `revealed in 3`. */
-const TOLD_WORDS: Record<TellingHow, string> = {
-  shows: "shown",
-  reveals: "revealed",
-  implies: "implied",
-  withholds: "withheld",
-  plants: "planted",
-  paysOff: "paid off",
-};
-
-/** `planted in 10, revealed and paid off in 24`. */
-function tellingsText(tellings: readonly Telling[]): string {
-  const scenes = [...new Set(tellings.map((t) => t.index))];
-  return scenes
-    .map(
-      (at) =>
-        `${tellings
-          .filter((t) => t.index === at)
-          .map((t) => TOLD_WORDS[t.how])
-          .join(" and ")} in ${at + 1}`,
-    )
-    .join(", ");
-}
-
-/** `reader-order --before`: what the scenes before it have told, briefly. */
-function toldBeforeLines(story: Story, index: number): string[] {
-  const scene = story.scenes[index];
-  if (scene === undefined) return [];
-  const anchor = sceneNow(story, scene);
-  const now = anchor === undefined ? undefined : startOf(story, anchor);
-  const { told, withheld } = toldBefore(story, index);
-  const line = ({ ref, tellings }: ToldSoFar) => {
-    const event = eventOf(story, ref);
-    const when = event === undefined ? undefined : eventTime(story, event);
-    const then = event === undefined ? undefined : startOf(story, event);
-    const years =
-      event === undefined || anchor === undefined
-        ? undefined
-        : rangeText(story, event, anchor, " after", " before");
-    const ago =
-      years !== undefined
-        ? `, ${years}`
-        : now === undefined || then === undefined
-          ? ""
-          : then === now
-            ? ", at the same time"
-            : `, ${describeBetween(then, now)} ${then < now ? "before" : "after"}`;
-    return `- ${shortDescribe(story, ref)}${when === undefined ? "" : ` at ${when}`}${ago}: ${tellingsText(tellings)}${unawareText(ref)}`;
-  };
-  const viewpoint =
-    scene.viewpoint === undefined
-      ? undefined
-      : story.actors.find((actor) => actor.id === scene.viewpoint);
-  const name =
-    viewpoint === undefined
-      ? ""
-      : viewpoint.name.trim() === ""
-        ? viewpoint.id
-        : viewpoint.name;
-  // Marks are taken as the scene opens, by story order, so a scene whose
-  // events have no position is still placed.
-  const opens = sceneSpan(story, scene)?.opens;
-  /**
-   * `; Mara doesn't know yet`, from the knowledge records, then what changes
-   * during the scene: `; Mara believes until event:bell, in this scene`.
-   */
-  const unawareText = (ref: Ref) => {
-    if (viewpoint === undefined) return "";
-    const gap = viewpointGap(story, viewpoint.id, ref, opens, index);
-    const how =
-      gap === undefined
-        ? undefined
-        : gap.later
-          ? "doesn't know yet"
-          : gap.ended === undefined
-            ? "doesn't know"
-            : `no longer ${gap.ended}`;
-    const believes =
-      gap === undefined || gap.believes.length === 0
-        ? ""
-        : `, believes ${gap.believes.map((r) => shortDescribe(story, r)).join(" and ")}`;
-    const turns = viewpointTurns(story, viewpoint.id, ref, scene).map(
-      (t) =>
-        `; ${name} ${t.how === "knows" ? "knows" : "believes"}${formatRef(t.what) === formatRef(ref) ? "" : ` ${formatRef(t.what)}`} ${t.turn === "starts" ? "from" : "until"} ${formatRef({ kind: "event", id: t.event })}, in this scene`,
-    );
-    return `${how === undefined ? "" : `; ${name} ${how}${believes}`}${turns.join("")}`;
-  };
-  const opening =
-    viewpoint === undefined || opens === undefined || opens === anchor
-      ? ""
-      : ` as it opens at ${placedEvent(story, opens)}`;
-  return [
-    `Before ${index + 1}. ${shortDescribe(story, { kind: "scene", id: scene.id })}${viewpoint === undefined ? "" : `, through the eyes of ${name}${opening}`}${anchor === undefined ? "" : `, at ${placedEvent(story, anchor)} (the latest event it shows)`}, the reader has been told:`,
-    ...(told.length === 0 ? ["(nothing yet)"] : told.map(line)),
-    ...(withheld.length === 0
-      ? []
-      : [
-          "Held back and not told yet:",
-          ...withheld.map((ref) => `- ${shortDescribe(story, ref)}`),
-        ]),
-    ...countsBefore(story, scene),
-  ];
-}
-
-/** Each count's value in effect at `event`, with how it stands. */
-/**
- * Each count's value as the scene opens and each change from its earliest
- * event to its latest: `402, since event:surge at …; then 261 at
- * event:confession`.
- */
-function countsBefore(story: Story, scene: Scene): string[] {
-  if (scene.depicts.length === 0) return [];
-  const lines = story.counts.flatMap((count) => {
-    const { entering, during } = stepsAround(
-      story,
-      countSeries(story, count),
-      scene.depicts,
-    );
-    if (entering === undefined && during.length === 0) return [];
-    const at =
-      entering === undefined ? undefined : countTime(story, entering.at);
-    const opens =
-      entering === undefined
-        ? "none yet"
-        : `${stepText(count, entering)}, since ${formatRef({ kind: "event", id: entering.at })}${at === undefined ? "" : ` at ${at}`}`;
-    const then = during.map(
-      (step) =>
-        `; then ${stepText(count, step)} at ${formatRef({ kind: "event", id: step.at })}`,
-    );
-    return [
-      `- ${shortDescribe(story, { kind: "count", id: count.id })}: ${opens}${then.join("")}`,
-    ];
-  });
-  return lines.length === 0
-    ? []
-    : ["Counts as the scene opens, then as they change during it:", ...lines];
-}
-
-/** `- scene:docks summary: "twenty years ago" (may state when this happened)`. */
-function mentionLines(story: Story, found: readonly Mention[]): string[] {
-  return found.map(
-    (m) => `- ${describe(story, m.ref)} ${m.field}: "${m.text}" (${m.how})`,
-  );
-}
-
 /** The most suspects an edit prints; `trace` lists them all. */
 const MAX_STALE_LINES = 3;
-
-/** The record as stored, with an event's position, to see whether an edit changed it. */
-function recordState(story: Story, ref: Ref): string {
-  const find = <T extends { id: string }>(items: readonly T[]) =>
-    items.find((item) => item.id === ref.id);
-  switch (ref.kind) {
-    case "actor":
-      return JSON.stringify(find(story.actors));
-    case "drive":
-      return JSON.stringify(find(story.drives));
-    case "fact":
-      return JSON.stringify(find(story.facts));
-    case "readerQuestion":
-      return JSON.stringify(find(story.readerQuestions));
-    case "event":
-      return JSON.stringify([
-        find(story.timeline.events),
-        story.timeline.positions.find(
-          (p) => p.event === ref.id && p.frame === WORLD_FRAME,
-        ),
-      ]);
-    case "scene":
-      return JSON.stringify(find(story.scenes));
-    case "openQuestion":
-      return JSON.stringify(find(story.openQuestions));
-    case "version":
-      return JSON.stringify(find(story.versions));
-    case "knowledge":
-      return JSON.stringify(find(story.knowledge));
-    case "object":
-      return JSON.stringify(find(story.objects));
-    case "count":
-      return JSON.stringify(find(story.counts));
-    case "candidate":
-      return JSON.stringify(
-        story.openQuestions
-          .find((q) => q.id === ref.questionId)
-          ?.candidates.find((c) => c.id === ref.id),
-      );
-  }
-}
-
-/** The record an edit changes the content of, if it changed it. */
-function changedRef(
-  before: Story,
-  after: Story,
-  command: StoryCommand,
-): Ref | undefined {
-  const target = ((): Ref | undefined => {
-    switch (command.type) {
-      case "setPosition":
-        return { kind: "event", id: command.event };
-      case "describeEvent":
-        return { kind: "event", id: command.id };
-      case "updateActor":
-        return { kind: "actor", id: command.id };
-      case "updateDrive":
-        return { kind: "drive", id: command.id };
-      case "addDriveTurn":
-      case "removeDriveTurn":
-        return { kind: "drive", id: command.drive };
-      case "updateFact":
-        return { kind: "fact", id: command.id };
-      case "updateReaderQuestion":
-        return { kind: "readerQuestion", id: command.id };
-      case "updateOpenQuestion":
-      case "answerOpenQuestion":
-      case "unanswerOpenQuestion":
-        return { kind: "openQuestion", id: command.id };
-      case "updateCandidate":
-        return {
-          kind: "candidate",
-          questionId: command.questionId,
-          id: command.id,
-        };
-      case "updateVersion":
-        return { kind: "version", id: command.id };
-      case "updateKnowledge":
-        return { kind: "knowledge", id: command.id };
-      case "updateObject":
-        return { kind: "object", id: command.id };
-      case "updateCount":
-      case "setCount":
-        return { kind: "count", id: command.id };
-      default:
-        return undefined;
-    }
-  })();
-  return target !== undefined &&
-    refExists(after, target) &&
-    recordState(before, target) !== recordState(after, target)
-    ? target
-    : undefined;
-}
 
 /** Each scene's prose file that exists, as `traceDependents` reads it. */
 function readProse(storyPath: string, story: Story): Prose[] {
@@ -2954,135 +1956,6 @@ function readProse(storyPath: string, story: Story): Prose[] {
       .map((text) => [{ scene: scene.id, text }])
       .unwrapOr([]),
   );
-}
-
-/** `- 2. scenes/harbour.md:3 "Twenty years…": reason; reason`. */
-function suspectLines(
-  story: Story,
-  storyPath: string,
-  found: readonly Suspect[],
-): string[] {
-  return found.map(({ target, reasons }) => {
-    const what =
-      target.kind === "record"
-        ? describe(story, target.ref)
-        : target.line === 0
-          ? proseFile(storyPath, target.scene)
-          : `${proseFile(storyPath, target.scene)}:${target.line} "${excerpt(target.text)}"`;
-    return `- ${what}: ${reasons.join("; ")}`;
-  });
-}
-
-const EXCERPT_LENGTH = 60;
-const excerpt = (text: string) =>
-  text.length <= EXCERPT_LENGTH
-    ? text
-    : `${text.slice(0, EXCERPT_LENGTH).trimEnd()}…`;
-
-/**
- * A prompt listing what may still state what the edit changed: suspects with
- * a reason in their text, at most `MAX_STALE_LINES`.
- */
-function staleTextLines(
-  before: Story,
-  after: Story,
-  command: StoryCommand,
-  storyPath: string,
-  batch: Batch = {
-    writing: new Set(),
-    created: new Set(),
-    rewritten: new Map(),
-  },
-): string[] {
-  const ref = changedRef(before, after, command);
-  // Nothing can state where an event was before it had a place.
-  const firstPlacement =
-    command.type === "setPosition" &&
-    !before.timeline.positions.some(
-      (p) => p.event === command.event && p.frame === WORLD_FRAME,
-    );
-  // Nor what a count was at an event before it had a value there.
-  const firstValue =
-    command.type === "setCount" &&
-    !before.counts.some(
-      (c) => c.id === command.id && c.values.some((v) => v.at === command.at),
-    );
-  if (firstValue && command.type === "setCount") {
-    // A value added between two others: the next one's note may count
-    // the change from the value before it.
-    const across = noteCountingAcross(after, command.id, command.at);
-    return across === undefined
-      ? []
-      : [
-          `What may still state the old ${formatRef({ kind: "count", id: command.id })}, likeliest first (nothing was rewritten):`,
-          `- ${formatRef({ kind: "count", id: command.id })} note at ${across.next.at} "${excerpt(across.next.note)}": "${across.stated}" states the change of ${across.was} from ${across.from.value} at ${across.from.at}; from the new ${command.value} at ${command.at} it is ${across.now}`,
-        ];
-  }
-  if (ref === undefined || firstPlacement) return [];
-  const was = countWas(before, after, command);
-  if (was === undefined) return [];
-  const all = traceDependents(after, ref, {
-    was,
-    prose: readProse(storyPath, after),
-  }).unwrapOr([]);
-  // The scene being written, record and prose, is what the writer has in
-  // hand, and a record this batch added was written with the change known.
-  // So, likely, was one an earlier edit in it rewrote with words of the
-  // changed record's new text, when shared words are all that suspect it;
-  // one rewritten for another reason can still state the old version
-  // (finding worldcrafter-gu8c).
-  const newWords = contentStems(recordText(after, ref));
-  const rewrittenToMatch = (target: Ref, reasons: readonly string[]) =>
-    [...(batch.rewritten.get(formatRef(target)) ?? [])].some((s) =>
-      newWords.has(s),
-    ) && !reasons.some((r) => /"[^"]*" /.test(r));
-  const found = all.filter(
-    ({ inText, target, reasons }) =>
-      inText &&
-      !(target.kind === "record"
-        ? batch.writing.has(formatRef(target.ref)) ||
-          batch.created.has(formatRef(target.ref)) ||
-          rewrittenToMatch(target.ref, reasons)
-        : batch.writing.has(formatRef({ kind: "scene", id: target.scene }))),
-  );
-  if (found.length === 0) return [];
-  const shown = found.slice(0, MAX_STALE_LINES);
-  const more = all.length - shown.length;
-  return [
-    `What may still state the old ${formatRef(ref)}, likeliest first (nothing was rewritten):`,
-    ...suspectLines(after, storyPath, shown),
-    ...(more === 0
-      ? []
-      : [`...run trace ${formatRef(ref)} for all ${all.length}.`]),
-  ];
-}
-
-/**
- * The story before the edit, as the trace should see it. A count's change
- * is only its value at one event, so only that value is looked for, and a
- * change of note alone (the same value), or one that leaves the old value
- * standing at another event, traces nothing: undefined.
- */
-function countWas(
-  before: Story,
-  after: Story,
-  command: StoryCommand,
-): Story | undefined {
-  if (command.type !== "setCount") return before;
-  const old = before.counts
-    .find((c) => c.id === command.id)
-    ?.values.find((v) => v.at === command.at);
-  if (old === undefined || old.value === command.value) return undefined;
-  const standing = after.counts
-    .find((c) => c.id === command.id)
-    ?.values.some((v) => v.value === old.value);
-  if (standing === true) return undefined;
-  return {
-    ...before,
-    counts: before.counts.map((c) =>
-      c.id === command.id ? { ...c, values: [old] } : c,
-    ),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -3238,37 +2111,6 @@ function saveBatch(storyPath: string, batch: Batch): void {
   );
 }
 
-/** Every record and candidate in the story, as refs. */
-function allRefs(story: Story): string[] {
-  const ids = (kind: RefKind, items: readonly { id: string }[]) =>
-    items.map((item) => formatRef({ kind, id: item.id }));
-  return [
-    ...ids("actor", story.actors),
-    ...ids("drive", story.drives),
-    ...ids("fact", story.facts),
-    ...ids("readerQuestion", story.readerQuestions),
-    ...ids("event", story.timeline.events),
-    ...ids("scene", story.scenes),
-    ...ids("openQuestion", story.openQuestions),
-    ...ids("version", story.versions),
-    ...ids("knowledge", story.knowledge),
-    ...ids("object", story.objects),
-    ...ids("count", story.counts),
-    ...story.openQuestions.flatMap((q) =>
-      q.candidates.map((c) =>
-        formatRef({ kind: "candidate", questionId: q.id, id: c.id }),
-      ),
-    ),
-  ];
-}
-
-/** The free text a record states, as one string. */
-const recordText = (story: Story, ref: Ref) =>
-  storyTexts(story)
-    .filter((t) => formatRef(t.ref) === formatRef(ref))
-    .map((t) => t.value)
-    .join(" ");
-
 /**
  * Adds to the batch the records `after` has that `before` didn't, and the
  * record the edit rewrote with the words it added.
@@ -3303,16 +2145,6 @@ function recordBatch(
   if (added.length > 0 || words.length > 0) saveBatch(storyPath, batch);
 }
 
-function touchLines(groups: TouchGroups): string[] {
-  const lines = TOUCH_KINDS.flatMap((kind) =>
-    groups[kind].map(
-      (t) =>
-        `  ${formatRef(t.ref)}${t.label === t.ref.id ? "" : ` ("${t.label}")`}: ${t.how.join("; ")}`,
-    ),
-  );
-  return lines.length === 0 ? ["  (nothing)"] : lines;
-}
-
 // ---------------------------------------------------------------------------
 // Running.
 
@@ -3340,167 +2172,76 @@ function loadStory(path: string): Result<Story, Failure> {
   );
 }
 
+/** The prose files beside the story file, named by path. */
+function fileSource(storyPath: string, story: Story): ProseSource {
+  return {
+    prose: readProse(storyPath, story),
+    proseLine: (scene) => proseLine(storyPath, scene.id),
+    locate: (scene, line) =>
+      line === 0
+        ? proseFile(storyPath, scene)
+        : `${proseFile(storyPath, scene)}:${line}`,
+  };
+}
+
+/** A query's refusal as the CLI reports it: a malformed query is a usage error. */
+const queryFailure = (e: QueryError): Failure =>
+  e.kind === "invalid" ? usageError(e.message) : refused(e.message);
+
 function runRead(
   name: ReadName,
   a: Reader,
   story: Story,
   storyPath: string,
 ): Result<string[], Failure> {
+  const withRef = <T>(
+    query: (ref: Ref) => Result<QueryResult<T>, QueryError>,
+  ): Result<string[], Failure> =>
+    parseRef(a.arg("ref"))
+      .mapErr(usageError)
+      .andThen((ref) => query(ref).mapErr(queryFailure))
+      .map(({ lines }) => lines);
   switch (name) {
     case "init":
       return ok([]);
     case "show":
-      return parseRef(a.arg("ref"))
-        .mapErr(usageError)
-        .andThen((ref) =>
-          refExists(story, ref)
-            ? ok([
-                ...showRecord(story, ref, storyPath),
-                ...markLines(story, ref),
-              ])
-            : err(refused(`${formatRef(ref)} does not exist`)),
-        );
+      return withRef((ref) =>
+        showQuery(story, ref, fileSource(storyPath, story)),
+      );
     case "list": {
       const asked = a.optionalArg("kind");
-      if (asked === undefined) {
-        return ok(
-          LIST_KINDS.flatMap((kind) => {
-            const lines = listLines(story, kind);
-            return lines.length === 0
-              ? []
-              : [`${kind}s:`, ...lines.map((l) => `  ${l}`)];
-          }),
-        );
-      }
+      if (asked === undefined) return ok(listQuery(story).lines);
       const kind = LIST_KINDS.find((k) => k === asked || `${k}s` === asked);
       return kind === undefined
         ? err(usageError(`<kind> must be one of ${LIST_KINDS.join(", ")}`))
-        : ok(listLines(story, kind));
+        : ok(listQuery(story, kind).lines);
     }
     case "touches":
-      return parseRef(a.arg("ref"))
-        .mapErr(usageError)
-        .andThen((ref) =>
-          whatThisTouches(story, ref).mapErr((e) => refused(e.message)),
-        )
-        .map((t) => [
-          `${formatRef(t.subject)}${t.label === t.subject.id ? "" : ` ("${t.label}")`} touches`,
-          "Directly:",
-          ...touchLines(t.direct),
-          "One step further:",
-          ...touchLines(t.further),
-        ]);
+      return withRef((ref) => touchesQuery(story, ref));
     case "scenes":
-      return parseRef(a.arg("ref"))
-        .mapErr(usageError)
-        .andThen((ref) =>
-          scenesTouching(story, ref).mapErr((e) => refused(e.message)),
-        )
-        .map((found) =>
-          found.length === 0
-            ? ["No scene touches it."]
-            : found.map(
-                ({ scene, index, how }) =>
-                  `${index + 1}. ${describe(story, { kind: "scene", id: scene.id })}: ${how.join("; ")}`,
-              ),
-        );
-    case "reader-order": {
-      const before = a.text("before");
-      if (before === undefined) return ok(readerOrderLines(story));
-      const index = story.scenes.findIndex((scene) => scene.id === before);
-      return index === -1
-        ? err(refused(`scene ${before} does not exist`))
-        : ok(toldBeforeLines(story, index));
-    }
-    case "span": {
-      const from = a.arg("from-event");
-      const to = a.arg("to-event");
-      const start = (id: string) =>
-        story.timeline.positions.find(
-          (p) => p.event === id && p.frame === WORLD_FRAME,
-        )?.start;
-      const missing = [from, to].find(
-        (id) => !refExists(story, { kind: "event", id }),
-      );
-      if (missing !== undefined) {
-        return err(refused(`event ${missing} does not exist`));
-      }
-      const unplaced = [from, to].find((id) => start(id) === undefined);
-      if (unplaced !== undefined) {
-        return err(refused(`event ${unplaced} has no position (set-position)`));
-      }
-      return ok([spanLine(story, from, to)]);
-    }
+      return withRef((ref) => scenesQuery(story, ref));
+    case "reader-order":
+      return readerOrderQuery(story, a.text("before"))
+        .mapErr(queryFailure)
+        .map(({ lines }) => lines);
+    case "span":
+      return spanQuery(story, a.arg("from-event"), a.arg("to-event"))
+        .mapErr(queryFailure)
+        .map(({ lines }) => lines);
     case "trace":
-      return parseRef(a.arg("ref"))
-        .mapErr(usageError)
-        .andThen((ref) =>
-          traceDependents(story, ref, {
-            prose: readProse(storyPath, story),
-          })
-            .mapErr((e) => refused(e.message))
-            .map((found) =>
-              found.length === 0
-                ? ["Nothing seems to depend on it."]
-                : [
-                    `What may depend on ${describe(story, ref)}, likeliest first:`,
-                    ...suspectLines(story, storyPath, found),
-                  ],
-            ),
-        );
+      return withRef((ref) =>
+        traceQuery(story, ref, fileSource(storyPath, story)),
+      );
     case "mentions":
-      return parseRef(a.arg("ref"))
-        .mapErr(usageError)
-        .andThen((ref) =>
-          whatMentions(story, ref).mapErr((e) => refused(e.message)),
-        )
-        .map((found) =>
-          found.length === 0
-            ? ["No free text mentions it."]
-            : mentionLines(story, found),
-        );
-    case "gaps": {
-      const gaps = storyGaps(story);
-      const marked = deliberateGaps(story);
-      const where = (g: { kind: GapKind; ref: Ref | null }) =>
-        `[${gapName(g.kind)} ${g.ref === null ? "story" : formatRef(g.ref)}]`;
-      return ok([
-        ...(gaps.length === 0
-          ? ["No gaps found."]
-          : [GAPS_ADVISORY, ...gaps.map((g) => `- ${g.message} ${where(g)}`)]),
-        ...(marked.length === 0
-          ? []
-          : [
-              `Marked deliberate, so not listed (${marked.length}): ${marked
-                .map(({ gap }) => where(gap))
-                .join(", ")}`,
-            ]),
-      ]);
-    }
-    case "contradictions": {
-      const found = storyContradictions(story);
-      return ok(
-        found.length === 0
-          ? ["No contradictions."]
-          : found.map(
-              (c) =>
-                `- ${c.message}${c.source === "openQuestion" || c.source === "knowledge" || c.source === "count" ? ` [${formatRef(c.ref)}]` : c.source === "membership" ? ` [membership ${c.id}]` : ""}`,
-            ),
-      );
-    }
-    case "render": {
-      const only = a.list("section");
-      const unknown = only?.filter(
-        (name) => !RENDER_SECTION_NAMES.includes(name),
-      );
-      return unknown !== undefined && unknown.length > 0
-        ? err(
-            usageError(
-              `no section ${unknown.join(", ")}: --section takes ${RENDER_SECTION_NAMES.join(", ")}`,
-            ),
-          )
-        : ok([renderStory(story, only).trimEnd()]);
-    }
+      return withRef((ref) => mentionsQuery(story, ref));
+    case "gaps":
+      return ok(gapsQuery(story).lines);
+    case "contradictions":
+      return ok(contradictionsQuery(story).lines);
+    case "render":
+      return renderQuery(story, a.list("section"))
+        .mapErr(queryFailure)
+        .map(({ lines }) => lines);
   }
 }
 
@@ -3546,28 +2287,6 @@ export function run(argv: readonly string[]): Result<Output, Failure> {
   return runEdit(EDITS[type], rest, path);
 }
 
-/**
- * The messages of the timeline problems an edit added, each once, leaving
- * out any that reads the same as a problem already there: a contradiction
- * an edit grows counts as added, but says nothing new when its message is
- * unchanged.
- */
-function newTimelineMessages(
-  before: Story,
-  after: Story,
-  problems: readonly TimelineProblem[],
-): string[] {
-  if (problems.length === 0) return [];
-  const known = new Set(
-    timelineProblems(compileChronology(before.timeline, [])).map((p) =>
-      timelineProblemMessage(before, p),
-    ),
-  );
-  return [
-    ...new Set(problems.map((p) => timelineProblemMessage(after, p))),
-  ].filter((message) => !known.has(message));
-}
-
 function runEdit(
   spec: EditSpec<StoryCommand>,
   argv: readonly string[],
@@ -3582,188 +2301,32 @@ function runEdit(
         .map(({ story: next, problems }) => {
           const batch = batchState(story, path);
           recordBatch(path, batch, story, next, command);
+          const report = editReport(story, next, command, {
+            problems,
+            prose: readProse(path, next),
+            batch,
+          });
+          const lines = editReportLines(
+            next,
+            // `--remove` drops what it names, so isn't reported.
+            a.bool("remove") === true
+              ? { ...report, droppedLinks: null }
+              : report,
+            {
+              source: fileSource(path, next),
+              maxSuspects: MAX_STALE_LINES,
+              linkName: (how) =>
+                SCENE_LINK_NAMES[SCENE_LINK_KINDS.indexOf(how)] ?? how,
+              droppedHint: "(--add adds without replacing the list)",
+            },
+          );
           return {
             story: next,
-            stdout: [
-              ...newTimelineMessages(story, next, problems).map(
-                (message) =>
-                  `Timeline problem (kept; see contradictions): ${message}`,
-              ),
-              ...addedProblems(story, next).map(
-                ({ source, message }) =>
-                  `${ADDED_HEADS[source]} problem (kept; see contradictions): ${message}`,
-              ),
-              ...alsoRemovedLines(story, next, command),
-              ...(a.bool("remove") === true
-                ? []
-                : droppedLinkLines(story, next, command)),
-              ...crossedLinkLines(story, next),
-              ...staleTextLines(story, next, command, path, batch),
-            ]
-              .map((line) => `${line}\n`)
-              .join(""),
+            stdout: lines.map((line) => `${line}\n`).join(""),
           };
         });
     }),
   );
-}
-
-/**
- * The versions and knowledge an edit removed besides the record it named,
- * since removing one record can take them with it.
- */
-function alsoRemovedLines(
-  before: Story,
-  after: Story,
-  command: StoryCommand,
-): string[] {
-  const named = (kind: "version" | "knowledge", id: string) =>
-    (command.type === "removeVersion" && kind === "version") ||
-    (command.type === "removeKnowledge" && kind === "knowledge")
-      ? command.id === id
-      : false;
-  const gone = (
-    kind: "version" | "knowledge",
-    was: readonly { id: string }[],
-    now: readonly { id: string }[],
-  ) =>
-    was
-      .filter(({ id }) => !now.some((n) => n.id === id) && !named(kind, id))
-      .map(({ id }) => describe(before, { kind, id }));
-  // A participant removed on its own isn't news; one that went with its
-  // event, actor or object is.
-  const key = (p: Participant) => JSON.stringify(PARTICIPANT_KEY(p));
-  const participants =
-    command.type === "removeParticipant"
-      ? []
-      : before.participants
-          .filter((p) => !after.participants.some((q) => key(q) === key(p)))
-          .map(
-            (p) =>
-              `${formatRef(p.who)} in ${formatRef({ kind: "event", id: p.event })}`,
-          );
-  // A count's value goes with its event, unless the count itself was named.
-  const values =
-    command.type === "removeCount" || command.type === "setCount"
-      ? []
-      : before.counts.flatMap((c) => {
-          const kept = after.counts.find((x) => x.id === c.id);
-          return kept === undefined
-            ? []
-            : c.values
-                .filter((v) => !kept.values.some((w) => w.at === v.at))
-                .map(
-                  (v) =>
-                    `the value of ${formatRef({ kind: "count", id: c.id })} at ${formatRef({ kind: "event", id: v.at })}`,
-                );
-        });
-  // A membership removed on its own isn't news either.
-  const memberships =
-    command.type === "removeMembership"
-      ? []
-      : before.memberships
-          .filter((m) => !after.memberships.some((n) => n.id === m.id))
-          .map(
-            (m) =>
-              `the membership ${m.id} of ${formatRef({ kind: "actor", id: m.member })} in ${formatRef({ kind: "actor", id: m.group })}`,
-          );
-  const removed = [
-    ...gone("version", before.versions, after.versions),
-    ...gone("knowledge", before.knowledge, after.knowledge),
-    ...participants.map((p) => `the part of ${p}`),
-    ...memberships,
-    ...values,
-  ];
-  return removed.length === 0 ? [] : [`Also removed: ${removed.join(", ")}`];
-}
-
-/**
- * The refs a scene-links set took off the list, since replacing a list can
- * drop one by accident. (`--remove` drops what it names, so isn't reported.)
- */
-function droppedLinkLines(
-  before: Story,
-  after: Story,
-  command: StoryCommand,
-): string[] {
-  if (command.type !== "setSceneLinks") return [];
-  const links = (story: Story) =>
-    (story.scenes.find((s) => s.id === command.id)?.[command.how] ?? []).map(
-      formatRef,
-    );
-  const now = new Set(links(after));
-  const dropped = links(before).filter((ref) => !now.has(ref));
-  const how = SCENE_LINK_NAMES[SCENE_LINK_KINDS.indexOf(command.how)];
-  return dropped.length === 0
-    ? []
-    : [
-        `Dropped from ${command.id} ${how}: ${dropped.join(", ")} (--add adds without replacing the list)`,
-      ];
-}
-
-/**
- * Refs a scene now both tells (reveals or implies) and withholds, which
- * cancel out; only those the edit made are listed.
- */
-function crossedLinkLines(before: Story, after: Story): string[] {
-  const crossed = (story: Story) =>
-    story.scenes.flatMap((scene) =>
-      (["reveals", "implies"] as const).flatMap((how) =>
-        scene[how]
-          .map(formatRef)
-          .filter((ref) => scene.withholds.map(formatRef).includes(ref))
-          .map(
-            (ref) => `scene ${scene.id} now both ${how} and withholds ${ref}`,
-          ),
-      ),
-    );
-  const old = new Set(crossed(before));
-  return crossed(after)
-    .filter((line) => !old.has(line))
-    .map((line) => `Note: ${line}; one of the two is probably meant.`);
-}
-
-type AddedSource = "cause" | "count" | "knowledge" | "membership";
-
-const ADDED_HEADS: Record<AddedSource, string> = {
-  cause: "Cause",
-  count: "Count",
-  knowledge: "Knowledge",
-  membership: "Membership",
-};
-
-/**
- * Cause, count, knowledge and membership contradictions in `after` that
- * weren't in `before`.
- */
-function addedProblems(
-  before: Story,
-  after: Story,
-): { source: AddedSource; message: string }[] {
-  type Found = { source: AddedSource; key: string; message: string };
-  const found = (story: Story) =>
-    storyContradictions(story).flatMap((c): Found[] =>
-      c.source === "cause"
-        ? [
-            {
-              source: c.source,
-              key: JSON.stringify([
-                c.kind,
-                ...(c.kind === "cycle" ? c.events : [c.cause, c.effect]),
-              ]),
-              message: c.message,
-            },
-          ]
-        : c.source === "count" ||
-            c.source === "knowledge" ||
-            c.source === "membership"
-          ? [{ source: c.source, key: c.message, message: c.message }]
-          : [],
-    );
-  const old = new Set(found(before).map(({ key }) => key));
-  return found(after)
-    .filter(({ key }) => !old.has(key))
-    .map(({ source, message }) => ({ source, message }));
 }
 
 if (import.meta.main) {
