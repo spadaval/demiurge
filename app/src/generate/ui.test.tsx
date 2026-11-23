@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import type { AssembledRecord, RevisionRecord } from "~/context/requests";
 import type { LlmRequest } from "~/llm/types";
 import { ContextViewer } from "./context-viewer";
-import { describeGenerationResult } from "./describe";
+import { describeGenerationResult, RETARGETED } from "./describe";
 import { draftOf, requestFromDraft } from "./draft";
 import { SegmentControls } from "./segment-controls";
 
@@ -295,6 +295,7 @@ describe("generation messages", () => {
       segmentId: null,
       requestId: "r1",
       save: { kind: "saved" },
+      retargeted: false,
       error: {
         kind: "network",
         url: chat.url,
@@ -311,6 +312,7 @@ describe("generation messages", () => {
         segmentId: null,
         requestId: "r1",
         save: { kind: "saved" },
+        retargeted: false,
         error: {
           kind: "http",
           url: chat.url,
@@ -319,5 +321,19 @@ describe("generation messages", () => {
         },
       }),
     ).toBe("Generation failed: 503 busy");
+  });
+
+  test("a retargeted request says where it went", () => {
+    const result = {
+      outcome: "complete" as const,
+      segmentId: "s1",
+      requestId: "r1",
+      save: { kind: "saved" as const },
+      retargeted: true,
+    };
+    expect(describeGenerationResult(result)).toBe(RETARGETED);
+    expect(describeGenerationResult({ ...result, outcome: "cancelled" })).toBe(
+      `Stopped. The text so far is kept. ${RETARGETED}`,
+    );
   });
 });

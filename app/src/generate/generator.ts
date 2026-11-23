@@ -30,8 +30,10 @@
  *   output. The replaced segment's provenance is archived under its own ID,
  *   and the new provenance names it in `replaces`, with its blocks as they
  *   were (the writer may have edited them), so no text is lost. By default it resends the request
- *   that made the segment, unchanged; pass another request ID (a revision
- *   the writer edited) to send that instead.
+ *   that made the segment, unchanged unless the profile has changed since:
+ *   then a revision addressed to the profile as it is (`retarget`) is
+ *   stored and sent. Pass another request ID (a revision the writer edited)
+ *   to send that, as stored.
  * - Cancel keeps what arrived: the segment becomes ready with the partial
  *   text, and its provenance says `cancelled` (with the tokens' logprobs so
  *   far). A connection or server failure part-way does the same with
@@ -181,6 +183,11 @@ export type GenerationResult = {
   requestId: string;
   /** Present when the outcome is `failed`. */
   error?: LlmError;
+  /**
+   * The request was made for a profile that has since changed, so a
+   * revision addressed to it as it is now was stored and sent (`retarget`).
+   */
+  retargeted: boolean;
   /** The session's status after saving (unsaved writes are retried). */
   save: SaveStatus;
 };
@@ -193,10 +200,16 @@ export type AcceptResult = {
 
 /** A stored request as it would be sent now. */
 export type CurrentRequest = {
+  /**
+   * The stored record; when retargeted, with its request addressed to the
+   * profile as it is now. That retargeted request is not stored until it
+   * is sent (then as a revision of this record), so showing it writes
+   * nothing.
+   */
   record: ContextRequest;
   /**
-   * True when the request was made for a server the profile has since left:
-   * `record` is then a new revision addressed to the profile as it is.
+   * True when the request was made for a profile that has since changed
+   * server, model or kind (`retarget`).
    */
   retargeted: boolean;
 };
@@ -232,7 +245,12 @@ export interface Generator {
     requestId: string,
     target?: GenerationTarget,
   ): ResultAsync<GenerationResult, GenerateError>;
-  /** Replaces a ready segment with new output from `requestId`, by default the request that made it. */
+  /**
+   * Replaces a ready segment with new output from `requestId`, sent as
+   * stored. By default it sends the request that made the segment, as
+   * `segmentRequest` shows it: retargeted, and the retargeted revision
+   * stored first, if the profile has changed since.
+   */
   regenerate(
     segmentId: string,
     requestId?: string,
@@ -248,7 +266,7 @@ export interface Generator {
   ): ResultAsync<GenerationResult, GenerateError>;
   /**
    * The stored request that made a segment's output, as it would be sent
-   * again (retargeted if the profile has moved since).
+   * again (retargeted, in memory only, if the profile has changed since).
    */
   segmentRequest(segmentId: string): ResultAsync<CurrentRequest, GenerateError>;
   /** Stops the running generation, keeping what arrived; before sending, it isn't sent. */
@@ -346,23 +364,39 @@ export function createGenerator(options: GeneratorOptions): Generator {
   const load = (id: string): ResultAsync<ContextRequest, GenerateError> =>
     requests.load(id).mapErr((e): GenerateError => e);
 
+  /** A stored request to send, and whether it was retargeted to be sent. */
+  type Sendable = { record: ContextRequest; retargeted: boolean };
+
   /**
-   * `record` as it can be sent now: as stored, or, when its profile has
-   * since moved to another server, a revision of it addressed to the
-   * profile as it is (`retarget`), so regenerating still works.
+   * `record` as it would be sent now: as stored, or, when its profile has
+   * since changed server, model or kind, with its request addressed to the
+   * profile as it is (`retarget`). Nothing is stored.
    */
-  const current = (
-    record: ContextRequest,
-  ): ResultAsync<CurrentRequest, GenerateError> => {
+  const current = (record: ContextRequest): CurrentRequest => {
     const profile = options.profile(record.request.profile);
     if (!profile || addressedTo(profile, record.request)) {
-      return okAsync({ record, retargeted: false });
+      return { record, retargeted: false };
     }
-    return requests
-      .revise(record.id, retarget(profile, record.request))
-      .mapErr((e): GenerateError => e)
-      .map((revision) => ({ record: revision, retargeted: true }));
+    return {
+      record: { ...record, request: retarget(profile, record.request) },
+      retargeted: true,
+    };
   };
+
+  /**
+   * Stored record `id` as it can be sent now: as stored, or a revision of it
+   * stored now, retargeted (`current`), so a request made before the
+   * profile changed still sends.
+   */
+  const sendable = (id: string): ResultAsync<Sendable, GenerateError> =>
+    load(id).andThen((stored) => {
+      const { record, retargeted } = current(stored);
+      if (!retargeted) return okAsync({ record, retargeted });
+      return requests
+        .revise(stored.id, record.request)
+        .mapErr((e): GenerateError => e)
+        .map((revision) => ({ record: revision, retargeted }));
+    });
 
   const requestIdOf = (segmentId: string): ResultAsync<string, GenerateError> =>
     loadProvenance(segmentId).andThen((stored) =>
@@ -426,7 +460,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
    * is honoured while it resolves: the request is then not sent.
    */
   function sendWith(
-    resolve: () => ResultAsync<ContextRequest, GenerateError>,
+    resolve: () => ResultAsync<Sendable, GenerateError>,
     target: GenerationTarget | undefined,
     /** The request's ID, when it is known before resolving. */
     known: string | null = null,
@@ -445,8 +479,8 @@ export function createGenerator(options: GeneratorOptions): Generator {
       return errAsync<T, GenerateError>(error);
     };
     return resolve()
-      .orElse((error) => refuseWith<ContextRequest>(error))
-      .andThen((record) => {
+      .orElse((error) => refuseWith<Sendable>(error))
+      .andThen(({ record, retargeted }) => {
         const requestId = record.id;
         if (abort.signal.aborted) {
           release();
@@ -455,6 +489,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
             segmentId: null,
             requestId,
             save: session.status.get(),
+            retargeted,
           });
         }
         active.set({ segmentId: null, requestId, text: "" });
@@ -474,7 +509,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
         if (placed.isErr()) return refuseWith(placed.error);
         const placement = placed.value;
         return ResultAsync.fromPromise(
-          stream(profile, requestId, request, placement, abort),
+          stream(profile, requestId, request, placement, abort, retargeted),
           (cause): GenerateError => {
             // A bug, not an LLM failure: still end the generation, so neither
             // the segment nor this generator stays locked.
@@ -544,6 +579,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
     request: LlmRequest,
     { segmentId, generation, replaced }: Placement,
     abort: AbortController,
+    retargeted: boolean,
   ): Promise<GenerationResult> {
     const startedAt = now();
     let text = "";
@@ -612,6 +648,7 @@ export function createGenerator(options: GeneratorOptions): Generator {
         segmentId: kept,
         requestId,
         save,
+        retargeted,
         ...(error ? { error } : {}),
       };
     };
@@ -752,11 +789,18 @@ export function createGenerator(options: GeneratorOptions): Generator {
     revise: (requestId, request) =>
       requests.revise(requestId, request).mapErr((e): GenerateError => e),
     send: (requestId, target) =>
-      sendWith(() => load(requestId), target, requestId),
+      sendWith(
+        () => load(requestId).map((record) => ({ record, retargeted: false })),
+        target,
+        requestId,
+      ),
     sendEdited: (parentId, request, target) =>
       sendWith(
         () =>
-          requests.revise(parentId, request).mapErr((e): GenerateError => e),
+          requests
+            .revise(parentId, request)
+            .mapErr((e): GenerateError => e)
+            .map((record) => ({ record, retargeted: false })),
         target,
       ),
     regenerate(segmentId, requestId) {
@@ -767,16 +811,13 @@ export function createGenerator(options: GeneratorOptions): Generator {
       return sendWith(
         () =>
           requestId
-            ? load(requestId)
-            : requestIdOf(segmentId)
-                .andThen(load)
-                .andThen(current)
-                .map(({ record }) => record),
+            ? load(requestId).map((record) => ({ record, retargeted: false }))
+            : requestIdOf(segmentId).andThen(sendable),
         { kind: "replace", segmentId },
       );
     },
     segmentRequest: (segmentId) =>
-      requestIdOf(segmentId).andThen(load).andThen(current),
+      requestIdOf(segmentId).andThen(load).map(current),
     cancel() {
       controller?.abort();
     },

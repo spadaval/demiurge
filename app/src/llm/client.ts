@@ -2,6 +2,7 @@ import { err, ok, type Result, ResultAsync } from "neverthrow";
 import { errorMessage, isRecord, parseLogprobs } from "./parse";
 import { SseParser } from "./sse";
 import type {
+  BackendKind,
   BackendProfile,
   Completion,
   Fetch,
@@ -64,28 +65,103 @@ function endpointUrl(
 }
 
 /**
- * `request` addressed to `profile` as it is now: its endpoint URL, and its
- * model (or none). Everything else is kept. For a stored request whose
- * profile has since moved to another server, so it can be sent again;
- * `checkRequest` still sends a profile's key only to that profile's URL.
+ * Body keys only one kind of server reads. Another server may refuse them
+ * (OpenAI-compatible APIs answer an unknown parameter with 400) or apply
+ * them differently, so a request moved to another kind leaves them out.
+ * Keys every kind takes (temperature, top_p, top_k, min_p, max_tokens,
+ * stop, seed, the penalties, logprobs) are not listed.
+ */
+const SERVER_KEYS: Readonly<Record<BackendKind, ReadonlySet<string>>> = {
+  llamacpp: new Set([
+    "n_probs",
+    "post_sampling_probs",
+    "n_predict",
+    "n_keep",
+    "n_indent",
+    "cache_prompt",
+    "id_slot",
+    "return_tokens",
+    "timings_per_token",
+    "typical_p",
+    "repeat_penalty",
+    "repeat_last_n",
+    "mirostat",
+    "mirostat_tau",
+    "mirostat_eta",
+    "dynatemp_range",
+    "dynatemp_exponent",
+    "dry_multiplier",
+    "dry_base",
+    "dry_allowed_length",
+    "dry_penalty_last_n",
+    "dry_sequence_breakers",
+    "xtc_probability",
+    "xtc_threshold",
+    "samplers",
+    "grammar",
+    "json_schema",
+    "ignore_eos",
+  ]),
+  openrouter: new Set([
+    "provider",
+    "transforms",
+    "route",
+    "models",
+    "top_a",
+    "repetition_penalty",
+    "reasoning",
+    "usage",
+    "plugins",
+  ]),
+  generic: new Set(),
+};
+
+/**
+ * Whether `key` in a request's body is for another kind of server than
+ * `profile`'s. A key the profile's own sampler sets is the writer's choice
+ * for this server, so it is never foreign.
+ */
+const foreignKey = (profile: BackendProfile, key: string): boolean =>
+  profile.sampler[key] === undefined &&
+  Object.entries(SERVER_KEYS).some(
+    ([kind, keys]) => kind !== profile.kind && keys.has(key),
+  );
+
+/**
+ * `request` addressed to `profile` as it is now: its endpoint URL, its
+ * model (or none), and without parameters only another kind of server
+ * reads (llama.cpp's `n_probs` sent to OpenRouter, say). Everything else is
+ * kept, the writer's edits included. For a stored request whose profile
+ * has since changed, so it can be sent again; `checkRequest` still sends a
+ * profile's key only to that profile's URL.
  */
 export function retarget(
   profile: BackendProfile,
   request: LlmRequest,
 ): LlmRequest {
-  const { model: _model, ...body } = request.body;
+  const body: JsonObject = {};
+  for (const [key, value] of Object.entries(request.body)) {
+    if (key !== "model" && !foreignKey(profile, key)) body[key] = value;
+  }
+  if (profile.model !== undefined) body.model = profile.model;
   return {
     ...request,
     profile: profile.name,
     url: endpointUrl(profile, request.endpoint),
-    body:
-      profile.model === undefined ? body : { ...body, model: profile.model },
+    body,
   };
 }
 
-/** Whether `request` goes to `profile`'s endpoint. */
+/**
+ * Whether `request` is addressed to `profile` as it is now, so `retarget`
+ * would leave it as it is: its endpoint, its model, and no parameter for
+ * another kind of server.
+ */
 export const addressedTo = (profile: BackendProfile, request: LlmRequest) =>
-  request.url === endpointUrl(profile, request.endpoint);
+  request.profile === profile.name &&
+  request.url === endpointUrl(profile, request.endpoint) &&
+  request.body.model === profile.model &&
+  !Object.keys(request.body).some((key) => foreignKey(profile, key));
 
 const ROLES = new Set(["system", "user", "assistant"]);
 

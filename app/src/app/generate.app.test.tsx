@@ -12,13 +12,14 @@ import { errAsync } from "neverthrow";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { canonicalize } from "~/content/canonicalize";
+import { RETARGETED } from "~/generate/describe";
 import type { BackendProfile } from "~/llm/types";
 import { createMemoryStorage } from "~/storage/memory";
 import type { JsonValue, StorageAdapter } from "~/storage/types";
 import { createStorageConnection } from "~/workspace/connection";
 import type { KeyValueStore } from "~/workspace/tabs";
 import { createWorkspace, type Workspace } from "~/workspace/workspace";
-import { AppProviders } from "./hooks";
+import { AppProviders, type AppServices } from "./hooks";
 import { createAppRouter } from "./router";
 import { createAppServices } from "./services";
 
@@ -124,6 +125,7 @@ let root: Root | undefined;
 let container: HTMLElement | undefined;
 let storage: StorageAdapter;
 let workspace: Workspace;
+let services: AppServices;
 
 beforeEach(async () => {
   scripts.length = 0;
@@ -160,7 +162,7 @@ async function render(keyValue: KeyValueStore, path = "/doc/doc1") {
     saveDelayMs: 60_000,
   });
   (await workspace.refreshDocuments())._unsafeUnwrap();
-  const services = await createAppServices({
+  services = await createAppServices({
     workspace,
     keyValue,
     layerSource: (await import("./layers")).createLayerSource(),
@@ -541,12 +543,17 @@ test("after the model is renamed and moved, earlier AI text still regenerates th
   await click(query(".tab a"));
   await until(() => plates().length === 1, "the document again");
 
+  const storedRequests = async () =>
+    (await storage.requests.list())._unsafeUnwrap().length;
+  const before = await storedRequests();
   await click(button("Request", "section[data-ai-segment]"));
   await until(() => query(".request-slip") !== null, "the segment's request");
   const slip = query(".request-slip")?.textContent ?? "";
   expect(slip).toContain("The model settings have changed");
   expect(slip).toContain(`Moved · chat · ${moved}/chat/completions`);
   await click(button("Close", ".request-slip"));
+  // Looking at it stores nothing.
+  expect(await storedRequests()).toBe(before);
 
   scripts.push(stream("Second."));
   await click(button("Regenerate", "section[data-ai-segment]"));
@@ -558,9 +565,47 @@ test("after the model is renamed and moved, earlier AI text still regenerates th
   );
   expect(received).toHaveLength(2);
   expect(received[1]?.auth).toBe(`Bearer ${KEY}`);
+  // Regenerate from the caption says where it went.
+  expect(query(".notices")?.textContent).toContain(RETARGETED);
+  expect(await storedRequests()).toBe(before + 1);
   // The stored request that was sent goes to the profile's own URL.
   const urls = (await storage.requests.list())
     ._unsafeUnwrap()
     .map((r) => (r.request as { request: { url: string } }).request.url);
   expect(urls).toContain(`${moved}/chat/completions`);
+});
+
+test("a request shown retargeted in the slip is stored once, when sent", async () => {
+  await render(withProfile());
+  await generateNext();
+  scripts.push(stream("First."));
+  await click(button("Send", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+
+  // Another model at the same server.
+  services.generation.profile.save({ ...PROFILE, model: "other-model" });
+  const storedRequests = async () =>
+    (await storage.requests.list())._unsafeUnwrap().length;
+  const before = await storedRequests();
+  await click(button("Request", "section[data-ai-segment]"));
+  await until(() => query(".request-slip") !== null, "the segment's request");
+  expect(query(".request-slip")?.textContent).toContain(
+    "The model settings have changed",
+  );
+  expect(
+    query<HTMLTextAreaElement>(".request-slip [data-role=parameters] textarea")
+      ?.value,
+  ).toContain('"other-model"');
+  expect(await storedRequests()).toBe(before);
+
+  scripts.push(stream("Second."));
+  await click(button("Send", ".request-slip"));
+  await until(
+    () =>
+      plateText(plates()[0]) === "Second." &&
+      plates()[0]?.dataset.status === "ready",
+    "the regenerated output",
+  );
+  expect((received[1]?.body as { model: string }).model).toBe("other-model");
+  expect(await storedRequests()).toBe(before + 1);
 });

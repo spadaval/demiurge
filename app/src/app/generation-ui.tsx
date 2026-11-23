@@ -112,7 +112,8 @@ export function RequestSlip({
       {slip.retargeted && (
         <p className="request-slip-stale">
           The model settings have changed since this request was made, so it now
-          goes to the server set there.
+          goes to the server and model set there, without parameters only
+          another kind of server reads.
         </p>
       )}
       {stale && !slip.sending && (

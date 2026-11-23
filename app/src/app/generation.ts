@@ -56,8 +56,9 @@ export interface Slip {
    */
   readonly assembledOver: unknown;
   /**
-   * The request was made for a server the profile has since left, and is
-   * shown (and sent) addressed to the profile as it is now.
+   * The request was made for a profile that has since changed server, model
+   * or kind, and `record.request` is shown addressed to the profile as it is
+   * now. Only that request is in memory; sending stores it as a revision.
    */
   readonly retargeted: boolean;
 }
@@ -199,7 +200,9 @@ export function createGeneration(options: GenerationOptions): Generation {
       if (revision.isOk()) record = revision.value;
     }
     if (slip.get() !== (open ? shown : null)) return;
-    slip.set({ ...shown, record, sending: false });
+    // A stored revision is addressed as it is.
+    const retargeted = shown.retargeted && record === shown.record;
+    slip.set({ ...shown, record, sending: false, retargeted });
   };
 
   /** Runs a send or regenerate, closing `shown` once its segment is placed. */
@@ -299,6 +302,9 @@ export function createGeneration(options: GenerationOptions): Generation {
       slip.set(sending);
       const { replaces } = shown;
       const id = shown.record.id;
+      // A retargeted request isn't stored yet: send it as a revision.
+      const request =
+        edited ?? (shown.retargeted ? shown.record.request : null);
       const target = replaces
         ? { kind: "replace" as const, segmentId: replaces }
         : undefined;
@@ -308,8 +314,8 @@ export function createGeneration(options: GenerationOptions): Generation {
         shown.documentId,
         generator,
         () =>
-          edited
-            ? generator.sendEdited(id, edited, target)
+          request
+            ? generator.sendEdited(id, request, target)
             : replaces
               ? generator.regenerate(replaces, id)
               : generator.send(id),
