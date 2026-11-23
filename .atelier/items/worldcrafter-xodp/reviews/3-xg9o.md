@@ -32,5 +32,6 @@ Now: fixed
 
 ## Finding 2: Wrap the new tests' profile saves in act
 Recommendation: defer
+Taken: worldcrafter-d93c by mcp:7d857dc0-4a0b-4b45-94fa-b528d1f91a2b
 
 `app/src/app/generate.app.test.tsx:789` and `:850` call `services.generation.profile.save` outside `act`. Those calls notify React subscribers synchronously, and the full check now prints four "An update to Rail inside a test was not wrapped in act(...)" warnings while running the two new tests. Wrap these saves in the existing `act` helper so new React warnings remain visible. This does not block this item: subsequent awaited UI actions flush the updates, and both regression tests assert the outgoing model and pass.
