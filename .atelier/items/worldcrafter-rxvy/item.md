@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-rxvy
 title: 'Anchored conversation: open a scoped talk topic from any scene, passage, or bible record'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -57,4 +57,4 @@ The writer can now start a talk topic from the thing it is about, and the model 
 1-9b2c.1: fixed in 0f14534
 1-9b2c.2: fixed in 0f14534
 1-9b2c.3: not built: a contradiction has no ref or stable identity (it is computed, and its message changes with the bible), and DESIGN.md and the mission's success criteria define a topic's scope as the world, a scene, a passage or a bible record. A contradiction topic needs a new scope kind, an agent scope and packet, an identity that survives bible edits, and a DESIGN amendment, which should be its own item rather than part of this one.
-
+2-tqwe.4: fixed in dd3b1a9
