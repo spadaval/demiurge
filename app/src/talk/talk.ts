@@ -339,6 +339,17 @@ export function createTalk(options: TalkOptions): Talk {
     const agent = runner(model);
     let current = topic;
     if (current.session === null) {
+      const id = topicSessionId(current.id);
+      // A session left by a first turn whose topic failed to save is reused:
+      // it holds no message yet, since the session starts before the save.
+      const left = await storage.agentRecords.load(sessionRecordId(id));
+      if (left.isOk()) {
+        current = { ...current, session: id };
+      } else if (left.error.kind !== "not_found") {
+        return err(left.error);
+      }
+    }
+    if (current.session === null) {
       const story = await loadStory(storage);
       if (story.isErr()) return err(story.error);
       const id = topicSessionId(current.id);

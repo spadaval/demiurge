@@ -6,7 +6,7 @@
  */
 
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import type { ResultAsync } from "neverthrow";
+import { errAsync, type ResultAsync } from "neverthrow";
 import { readStep, stepRecordId } from "../agent/records";
 import {
   failure,
@@ -256,6 +256,39 @@ describe("a topic with the model", () => {
     expect(await value(listTopics(storage))).toEqual([]);
     expect(await value(storage.agentRecords.list())).toEqual([]);
     expect(stub.received).toEqual([]);
+  });
+
+  test("a first turn whose topic failed to save can be sent again", async () => {
+    // Storage refuses talk-record writes until told otherwise.
+    const real = storage;
+    let refuse = true;
+    storage = Object.assign(Object.create(real), {
+      batch: (writes: Parameters<StorageAdapter["batch"]>[0]) =>
+        refuse && writes.some((w) => w.kind === "saveTalkRecord")
+          ? errAsync({
+              kind: "failure" as const,
+              operation: "save" as const,
+              message: "disk full",
+              cause: null,
+            })
+          : real.batch(writes),
+    });
+    const t = talk();
+    const spec = {
+      id: "t9",
+      title: "Ferry",
+      scope: { kind: "world" as const },
+      message: "Is it late?",
+    };
+    expect(await failed(t.start(spec))).toMatchObject({ kind: "failure" });
+    expect(await value(listTopics(storage))).toEqual([]);
+    refuse = false;
+    stub.script(reply("Yes."));
+    const outcome = await value(t.start(spec));
+    expect(outcome.log.messages.map((m) => m.body)).toEqual([
+      "Is it late?",
+      "Yes.",
+    ]);
   });
 
   test("a failed model call keeps the writer's message, and trying again answers it", async () => {
