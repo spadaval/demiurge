@@ -20,8 +20,11 @@ import type {
 /**
  * Bump when the stores or indexes change, and add a step to `upgrade` that
  * moves version N-1 data forward. Never edit an existing step.
+ *
+ * 1: documents, world entries, annotations, requests, snapshots, outlines,
+ *    timelines. 2: story-bible records (`storyRecords`).
  */
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 const DOCUMENT_INDEX = "byDocument";
 
@@ -39,8 +42,19 @@ interface SnapshotContentRecord {
   readonly content: Snapshot["content"];
 }
 
-function upgrade(db: IDBDatabase, oldVersion: number): void {
-  if (oldVersion < 1) {
+/**
+ * Moves a database from `oldVersion` to `newVersion` by running each step in
+ * between. `newVersion` is `DB_VERSION` except in tests that build a database
+ * as an older release left it.
+ */
+export function upgrade(
+  db: IDBDatabase,
+  oldVersion: number,
+  newVersion: number = DB_VERSION,
+): void {
+  const step = (version: number) =>
+    oldVersion < version && version <= newVersion;
+  if (step(1)) {
     db.createObjectStore("documents", { keyPath: "id" });
     db.createObjectStore("worldEntries", { keyPath: "documentId" });
     db.createObjectStore("annotations", { keyPath: "id" }).createIndex(
@@ -58,6 +72,9 @@ function upgrade(db: IDBDatabase, oldVersion: number): void {
     // release, schema changes bump DB_VERSION instead.
     db.createObjectStore("outlines", { keyPath: "id" });
     db.createObjectStore("timelines", { keyPath: "id" });
+  }
+  if (step(2)) {
+    db.createObjectStore("storyRecords", { keyPath: "id" });
   }
 }
 
@@ -316,6 +333,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
     snapshots,
     outlines: keyed("outlines", (record) => record.id),
     timelines: keyed("timelines", (record) => record.id),
+    storyRecords: keyed("storyRecords", (record) => record.id),
     batch: (writes) => {
       const stores = new Set<StoreName>();
       for (const write of writes) {
@@ -324,6 +342,12 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         if (write.kind === "saveSnapshot") {
           stores.add("snapshots");
           stores.add(SNAPSHOT_CONTENT);
+        }
+        if (
+          write.kind === "saveStoryRecord" ||
+          write.kind === "deleteStoryRecord"
+        ) {
+          stores.add("storyRecords");
         }
       }
       // A transaction needs at least one store.
@@ -360,6 +384,12 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
                 added.push({ info, add });
                 break;
               }
+              case "saveStoryRecord":
+                tx.objectStore("storyRecords").put(write.record);
+                break;
+              case "deleteStoryRecord":
+                tx.objectStore("storyRecords").delete(write.id);
+                break;
             }
           }
           return () =>

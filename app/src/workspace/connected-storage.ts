@@ -13,7 +13,7 @@ import type { StorageConnection } from "./connection";
 
 /**
  * A `StorageAdapter` for stores that take an adapter (world facts, outline,
- * timeline), so they follow the workspace's connection without depending on
+ * timeline, story bible), so they follow the workspace's connection without depending on
  * the workspace:
  * - Every operation runs through `connection`, so it uses the live adapter,
  *   and a failure it sees reopens the store and retries once, as document
@@ -108,12 +108,17 @@ export function createConnectedStorage(
       (storage) => storage.timelines,
       (r) => r.id,
     ),
+    storyRecords: keyed(
+      "storyRecords",
+      (storage) => storage.storyRecords,
+      (r) => r.id,
+    ),
     batch: (writes) => {
-      const { collection = "documents", id } = batchContext(writes);
+      const { collection = "documents", id, operation } = batchContext(writes);
       return write(
         {
           kind: "read_only",
-          operation: "save",
+          operation: operation === "delete" ? "delete" : "save",
           collection,
           ...(id === undefined ? {} : { id: String(id) }),
         },

@@ -253,6 +253,23 @@ export function describeStorageContract(
       }),
     );
 
+    describeCollection(
+      "storyRecords",
+      () => storage.storyRecords,
+      (id, version) => ({
+        id,
+        kind: "drive",
+        data: {
+          id,
+          actorId: null,
+          want: `Version ${version}`,
+          origins: ["e1"],
+          turns: [{ how: "flipped", into: "d2", note: "" }],
+        },
+        updatedAt: version,
+      }),
+    );
+
     test("a document's content tree round-trips losslessly", async () => {
       const document = {
         id: "doc1",
@@ -441,6 +458,57 @@ export function describeStorageContract(
           kind: "not_found",
         });
         expect(await value(storage.snapshots.list("doc1"))).toEqual([]);
+      });
+
+      const storyRecord = (id: string, want: JsonValue) => ({
+        id,
+        kind: "drive",
+        data: { id, want },
+        updatedAt: 3,
+      });
+
+      test("saves and deletes story records together", async () => {
+        await value(storage.storyRecords.save(storyRecord("drive/a", "old")));
+        await value(storage.storyRecords.save(storyRecord("drive/b", "gone")));
+        expect(
+          await value(
+            storage.batch([
+              {
+                kind: "saveStoryRecord",
+                record: storyRecord("drive/a", "new"),
+              },
+              { kind: "deleteStoryRecord", id: "drive/b" },
+              { kind: "saveStoryRecord", record: storyRecord("drive/c", "c") },
+              { kind: "deleteStoryRecord", id: "drive/missing" },
+            ]),
+          ),
+        ).toEqual([]);
+        expect(await value(storage.storyRecords.list())).toEqual([
+          storyRecord("drive/a", "new"),
+          storyRecord("drive/c", "c"),
+        ]);
+      });
+
+      test("deletes no story record when a later write fails", async () => {
+        await value(storage.storyRecords.save(storyRecord("drive/a", "kept")));
+        const failure = await error(
+          storage.batch([
+            { kind: "deleteStoryRecord", id: "drive/a" },
+            {
+              kind: "saveStoryRecord",
+              record: storyRecord("drive/b", unstorable),
+            },
+          ]),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "delete",
+          collection: "storyRecords",
+          id: "drive/a",
+        });
+        expect(await value(storage.storyRecords.list())).toEqual([
+          storyRecord("drive/a", "kept"),
+        ]);
       });
 
       test("an empty batch succeeds", async () => {
