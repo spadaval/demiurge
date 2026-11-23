@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-lhh3
 title: Talk pages and world inbox
-status: open
+status: building
 mission: worldcrafter-mtkn
 labels:
 - ai
@@ -13,7 +13,8 @@ priority: medium
 blocked_by:
 - worldcrafter-if6h
 - worldcrafter-667u
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A3f69cce6-a3b3-462c-8abc-fa3ad7d4dffd%3Adelegate-task%3A92a6a651-2527-4b20-8645-8e2ee9697ffa
 ready: null
 trivial: null
 caused_by: null
