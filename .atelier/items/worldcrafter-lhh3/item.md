@@ -100,16 +100,26 @@ view, New topic through two turns, discarding an unsent topic, resolve,
 reopen and archive with the closed ledger, the inbox sheet, Try again, and
 Send with no model. Storage contract, IndexedDB upgrade (4 to 5), world
 file and connected-storage tests cover the collection. `cd app && bun run
-check`: 1654 pass, 0 fail, no warnings (after round 1's fixes).
+check`: 1723 pass, 0 fail, no warnings (after round 2's fixes and the
+merge of master).
 
 Where it departs from DESIGN.md's Topics section, and why:
-- **Not built, other items' scope**: the "Request" action on a model turn,
-  "Context" on the composer and in the masthead, and the agent slip in the
-  gloss column (`worldcrafter-w4mr`; each message stores the request ID and
-  trace that slip needs). Opening a contradiction's detail in the World
-  inspector (`worldcrafter-wqh0`): inbox contradiction rows aren't links yet,
-  and record scopes show as plain text rather than references. Launching
-  scene, passage and record topics, and Talk gloss notes (`worldcrafter-rxvy`).
+- **Not built: hosting the agent slip on a topic sheet.** That means the
+  "Request" action on a model turn, "Context" on the composer and in the
+  masthead, and the slip in the gloss column. This item's Scope leaves
+  prompt and trace UI to `worldcrafter-w4mr`. w4mr has merged the slip,
+  but it leaves hosting it to its caller, and `docs/rebuild/story-agent.md`
+  now lists "talk pages hosting the slip" as not done. Each message stores
+  the request ID and trace the slip needs. Hosting it also means starting
+  topic sessions from the profile defaults store (`agent/defaults.ts`),
+  which nothing in the app creates yet. **The lead should decide whether
+  this needs an item of its own; I haven't filed one.** Launching scene,
+  passage and record topics, and Talk gloss notes, are `worldcrafter-rxvy`.
+- **Since merging master (wqh0, hqca, w4mr)**: topic turns write through
+  `services.bible.storage`, so the model's edits show at once in open scenes
+  and the World inspector (tested). The inbox and resolved-and-archived
+  sheets use the inspector's ledger components. A contradiction row opens
+  the Contradictions view, and a record scope links to its detail.
 - **Not built, no item yet**: proposals in a turn ("Record as fact"). No
   structured proposal exists in the agent's output to render. Also missing:
   a tool for the agent to raise a topic itself (`Talk.raise` is the command
@@ -129,3 +139,5 @@ Where it departs from DESIGN.md's Topics section, and why:
 1-jkqn.2: fixed in f8ae145
 1-jkqn.3: fixed in f8ae145
 1-jkqn.4: fixed in 7f136cc
+2-c04g.5: fixed in 2d2cb74
+2-c04g.6: fixed in 2d2cb74
