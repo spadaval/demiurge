@@ -43,6 +43,7 @@ import {
 import type { EditWarnings, SuspectData } from "~/story/tools";
 import { refLabel, type Touch } from "~/story/touches";
 import type { Position } from "~/time/timeline";
+import { RecordTalk } from "./anchored-talk";
 import { BibleEditsProvider, useBibleEdits } from "./bible-edit";
 import { useServices, useStore } from "./hooks";
 import {
@@ -1729,6 +1730,7 @@ function RecordSheet({ subject }: { subject: Ref }) {
         {/* Keyed, so a reason half written doesn't carry to the next record. */}
         <RecordEdits key={formatRef(subject)} subject={subject} />
         <RecordActions subject={subject} />
+        <RecordTalk subject={subject} />
       </div>
       {touches && (
         <aside className="record-touches" aria-label="Touches">

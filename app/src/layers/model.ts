@@ -64,7 +64,9 @@ export type MarkStyle =
   /** A name the bookkeeping pass thinks should be a world entry. */
   | { readonly kind: "suggestion" }
   /** Words naming a story-bible record a World note is about: a hairline. */
-  | { readonly kind: "record" };
+  | { readonly kind: "record" }
+  /** A passage a talk topic is about: a hairline on the Notes layer. */
+  | { readonly kind: "talk" };
 
 export interface LayerMark {
   readonly id: string;
@@ -82,7 +84,9 @@ export type NoteAuthority =
   | "suggested"
   | "yours"
   /** Computed from the story bible's records, as the writer or agent set them. */
-  | "story bible";
+  | "story bible"
+  /** A talk topic the model started. */
+  | "raised by model";
 
 /** Body text of a note; `strong` runs are set in full ink. */
 export type NoteRun = { readonly text: string; readonly strong?: true };
@@ -94,6 +98,8 @@ export interface NoteAction {
   readonly resolves: "confirm" | "dismiss" | "none";
   /** Set when the action isn't available yet, with the reason. */
   readonly unavailable?: string;
+  /** The talk topic the action opens, in its tab. */
+  readonly topic?: string;
 }
 
 export interface GlossNote {
@@ -180,6 +186,26 @@ export function locate(text: string, anchor: TextAnchor): Span | null {
     }
     from = at + 1;
   }
+}
+
+/**
+ * The anchor of the words at `[start, end)` in `text`: their quote, and which
+ * occurrence of it they are, so `locate` finds these words and not an
+ * earlier copy. Null for no words.
+ */
+export function anchorAt(
+  text: string,
+  blockId: string,
+  { start, end }: Span,
+): TextAnchor | null {
+  const quote = text.slice(start, end);
+  if (quote === "") return null;
+  let occurrence = 0;
+  for (let at = text.indexOf(quote); at !== -1 && at < start; ) {
+    occurrence++;
+    at = text.indexOf(quote, at + 1);
+  }
+  return occurrence === 0 ? { blockId, quote } : { blockId, quote, occurrence };
 }
 
 /**

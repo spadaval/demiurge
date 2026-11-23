@@ -12,7 +12,7 @@
  * - Scene: the scene record, `reader-order --before` the scene (what the
  *   reader has been told and what is held back, the viewpoint character's
  *   marks, and each count as the scene opens and as it changes), each event
- *   it depicts, each person in it, and its prose so far.
+ *   it depicts, each person in it, what it touches, and its prose so far.
  * - Record: the record, what it touches, and the scenes that touch it.
  */
 
@@ -57,10 +57,20 @@ export type PacketOptions = {
    * before the cursor from the open editor (`context/builder.ts`).
    */
   prose?: boolean;
+  /**
+   * Whether a scene packet has what the scene touches ("What it touches").
+   * Prose generation leaves it out: the events and people it depicts are
+   * already in the packet, and the step past them is for planning, not for
+   * writing the next lines.
+   */
+  touches?: boolean;
 };
 
 /** The title of a scene packet's prose section. */
 export const SCENE_PROSE_SECTION = "Its prose so far";
+
+/** The title of the section of what a scene or record touches. */
+export const TOUCHES_SECTION = "What it touches";
 
 /** The packet for `scope` from the bible and prose in `storage` now. */
 export function buildContextPacket(
@@ -79,9 +89,11 @@ export function buildContextPacket(
           scope,
           sections: sections(story, prose, scope).filter(
             (section) =>
-              options.prose !== false ||
               scope.kind !== "scene" ||
-              section.title !== SCENE_PROSE_SECTION,
+              ((options.prose !== false ||
+                section.title !== SCENE_PROSE_SECTION) &&
+                (options.touches !== false ||
+                  section.title !== TOUCHES_SECTION)),
           ),
         }));
     });
@@ -215,6 +227,10 @@ function sceneSections(
       ),
     },
     {
+      title: TOUCHES_SECTION,
+      lines: linesOf(touchesQuery(story, { kind: "scene", id })),
+    },
+    {
       title: SCENE_PROSE_SECTION,
       lines: [
         notRead !== undefined
@@ -237,7 +253,7 @@ function recordSections(
   const ref = parsed.value;
   return [
     { title: formatRef(ref), lines: linesOf(showQuery(story, ref, prose)) },
-    { title: "What it touches", lines: linesOf(touchesQuery(story, ref)) },
+    { title: TOUCHES_SECTION, lines: linesOf(touchesQuery(story, ref)) },
     {
       title: "Scenes that touch it",
       lines: linesOf(scenesQuery(story, ref)),

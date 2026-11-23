@@ -13,7 +13,7 @@ import type { StorageAdapter } from "~/storage/types";
 import { loadStory } from "~/story/store";
 import type { Story } from "~/story/story";
 import type { Topic, TopicScope, TopicStatus, TurnCall } from "~/talk/records";
-import { passageStale } from "~/talk/scope";
+import { passageStale, sameScope } from "~/talk/scope";
 import {
   createTalk,
   describeTalkError,
@@ -89,6 +89,12 @@ export interface AppTalk {
   /** A topic about `scope`, not stored until its first message; its ID. */
   draft(scope: TopicScope): string;
   /**
+   * The topic to show for "Talk about this…" on a scene, passage or record:
+   * a topic already drafted about the same thing and not sent yet, so the
+   * writer comes back to what they started, or else a new draft. Its ID.
+   */
+  anchor(scope: TopicScope): string;
+  /**
    * Forgets a topic's tab: a draft is discarded, and what was typed and not
    * sent goes with it.
    */
@@ -163,6 +169,12 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
     else next.set(id, value);
     store.set(next);
   };
+
+  function draft(scope: TopicScope): string {
+    const id = newId();
+    setIn(drafts, id, scope);
+    return id;
+  }
 
   const fail = (id: string, error: TalkError) =>
     setIn(errors, id, describeTalkError(error));
@@ -267,10 +279,12 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
     problem,
     refresh,
     open,
-    draft(scope) {
-      const id = newId();
-      setIn(drafts, id, scope);
-      return id;
+    draft,
+    anchor(scope) {
+      for (const [id, drafted] of drafts.get()) {
+        if (sameScope(drafted, scope)) return id;
+      }
+      return draft(scope);
     },
     discardDraft(id) {
       setIn(drafts, id, undefined);
