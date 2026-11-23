@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-hqca
 title: Wire Night Edition scene apparatus layers and gloss column to live story bible state
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
