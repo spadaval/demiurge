@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { IDBFactory } from "fake-indexeddb";
 import { contentFixture, describeStorageContract } from "./contract";
-import { DB_VERSION, openIndexedDbStorage } from "./indexeddb";
+import { DB_VERSION, openIndexedDbStorage, upgrade } from "./indexeddb";
 import type { JsonValue } from "./types";
 
 async function open(factory: IDBFactory) {
@@ -157,6 +157,129 @@ describe("IndexedDB persistence", () => {
     });
     expect((await storage.snapshots.list("doc1"))._unsafeUnwrap()).toEqual([]);
     storage.close();
+  });
+
+  test("upgrading from version 1 keeps every record and adds story records", async () => {
+    const factory = new IDBFactory();
+    const document = {
+      id: "doc1",
+      title: "The Salt Road",
+      content: contentFixture,
+      updatedAt: 1,
+    };
+    const worldEntry = {
+      documentId: "doc1",
+      facts: { aliases: ["Mara"] },
+      updatedAt: 1,
+    };
+    const annotation = {
+      id: "seg_01",
+      documentId: "doc1",
+      kind: "ai_provenance",
+      data: { model: "local" },
+      updatedAt: 1,
+    };
+    const request = {
+      id: "r1",
+      documentId: "doc1",
+      request: { prompt: "Continue." },
+      createdAt: 1,
+    };
+    const outline = {
+      id: "manuscript",
+      books: [
+        {
+          id: "b1",
+          title: "Book One",
+          chapters: [{ id: "c1", title: "Arrival", scenes: ["doc1"] }],
+        },
+      ],
+      updatedAt: 1,
+    };
+    const timeline = {
+      id: "world",
+      timeline: { version: 1, events: [{ id: "e1", label: "Storm" }] },
+      updatedAt: 1,
+    };
+    const snapshot = { documentId: "doc1", reason: "periodic", createdAt: 5 };
+
+    // The database as a version 1 release left it, written without the adapter.
+    await new Promise<void>((resolve, reject) => {
+      const request1 = factory.open("worldcrafter", 1);
+      request1.onupgradeneeded = (event) =>
+        upgrade(request1.result, event.oldVersion, 1);
+      request1.onsuccess = () => {
+        const db = request1.result;
+        expect([...db.objectStoreNames]).not.toContain("storyRecords");
+        const stores = [
+          "documents",
+          "worldEntries",
+          "annotations",
+          "requests",
+          "snapshots",
+          "snapshotContent",
+          "outlines",
+          "timelines",
+        ];
+        const tx = db.transaction(stores, "readwrite");
+        tx.objectStore("documents").put(document);
+        tx.objectStore("worldEntries").put(worldEntry);
+        tx.objectStore("annotations").put(annotation);
+        tx.objectStore("requests").put(request);
+        tx.objectStore("outlines").put(outline);
+        tx.objectStore("timelines").put(timeline);
+        const add = tx.objectStore("snapshots").add(snapshot);
+        add.onsuccess = () =>
+          tx
+            .objectStore("snapshotContent")
+            .put({ id: add.result, content: contentFixture });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onabort = () => reject(tx.error);
+      };
+      request1.onerror = () => reject(request1.error);
+    });
+
+    const upgraded = await open(factory);
+    expect((await upgraded.documents.list())._unsafeUnwrap()).toEqual([
+      document,
+    ]);
+    expect((await upgraded.worldEntries.list())._unsafeUnwrap()).toEqual([
+      worldEntry,
+    ]);
+    expect(
+      (await upgraded.annotations.listForDocument("doc1"))._unsafeUnwrap(),
+    ).toEqual([annotation]);
+    expect((await upgraded.requests.list())._unsafeUnwrap()).toEqual([request]);
+    expect((await upgraded.outlines.list())._unsafeUnwrap()).toEqual([outline]);
+    expect((await upgraded.timelines.list())._unsafeUnwrap()).toEqual([
+      timeline,
+    ]);
+    const [info] = (await upgraded.snapshots.list("doc1"))._unsafeUnwrap();
+    expect(info).toMatchObject(snapshot);
+    if (info === undefined) throw new Error("expected the snapshot");
+    expect((await upgraded.snapshots.load(info.id))._unsafeUnwrap()).toEqual({
+      ...info,
+      content: contentFixture,
+    });
+
+    const record = {
+      id: "actor/mara",
+      kind: "actor",
+      data: { id: "mara", name: "Mara" },
+      updatedAt: 2,
+    };
+    expect((await upgraded.storyRecords.list())._unsafeUnwrap()).toEqual([]);
+    (await upgraded.storyRecords.save(record))._unsafeUnwrap();
+    upgraded.close();
+
+    const reopened = await open(factory);
+    expect((await reopened.storyRecords.list())._unsafeUnwrap()).toEqual([
+      record,
+    ]);
+    reopened.close();
   });
 
   test("opening a database from a newer schema fails as a Result", async () => {

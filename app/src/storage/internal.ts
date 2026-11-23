@@ -74,5 +74,17 @@ export function batchContext(writes: readonly BatchWrite[]): FailureContext {
         collection: "snapshots",
         id: first.snapshot.documentId,
       };
+    case "saveStoryRecord":
+      return {
+        operation: "save",
+        collection: "storyRecords",
+        id: first.record.id,
+      };
+    case "deleteStoryRecord":
+      return {
+        operation: "delete",
+        collection: "storyRecords",
+        id: first.id,
+      };
   }
 }

@@ -18,6 +18,7 @@ import type {
   StorageAdapter,
   StorageError,
   StoredDocument,
+  StoredStoryRecord,
 } from "./types";
 
 /**
@@ -75,6 +76,7 @@ export function createMemoryStorage(): StorageAdapter {
   }
 
   const documentRecords = new Map<string, StoredDocument>();
+  const storyRecords = new Map<string, StoredStoryRecord>();
   const annotationRecords = new Map<string, AnnotationRecord>();
   const annotationStore = keyed<AnnotationRecord>(
     "annotations",
@@ -136,6 +138,7 @@ export function createMemoryStorage(): StorageAdapter {
     snapshots,
     outlines: keyed("outlines", (record) => record.id),
     timelines: keyed("timelines", (record) => record.id),
+    storyRecords: keyed("storyRecords", (record) => record.id, storyRecords),
     batch: (writes) =>
       run(batchContext(writes), () => {
         // Copy every value before changing anything, so a value that can't
@@ -143,12 +146,22 @@ export function createMemoryStorage(): StorageAdapter {
         const copies = structuredClone(writes);
         const saved: SnapshotInfo[] = [];
         for (const write of copies) {
-          if (write.kind === "saveDocument") {
-            documentRecords.set(write.record.id, write.record);
-          } else if (write.kind === "saveAnnotation") {
-            annotationRecords.set(write.record.id, write.record);
-          } else {
-            saved.push(addSnapshot(write.snapshot));
+          switch (write.kind) {
+            case "saveDocument":
+              documentRecords.set(write.record.id, write.record);
+              break;
+            case "saveAnnotation":
+              annotationRecords.set(write.record.id, write.record);
+              break;
+            case "saveSnapshot":
+              saved.push(addSnapshot(write.snapshot));
+              break;
+            case "saveStoryRecord":
+              storyRecords.set(write.record.id, write.record);
+              break;
+            case "deleteStoryRecord":
+              storyRecords.delete(write.id);
+              break;
           }
         }
         return saved;

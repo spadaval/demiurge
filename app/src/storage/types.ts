@@ -21,7 +21,8 @@ export type CollectionName =
   | "requests"
   | "snapshots"
   | "outlines"
-  | "timelines";
+  | "timelines"
+  | "storyRecords";
 
 export type StorageOperation = "open" | "save" | "load" | "list" | "delete";
 
@@ -122,6 +123,22 @@ export interface StoredTimeline {
   readonly updatedAt: number;
 }
 
+/**
+ * One record of a world's story bible: an actor, a drive, a scene, a timeline
+ * event, and so on. The story module (`src/story/store.ts`) owns the kinds,
+ * how `id` is built from a record's own identity, the shape of `data`, and the
+ * checks on load; storage keeps `data` as JSON. A world has one bible, stored
+ * one record per item so that devices can sync and merge it record by record.
+ */
+export interface StoredStoryRecord {
+  /** `<kind>/<part>/...`, unique across the bible; see `src/story/store.ts`. */
+  readonly id: string;
+  readonly kind: string;
+  readonly data: JsonValue;
+  /** Epoch milliseconds, set by the caller when the record last changed. */
+  readonly updatedAt: number;
+}
+
 /** An assembled LLM request, kept so it can be viewed and debugged. */
 export interface StoredRequest {
   readonly id: string;
@@ -193,12 +210,15 @@ export interface SnapshotCollection {
 /**
  * One write in a `StorageAdapter.batch`. The kinds are the ones accepting an
  * AI segment needs together (the document, its provenance record, and the
- * revision snapshot); add a kind when another flow needs one.
+ * revision snapshot), and the story-bible record writes that saving a story
+ * makes together; add a kind when another flow needs one.
  */
 export type BatchWrite =
   | { readonly kind: "saveDocument"; readonly record: StoredDocument }
   | { readonly kind: "saveAnnotation"; readonly record: AnnotationRecord }
-  | { readonly kind: "saveSnapshot"; readonly snapshot: NewSnapshot };
+  | { readonly kind: "saveSnapshot"; readonly snapshot: NewSnapshot }
+  | { readonly kind: "saveStoryRecord"; readonly record: StoredStoryRecord }
+  | { readonly kind: "deleteStoryRecord"; readonly id: string };
 
 /**
  * The only way the app persists data. Deleting a document does not delete its
@@ -216,6 +236,11 @@ export interface StorageAdapter {
   readonly outlines: Collection<StoredOutline>;
   /** Keyed by `id`. A world has one timeline, saved and loaded whole. */
   readonly timelines: Collection<StoredTimeline>;
+  /**
+   * Keyed by `id`. The world's story bible, one record per item; saved
+   * through `src/story/store.ts`, which writes only the records that changed.
+   */
+  readonly storyRecords: Collection<StoredStoryRecord>;
   /**
    * Applies `writes` in order as one atomic step: either all take effect or
    * none does. Resolves with the info of each snapshot saved, in order. A
