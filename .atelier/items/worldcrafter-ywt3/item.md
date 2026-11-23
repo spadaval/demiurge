@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ywt3
 title: 'Host the agent slip on topic sheets: Request, Context and the next-turn slip'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -75,7 +75,9 @@ Still open, and not new: a stored message whose `runner.send` fails before the r
 
 `cd app && bun run check`: 1761 pass, 0 fail. The topic tests print no act() warnings.
 
+Round 2 (`c3265cd`): 2-nd1g.2 held. After a rename, the topic's part in the session no longer matched what `topicPrompt` writes now, so the fallback took everything after the last heading, including an instruction appended in an earlier turn. `findTopicPrompt` (`talk/scope.ts`) now finds the part by its exact shape: the same template as `topicPrompt`, with the title and scope name left open and a passage's quote exact. The part therefore ends where it ends, whatever follows it. A heading with nothing of that shape under it (the writer edited the part in an earlier this-session edit) is refused with the same reason, not guessed. The app regression appends an instruction and saves it as the default, renames the topic, prepends another and saves again, then checks that a new topic gets both with only its own part. Restoring the old fallback fails it. `talk.test.ts` adds the rename case, a passage quote with regex characters, and both refusals. `bun run check`: 1762 pass, 0 fail.
+
 ### Responses
 1-warp.1: fixed in d4c0024
 1-warp.2: fixed in d4c0024
-
+2-nd1g.2: fixed in c3265cd
