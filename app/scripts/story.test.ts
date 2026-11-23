@@ -1604,6 +1604,9 @@ describe("story CLI", () => {
     expect(ok("constrain", "c2", "a", "before", "b")).toBe("");
   });
 
+  // It runs every example as its own CLI process, dozens in a row: 9.5 s at
+  // a load average of 15, so bun's default 5 s budget fails it under load
+  // without anything being wrong.
   test("--help lists every command with an example, and every example runs", () => {
     const help = cli("--help");
     expect(help.code).toBe(0);
@@ -1647,5 +1650,5 @@ describe("story CLI", () => {
     for (const [name, spec] of Object.entries(READS)) {
       if (name !== "init") ok(...spec.example);
     }
-  });
+  }, 30_000);
 });
