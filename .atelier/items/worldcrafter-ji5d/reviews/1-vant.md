@@ -35,6 +35,7 @@ Bound the cumulative page size with room for parsing and serialization overhead,
 
 ## Finding 2: Track session-safe app integration before claiming usable device sync
 Recommendation: defer
+Dropped by mcp:7d857dc0-4a0b-4b45-94fa-b528d1f91a2b: Already tracked: worldcrafter-zvj0 covers wiring sync into the app without overwriting open documents.
 
 `syncWorld` has no app caller, as the report and `docs/rebuild/sync.md:87–94` acknowledge. `app/src/workspace/document-session.ts:262–305` saves its in-memory editor value without observing a sync write, so simply wiring an online/startup callback would let stale in-memory prose become a fresh accepted edit after a pull. A writer-tab check alone also does not serialize local edits, agent writes, or overlapping sync runs with adoption of server records.
 
