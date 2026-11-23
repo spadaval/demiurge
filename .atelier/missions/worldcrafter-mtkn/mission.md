@@ -8,7 +8,7 @@ labels:
 - ui
 - night-edition
 - agent
-lead: null
+lead: mcp:0711a88b-92ee-459c-ae50-19b10ad237ff
 planners:
 - ace64553-eec2-406a-84c3-c6360b8f5131
 created_at: 2026-11-22T22:38:26.289754150Z
