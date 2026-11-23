@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 import { ninefoldStory } from "~/demo/ninefold-story";
 import { createMemoryStorage } from "~/storage/memory";
 import { saveStory } from "~/story/store";
-import { createStoryBible, type StoryState } from "./story";
+import { type BibleState, createBible } from "./bible";
 
 /** Waits until the bible's state passes `check`. */
 async function until(
-  state: () => StoryState,
-  check: (state: StoryState) => boolean,
+  state: () => BibleState,
+  check: (state: BibleState) => boolean,
 ) {
   for (let i = 0; i < 50 && !check(state()); i++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -15,12 +15,12 @@ async function until(
   expect(check(state())).toBe(true);
 }
 
-const actors = (state: StoryState) =>
+const actors = (state: BibleState) =>
   state.kind === "ready" ? state.story.actors.map((a) => a.id) : [];
 
 test("loads the stored bible, and an empty store as an empty story", async () => {
   const storage = createMemoryStorage();
-  const bible = createStoryBible(storage);
+  const bible = createBible(storage);
   expect(bible.state.get().kind).toBe("loading");
   await bible.refresh();
   expect(bible.state.get()).toMatchObject({ kind: "ready" });
@@ -28,7 +28,7 @@ test("loads the stored bible, and an empty store as an empty story", async () =>
 });
 
 test("any write of story records through its storage reloads it", async () => {
-  const bible = createStoryBible(createMemoryStorage());
+  const bible = createBible(createMemoryStorage());
   await bible.refresh();
   // A whole save, as the story store batches it.
   await saveStory(bible.storage, ninefoldStory(), 1);
@@ -50,7 +50,7 @@ test("any write of story records through its storage reloads it", async () => {
 
 test("writes to other collections leave it alone", async () => {
   const storage = createMemoryStorage();
-  const bible = createStoryBible(storage);
+  const bible = createBible(storage);
   await bible.refresh();
   const before = bible.state.get();
   await bible.storage.batch([
@@ -71,7 +71,7 @@ test("a bible that doesn't load says why", async () => {
     data: "not an actor",
     updatedAt: 1,
   });
-  const bible = createStoryBible(storage);
+  const bible = createBible(storage);
   await bible.refresh();
   const state = bible.state.get();
   expect(state.kind).toBe("error");

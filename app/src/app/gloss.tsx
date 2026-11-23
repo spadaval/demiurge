@@ -89,7 +89,7 @@ export function Sheet({
     worldIndex,
     workspace,
     manuscript,
-    story,
+    bible,
     generation,
   } = useServices();
   const editor = useEditorRef();
@@ -97,7 +97,7 @@ export function Sheet({
   const resolutions = useStore(layerSource.resolutions);
   const entries = useStore(worldIndex.entries);
   const documents = useStore(workspace.documents);
-  const storyState = useStore(story.state);
+  const storyState = useStore(bible.state);
   const documentId = session.documentId;
   const on = layersForScene(state.on, state.subtextScenes, documentId);
 

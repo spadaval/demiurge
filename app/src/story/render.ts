@@ -423,18 +423,27 @@ function unheldDriveLines(story: Story): string[] {
 }
 
 function positionText(story: Story, position: Position | undefined): string {
-  if (position === undefined) return "";
+  return position === undefined
+    ? ""
+    : ` (${describePosition(story, position)})`;
+}
+
+/**
+ * Where a position is on the world clock, in the timeline's unit: dates for
+ * a year clock (`year 1203`, `3 to 5 June 1131`), plain numbers for any
+ * other (`day 3 to 6`), with the writer's note on how exact it is quoted
+ * after it so it doesn't read as part of the position.
+ */
+export function describePosition(story: Story, position: Position): string {
   const { worldUnit } = story.timeline;
-  // The writer's own words on how exact it is, quoted so they don't read
-  // as part of the position.
   const precision =
     position.precision === null ? "" : `, noted "${position.precision}"`;
-  if (worldUnit === "year") return ` (${describeWhen(position)}${precision})`;
+  if (worldUnit === "year") return `${describeWhen(position)}${precision}`;
   const range =
     position.start === position.end
       ? `${position.start}`
       : `${position.start} to ${position.end}`;
-  return ` (${worldUnit} ${range}${precision})`;
+  return `${worldUnit} ${range}${precision}`;
 }
 
 function constraintText(story: Story, c: Constraint): string {

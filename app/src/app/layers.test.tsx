@@ -261,7 +261,7 @@ test("the bible's apparatus: scene notes head the gloss, notes on words are mark
 test("the apparatus follows the bible when a command changes it", async () => {
   const { view, services } = await renderDemo(true);
   await settle();
-  const executed = await services.story.execute({
+  const executed = await services.bible.execute({
     type: "setCount",
     id: "lamps",
     at: "night-market",
@@ -313,7 +313,7 @@ test("the apparatus follows the bible when the agent changes it", async () => {
   ];
   const runner = createAgentRunner({
     // The app's story storage: the agent's edits reach the open scene.
-    storage: services.story.storage,
+    storage: services.bible.storage,
     bindings: { plan: { profile }, prose: { profile } },
     complete: () => {
       const answer = answers.shift();
@@ -384,7 +384,7 @@ test("notes keep the order of their keys past z", async () => {
     notes: "",
   }));
   const saved = await saveStory(
-    services.story.storage,
+    services.bible.storage,
     {
       ...story,
       objects: [...story.objects, ...objects],

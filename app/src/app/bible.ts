@@ -9,28 +9,37 @@ import {
 } from "~/story/store";
 import type { Story } from "~/story/story";
 import { createStore, type Store } from "~/workspace/store";
+import { describeStorageError } from "./environment";
 
-export type StoryState =
+export type BibleState =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly story: Story }
   | { readonly kind: "error"; readonly message: string };
 
 /**
- * The world's story bible as the app shows it, kept live: every write of a
- * story record through `storage` reloads it, whoever makes the write (a
- * command, an agent's tool call, a restore), so the views that read `state`
- * follow the bible as it changes.
+ * The world's story bible as the app reads it (`src/story/store.ts`), kept
+ * live: every write of a story record through `storage` reads it again,
+ * whoever makes the write (a command, an agent's tool call, a restore), so
+ * the inspector, the scene apparatus and the stamp follow the bible as it
+ * changes.
  */
-export interface StoryBible {
-  readonly state: Store<StoryState>;
+export interface Bible {
+  readonly state: Store<BibleState>;
+  /**
+   * Reads the bible again. A failed read keeps the last story shown, if
+   * there was one, so a passing storage error doesn't blank the inspector;
+   * the error is in `error` until a read succeeds. Calls made while a read
+   * runs share one more read after it.
+   */
+  refresh(): Promise<void>;
+  /** Why the last read failed, or null. */
+  readonly error: Store<string | null>;
   /**
    * The adapter every writer of the bible in this app uses: give it to an
    * agent runner, `executeStoryTool` or `executeStoryCommand`. A write that
    * goes around it is not seen until the next `refresh`.
    */
   readonly storage: StorageAdapter;
-  /** Reloads the bible; calls made while a reload runs share one more. */
-  refresh(): Promise<void>;
   /** Applies a story command to the stored bible. */
   execute(
     command: StoryCommand,
@@ -38,20 +47,28 @@ export interface StoryBible {
   ): ResultAsync<StoryExecuted, StoryStoreError>;
 }
 
-export function createStoryBible(base: StorageAdapter): StoryBible {
-  const state = createStore<StoryState>({ kind: "loading" });
+/**
+ * The bible over `base`, which in the app is the workspace's connected
+ * storage, so a read follows reconnects.
+ */
+export function createBible(base: StorageAdapter): Bible {
+  const state = createStore<BibleState>({ kind: "loading" });
+  const error = createStore<string | null>(null);
   let running: Promise<void> | null = null;
   let stale = false;
 
-  const load = async () => {
+  const read = async () => {
     do {
       stale = false;
-      const result = await loadStory(storage);
-      state.set(
-        result.isOk()
-          ? { kind: "ready", story: result.value }
-          : { kind: "error", message: describeStoryError(result.error) },
-      );
+      const loaded = await loadStory(storage);
+      if (loaded.isOk()) {
+        error.set(null);
+        state.set({ kind: "ready", story: loaded.value });
+        continue;
+      }
+      const message = describeBibleError(loaded.error);
+      error.set(message);
+      if (state.get().kind !== "ready") state.set({ kind: "error", message });
     } while (stale);
   };
 
@@ -60,7 +77,7 @@ export function createStoryBible(base: StorageAdapter): StoryBible {
       stale = true;
       return running;
     }
-    running = load().finally(() => {
+    running = read().finally(() => {
       running = null;
     });
     return running;
@@ -69,8 +86,9 @@ export function createStoryBible(base: StorageAdapter): StoryBible {
   const storage = watchStoryWrites(base, () => void refresh());
   return {
     state,
-    storage,
+    error,
     refresh,
+    storage,
     execute: (command, now) => executeStoryCommand(storage, command, now),
   };
 }
@@ -118,8 +136,14 @@ export function watchStoryWrites(
   };
 }
 
-function describeStoryError(error: StoryStoreError): string {
-  return "message" in error && typeof error.message === "string"
-    ? `The story bible could not be read: ${error.message}`
-    : `The story bible could not be read (${error.kind}).`;
+function describeBibleError(error: StoryStoreError): string {
+  switch (error.kind) {
+    case "failure":
+    case "read_only":
+      return `The story bible could not be read. ${describeStorageError(error)}`;
+    case "not_found":
+      return `The story bible could not be read: record ${error.id} is missing.`;
+    default:
+      return `The story bible could not be read: ${error.message}`;
+  }
 }
