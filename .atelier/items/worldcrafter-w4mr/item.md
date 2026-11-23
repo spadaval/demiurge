@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-w4mr
 title: 'Agent session and prompt inspector: view and edit system prompt, context packet, tool trace, and trace diffs'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -62,4 +62,18 @@ The context viewer now shows and edits story agent turns as well as prose reques
 `cd app && bun run check`: tsc and Biome clean, 1620 pass, 0 fail. It prints React act() warnings from the existing Rail tests (`worldcrafter-d93c`); the new tests print none.
 
 For lhh3: start a session with `runner.start({ role, scope, ...defaults.get(profile.name, role) })`, render `ContextViewer kind="next"` beside the composer with a `NextTurnBase` (the session's prompt and sampler, the profile's sampler, and `buildContextPacket` for its scope), and send with `sendNextTurn`. For a model turn's "Request", render `kind="turn"` with `sessionTurns(loadSessionLog(...))[i]`.
+
+Round 2 (`9cfbadb`), all three fix-now findings held:
+- *Model.* The Model part now has a model name field above the sampler, with its fold line showing the model that will be sent (the field, else the profile's). A model or sampler edit takes one scope choice. The session (`model`), the defaults store and `sendNextTurn` carry the model, and the runner sends it on the binding's server. Emptying the field goes back to the profile's model, here or as the default. A sampler that sets `model`, `stream`, `messages`, `prompt`, `tools` or `tool_choice` is refused with a reason, since the request builder overwrites those. The tests check the model actually sent, for this session and as a profile default reaching a new session.
+- *Query references.* `callNamed` also reads a successful query's data: refs under `ref` or `on` (show, touches, mentions, contradictions) and scene IDs under `scene` (scenes, readerOrder), keeping only what parses as a ref. A component test follows `show`'s `actor:mara` through `onOpen`.
+- *Durations.* Each answered call now stores `finishedAt`, and the slip times a call from `at` to it. Calls stored without it show "done" with no duration. A runner test pauses between two calls, lets an hour pass, resumes, and both calls still read 1 ms.
+
+The deferred finding (story-time values inside raw results not set in `time`) stays as noted above.
+
+`cd app && bun run check`: 1624 pass, 0 fail.
+
+### Responses
+1-08b5.1: fixed in 9cfbadb
+1-08b5.2: fixed in 9cfbadb
+1-08b5.3: fixed in 9cfbadb
 
