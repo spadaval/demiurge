@@ -1,0 +1,19 @@
+# Readiness checklist, garden run worldcrafter-gq2k
+
+Checked on master at ef83841, in a scratch clone (`git clone --no-local --branch master`) with `TMPDIR` under the home directory and outside any repository. One command at a time; the clone was removed afterwards. Lines 2 to 6 are judged on master as it was, before this run's two commits.
+
+| # | Line | Result | Evidence |
+| --- | --- | --- | --- |
+| 1 | Each harness loads `AGENTS.md` and starts with `atelier status` | not met | `.claude/settings.json` runs `atelier status` at SessionStart and `.codex/hooks.json` does too, but there is no `CLAUDE.md` beside `.claude/` importing `AGENTS.md` (`git ls-files` finds none). |
+| 2 | `AGENTS.md` names the build, test, lint and launch commands of the code agents change now | not met | 756 of 1,068 file changes in the last 30 days landed in `app/`. `AGENTS.md` named only the root app's commands (`bun run build`, `start`, `format`, `lint`), no test command, and nothing for `app/`, whose `bun run check` appears only in item records (6 items). Fixed on the branch in 23dca4b and 62493cc: `app/` has no launch script, its web app is the static `dist/` that `bun run build` writes, and its story CLI runs with `bun scripts/story.ts --help` (exit 0 in the scratch clone). |
+| 3 | What `AGENTS.md` points to exists | not met | The script printed `AGENTS.md names missing src/docs/editor`; the editor docs are in `docs/editor`. Fixed in 23dca4b; the script now prints nothing. |
+| 4 | A fresh clone builds with the documented commands alone | not met | Both apps build: root `bun install --frozen-lockfile` and `bun run build` (exit 0, 1 min 27 s); `app/` `bun install --frozen-lockfile` and `bun run build` (exit 0, 14 s). But `AGENTS.md` named no install step (only `README.md`, which it does not link, does) and no command for `app/`. |
+| 5 | Format, lint and type check run from documented commands that change nothing, and pass on the base | not met | Root `bun run lint` (biome check) exited 1 with 5 format errors: `src/components/SettingsModal.tsx`, `src/components/Sidebar.tsx`, `src/components/editor/PlateDocumentEditor.tsx`, `src/styles/app.css`, `docs/rounds/round-5/outline-recheck.json`. `AGENTS.md` documents it as `bun run lint --fix`, which changes files. The root app has no type check command. In `app/`, `tsc --noEmit` and `biome check` pass (8 warnings), but were not documented. The format errors are fixed in 6fb6436, after which root `bun run lint` exits 0 with 2 warnings and 1 info, rechecked in a fresh clone of the branch with and without `app/`'s dependencies installed. Fixed in part: the root app still has no type check command, and `AGENTS.md` still documents lint as `bun run lint --fix`. |
+| 6 | The tests run from one documented command and pass on the base | not met | `bun test` in `app/` passes: 1,154 tests in 54 files, 0 failures, 51 s. It was documented nowhere an agent reads first. The root app has one test file, `src/lib/entity-suppression.test.ts`, and no test command. |
+| 7 | Every merge runs the checks of lines 5 and 6 | not met | `.atelier/config.toml` lists no merge check, and the repository has no `.github/` workflow. worldcrafter-s9lp's merge printed that no merge check ran. |
+| 8 | A verify skill says how to launch the product and prove a feature works | not met | `.agents/skills/` holds `frontend-design`, `openrouter-typescript-sdk` and `story-sketch`, and `.agent/skills/` holds `openrouter-typescript-sdk`; none says how to launch the product. No launch was attempted: `AGENTS.md` says a dev server is always running on this host, so a launch could take its port. |
+| 9 | Every bug names its cause | not met | 2 of 2 bug items lack `caused_by`: worldcrafter-08kf and worldcrafter-yxfp. |
+
+The repository has no `.atelier/readiness.md`, so it has no lines of its own.
+
+Totals: 0 met, 9 not met, 0 could not test.

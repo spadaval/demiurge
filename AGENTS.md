@@ -39,12 +39,13 @@ The product is Demiurge (decision `worldcrafter-cogw`), and `worldcrafter` stays
 Use bun for all commands.
 - **Build**: `bun run build` | **Start**: `bun run start`
 - **Format**: `bun run format` | - **Lint**: `bun run lint --fix` (run after all changes)
+- The lines above are the old app's, at the root. The rebuild in `app/` has its own, run from `app/` after a `bun install` there: `bun run check` runs the type check, lint and tests, `bun test` runs the tests alone, and `bun run build` builds it. It has no launch script: the web app is static, so `bun run build` writes `dist/` for any static server, and the story CLI runs with `bun scripts/story.ts --help`.
 
 ## Architecture
 - **State**: `@legendapp/state` for persistent/shared state, `useState` only for ephemeral UI state (reference `docs/legend-state.md`)
 - **Error Handling**: `neverthrow` for functional errors, try/catch for async operations (reference `docs/neverthrow.md`)
 - **Tech Stack**: Tanstack Start (React + Vite), tailwindcss (styling), trpc (API replacement)
-- **Editor**: `platejs` - highly configurable and flexible react-based editor. Based on the `slate` editor. See `/src/components/editor` and `/src/docs/editor`.
+- **Editor**: `platejs` - highly configurable and flexible react-based editor. Based on the `slate` editor. See `/src/components/editor` and `/docs/editor`.
 
 ## File Structure
 Top-level has app/config/docs files (package.json, vite.config.ts, tailwind.config.mjs, README.md, AGENTS.md) plus generated/output dirs like dist/, .output/.
