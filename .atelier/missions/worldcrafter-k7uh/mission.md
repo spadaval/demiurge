@@ -3,7 +3,7 @@ schema: atelier.mission
 schema_version: 3
 id: worldcrafter-k7uh
 title: Clean up repo and fix Round 5 story-model defects
-status: open
+status: done
 labels:
 - cleanup
 - story-model
@@ -44,8 +44,6 @@ Out:
 ## Authority
 
 Agents may choose implementation details, test structure, and doc wording within this scope. Pushing to remotes, deploying, or altering settled product decisions (`worldcrafter-cogw`, `worldcrafter-45an`) waits for Sumeet.
-
-## Result
 
 ## Result
 
