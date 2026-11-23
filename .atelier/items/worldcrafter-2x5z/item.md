@@ -3,14 +3,15 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-2x5z
 title: Retire the old app and its dependencies
-status: open
+status: building
 mission: worldcrafter-k7uh
 labels:
 - rebuild
 - feature
 priority: medium
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A19a62698-b51c-422f-9aec-662edcca5fd6%3Adelegate-task%3A238b3c3c-a85b-4e4e-b578-5089a11fc416
 ready: null
 trivial: null
 caused_by: null
