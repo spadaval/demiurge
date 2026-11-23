@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-xodp
 title: 'Generation ergonomics: shortcuts, stale pins, and retarget fixes'
-status: building
+status: in_review
 mission: worldcrafter-3z9j
 labels: []
 priority: medium
