@@ -45,6 +45,7 @@ import { type Position, WORLD_FRAME } from "~/time/timeline";
 import {
   type GlossNote,
   type LayerMark,
+  locate,
   type MarkStyle,
   NO_SCENE_LAYERS,
   type NoteRun,
@@ -134,15 +135,25 @@ function computeScene(story: Story, documentId: string): BibleScene | null {
 
 /**
  * The scene's layers from its bible notes, anchored to the first words in
- * `blocks` that name each note's record. Two notes never share a key's
- * place; a note with no words found is about the scene.
+ * `blocks` that name each note's record. A key sits on its words' last
+ * character, and two keys on one character would hide one of the notes, so
+ * a note never takes a place another bible note or a keyed mark in
+ * `others` (the scene's other layers) holds: it tries the next match. A
+ * note with no free words found is about the scene.
  */
 export function bibleLayers(
   notes: readonly BibleNote[],
   blocks: readonly TextBlock[],
+  others: readonly LayerMark[] = [],
 ): SceneLayers {
   if (notes.length === 0) return NO_SCENE_LAYERS;
   const taken = new Set<string>();
+  for (const mark of others) {
+    if (mark.noteId === undefined) continue;
+    const block = blocks.find((b) => b.id === mark.anchor.blockId);
+    const span = block === undefined ? null : locate(block.text, mark.anchor);
+    if (span !== null) taken.add(keyPlace(mark.anchor.blockId, span.end));
+  }
   const marks: LayerMark[] = [];
   const placed: GlossNote[] = [];
   for (const { note, atScene, names, style } of notes) {
@@ -188,7 +199,7 @@ function findAnchor(
         const quote = match[0];
         if (quote.trim() === "") continue;
         // A key sits on its words' last character: one key to a place.
-        const place = `${block.id} ${match.index + quote.length}`;
+        const place = keyPlace(block.id, match.index + quote.length);
         if (taken.has(place)) continue;
         taken.add(place);
         return {
@@ -201,6 +212,9 @@ function findAnchor(
   }
   return null;
 }
+
+/** Where a key whose words end at `end` in a block sits. */
+const keyPlace = (blockId: string, end: number) => `${blockId} ${end}`;
 
 /** Which occurrence of `quote` starts at `at`, counted as `locate` counts. */
 function occurrenceAt(text: string, quote: string, at: number): number {

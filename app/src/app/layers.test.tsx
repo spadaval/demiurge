@@ -5,10 +5,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createAgentRunner } from "~/agent/runner";
 import { DEMO_SCENE, seedDemoWorld } from "~/demo/ninefold";
+import { ninefoldStory } from "~/demo/ninefold-story";
+import { mergeLayers, noteKey, type SceneLayers } from "~/layers/model";
 import type { BackendProfile, Completion } from "~/llm/types";
+import { saveStory } from "~/story/store";
 import { createStorageConnection } from "~/workspace/connection";
 import { createWorkspace } from "~/workspace/workspace";
 import { AppProviders } from "./hooks";
+import { createLayerSource } from "./layers";
 import { createAppRouter } from "./router";
 import { createAppServices } from "./services";
 
@@ -44,7 +48,11 @@ function runs(root: Element | null | undefined, selector: string): string[] {
 const settle = () =>
   act(() => new Promise((resolve) => setTimeout(resolve, 10)));
 
-async function renderDemo(allLayers = false) {
+async function renderDemo(
+  allLayers = false,
+  /** More layers for the demo scene, beside the demo's own. */
+  extra?: SceneLayers,
+) {
   const demo = await seedDemoWorld("w", { allLayers });
   const workspace = createWorkspace({
     worldId: "w",
@@ -59,7 +67,18 @@ async function renderDemo(allLayers = false) {
   const services = await createAppServices({
     workspace,
     keyValue: demo.tabStore,
-    layerSource: demo.layerSource,
+    layerSource:
+      extra === undefined
+        ? demo.layerSource
+        : createLayerSource(
+            new Map([
+              [
+                DEMO_SCENE,
+                mergeLayers(demo.layerSource.scene(DEMO_SCENE), extra),
+              ],
+            ]),
+            demo.layerSource.topics,
+          ),
     environment: {
       role: "writer",
       persistence: "granted",
@@ -318,4 +337,81 @@ test("the apparatus follows the bible when the agent changes it", async () => {
   }
   // Kesh sold the secret himself: through his eyes there is no irony in it.
   expect(noteText(view, "Irony")).toBeUndefined();
+});
+
+test("a bible note never hides another layer's note keyed on the same words", async () => {
+  const { view } = await renderDemo(true, {
+    speakers: [],
+    cues: new Map(),
+    marks: [
+      {
+        id: "m-turn",
+        anchor: { blockId: "p-tide", quote: "the tide turned" },
+        style: { kind: "time" },
+        noteId: "n-turn",
+      },
+    ],
+    notes: [
+      {
+        id: "n-turn",
+        layer: "time",
+        heading: "Turn",
+        authority: "inferred",
+        body: [{ text: "The first turn since the sealing." }],
+        actions: [],
+      },
+    ],
+  });
+  await settle();
+  expect(noteText(view, "Turn")).toBe("The first turn since the sealing.");
+  // The bible's event, whose only words those are, is about the scene.
+  expect(noteText(view, "Event")).toBeDefined();
+  const anchors = [...view.querySelectorAll(".prose [data-anchor]")].map((a) =>
+    a.getAttribute("data-anchor"),
+  );
+  expect(anchors).toContain("n-turn");
+  expect(anchors).not.toContain("bible/event/tide-turns");
+});
+
+test("notes keep the order of their keys past z", async () => {
+  const { view, services } = await renderDemo(true);
+  await settle();
+  const story = ninefoldStory();
+  // Thirty objects the prose never names: thirty notes about the scene.
+  const objects = Array.from({ length: 30 }, (_, i) => ({
+    id: `thing-${i}`,
+    name: `Thing number ${i}`,
+    notes: "",
+  }));
+  const saved = await saveStory(
+    services.story.storage,
+    {
+      ...story,
+      objects: [...story.objects, ...objects],
+      scenes: story.scenes.map((scene) =>
+        scene.id === DEMO_SCENE
+          ? {
+              ...scene,
+              plants: [
+                ...scene.plants,
+                ...objects.map((o) => ({ kind: "object" as const, id: o.id })),
+              ],
+            }
+          : scene,
+      ),
+    },
+    2,
+  );
+  expect(saved.isOk()).toBe(true);
+  const keys = () =>
+    [...view.querySelectorAll(".gloss-note .gloss-key")].map(
+      (key) => key.textContent,
+    );
+  for (let i = 0; i < 20 && keys().length < 44; i++) await settle();
+  expect(keys()).toEqual(Array.from({ length: 44 }, (_, i) => noteKey(i)));
+  const planted = [...view.querySelectorAll(".gloss-note")]
+    .map((note) => note.querySelector(".gloss-body")?.textContent ?? "")
+    .filter((text) => text.startsWith("Thing number"))
+    .map((text) => Number(text.split(" ")[2]));
+  expect(planted).toEqual(objects.map((_, i) => i));
 });

@@ -302,6 +302,27 @@ describe("bibleLayers", () => {
     ).toEqual(["Forty"]);
   });
 
+  test("a note never takes a key's place another layer's note holds", () => {
+    const tide = notes.filter((n) => n.note.id === "bible/event/tide-turns");
+    const source = {
+      id: "m-source",
+      anchor: { blockId: "p-tide", quote: "tide turned" },
+      style: { kind: "time" as const },
+      noteId: "n-source",
+    };
+    // Its only words end where the source's key is: it is about the scene.
+    const held = bibleLayers(tide, blocks, [source]);
+    expect(held.marks).toEqual([]);
+    expect(held.notes[0]?.placement).toBe("scene");
+    // A mark without a note has no key, and words no longer there hold nothing.
+    expect(
+      bibleLayers(tide, blocks, [
+        { id: source.id, anchor: source.anchor, style: source.style },
+        { ...source, anchor: { blockId: "p-tide", quote: "gone" } },
+      ]).marks.map((mark) => mark.anchor.quote),
+    ).toEqual(["the tide turned"]);
+  });
+
   test("the same text gives layers that draw the same", () => {
     const a = bibleLayers(notes, blocks);
     expect(sameBibleLayers(a, bibleLayers(notes, blocks))).toBe(true);

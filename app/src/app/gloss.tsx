@@ -111,12 +111,13 @@ export function Sheet({
         : undefined) ?? NO_BIBLE_NOTES,
     [storyState, documentId],
   );
+  const fromSource = layerSource.scene(documentId);
   const fromBible = useEditorSelector(
-    (current) => bibleLayers(bibleNotes, textBlocks(current.children)),
-    [bibleNotes],
+    (current) =>
+      bibleLayers(bibleNotes, textBlocks(current.children), fromSource.marks),
+    [bibleNotes, fromSource],
     { equalityFn: sameBibleLayers },
   );
-  const fromSource = layerSource.scene(documentId);
   const sceneLayers = useMemo(
     () => mergeLayers(fromSource, fromBible),
     [fromSource, fromBible],
@@ -306,19 +307,14 @@ function Gloss({
   const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
   const version = useEditorVersion();
 
+  // In the order the keys were given (a … z, aa …), not by their letters,
+  // which sort `aa` before `b`.
+  const order = new Map([...keys.keys()].map((id, i) => [id, i]));
   const keyed = notes
     .filter(
       (note) => keys.has(note.id) && resolutions.get(note.id) !== "dismissed",
     )
-    .sort((a, b) =>
-      (keys.get(a.id)?.letter ?? "").localeCompare(
-        keys.get(b.id)?.letter ?? "",
-        "en",
-        {
-          numeric: true,
-        },
-      ),
-    );
+    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   // The slip has the column to itself while it is open.
   const visible = new Set(
     slip
