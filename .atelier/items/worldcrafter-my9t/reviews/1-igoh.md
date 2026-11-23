@@ -27,6 +27,7 @@ Validation: `bun test src/storage/retention.test.ts src/workspace src/generate s
 
 ## Finding 1: Count the protected newest periodic snapshot in its retention bucket
 Recommendation: defer
+Dropped by thread:delegated-task:command%3Amcp%3A6d73f777-f6d1-4f6c-b6f0-9f634b2c4463%3Adelegate-task%3A8cbaf9e1-b5f0-41ca-a880-ad8e43deaf11: Taken into worldcrafter-ey04's Done when: the planner is unused until thinning is enabled there, and the bug keeps an extra copy rather than losing one.
 
 `app/src/storage/retention.ts:74-84` excludes the newest snapshot of each document before calculating each bucket's newest periodic snapshot. When the document has not been edited for at least 14 days, this keeps both its newest periodic snapshot and the next periodic snapshot in the same day or week, rather than the documented one per bucket. For example, at `now = 1000 * 86400000`, IDs 1 and 2 for one document, both periodic and aged 30.9 and 30.5 days respectively, are both in UTC day 969. The planner returns `keep: [1, 2], remove: []`; ID 2 should fill that day's slot while remaining protected as the document's newest snapshot.
 
