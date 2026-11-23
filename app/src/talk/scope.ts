@@ -123,6 +123,9 @@ export function topicScopeProblem(
   }
 }
 
+/** The heading `topicPrompt` starts with. */
+export const TOPIC_PROMPT_HEADING = "# This talk page";
+
 /** What a topic adds to the agent's system prompt: what the page is about. */
 export function topicPrompt(
   story: Story,
@@ -134,7 +137,7 @@ export function topicPrompt(
       ? "the story as a whole"
       : scopeLine(story, scope).replace(" · ", " ");
   const lines = [
-    "# This talk page",
+    TOPIC_PROMPT_HEADING,
     "",
     `You are a participant on a talk page about ${about}. Its topic is "${title}". The writer started it to settle that question; keep to it. Your turns are signed as the model's and kept with the page.`,
   ];

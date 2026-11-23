@@ -66,3 +66,64 @@ test("turns are a record: no numbers and no indent", () => {
   expect(computed.marginTop).toBe("0px");
   turns.remove();
 });
+
+/** The declarations of `selector` inside the media rule matching `media`. */
+function mediaRule(
+  media: string,
+  selector: string,
+): CSSStyleDeclaration | undefined {
+  for (const r of [...(style.sheet?.cssRules ?? [])]) {
+    if (!(r instanceof CSSMediaRule) || !r.media.mediaText.includes(media)) {
+      continue;
+    }
+    for (const inner of [...r.cssRules]) {
+      if (inner instanceof CSSStyleRule && inner.selectorText === selector) {
+        return inner.style;
+      }
+    }
+  }
+  return undefined;
+}
+
+test("the agent slip sits in the topic sheet's gloss column, on a leader", () => {
+  const sheet = rule(".topic-sheet");
+  expect(sheet?.getPropertyValue("display")).toBe("grid");
+  expect(sheet?.getPropertyValue("grid-template-columns")).toContain(
+    "var(--gloss-width)",
+  );
+  // Beside its turn, out of the turns' flow: never a pane or an overlay.
+  const slip = rule(".topic-slip");
+  expect(slip?.getPropertyValue("position")).toBe("absolute");
+  expect(slip?.getPropertyValue("grid-column")).toBe("3");
+  expect(rule(".turn-entry")?.getPropertyValue("position")).toBe("relative");
+  expect(rule(".composer-entry")?.getPropertyValue("position")).toBe(
+    "relative",
+  );
+  const leader = rule(".topic-slip::before");
+  expect(leader?.getPropertyValue("width")).toBe("26px");
+  expect(leader?.getPropertyValue("border-top")).toContain(
+    "var(--rule-strong)",
+  );
+});
+
+test("at 860px and below the slip opens inline, after its turn, under a hairline", () => {
+  const slip = mediaRule("max-width: 860px", ".topic-slip");
+  expect(slip?.getPropertyValue("position")).toBe("static");
+  expect(slip?.getPropertyValue("border-top")).toContain("var(--rule)");
+  expect(
+    mediaRule("max-width: 860px", ".topic-slip::before")?.getPropertyValue(
+      "display",
+    ),
+  ).toBe("none");
+  expect(
+    mediaRule("max-width: 860px", ".topic-sheet")?.getPropertyValue("display"),
+  ).toBe("block");
+});
+
+test("nothing in a topic's slip is set in vermilion", () => {
+  const slipRules = css
+    .split("}")
+    .filter((block) => /\.(topic-slip|agent-slip|slip-)/.test(block));
+  expect(slipRules.length).toBeGreaterThan(0);
+  for (const block of slipRules) expect(block).not.toContain("--ai");
+});

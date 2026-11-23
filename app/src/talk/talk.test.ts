@@ -31,8 +31,13 @@ import {
   readTopic,
   topicRecord,
 } from "./records";
-import { scopeLine } from "./scope";
-import { createTalk, type TalkModel, topicSessionId } from "./talk";
+import { scopeLine, topicPrompt } from "./scope";
+import {
+  createTalk,
+  profilePrompt,
+  type TalkModel,
+  topicSessionId,
+} from "./talk";
 
 const fixture: Story = parseStory(
   await Bun.file(
@@ -682,5 +687,17 @@ describe("stored talk records", () => {
       }).isErr(),
     ).toBe(true);
     expect(readMessage(record).isErr()).toBe(true);
+  });
+});
+
+describe("a topic prompt saved as the profile default", () => {
+  test("drops the topic's own part, the last one, and keeps a prompt without one whole", () => {
+    const topic = topicPrompt(fixture, "Who lit the lamp?", { kind: "world" });
+    expect(profilePrompt(`Be terse.\n\n${topic}`)).toBe("Be terse.");
+    // A writer's own heading earlier in the prompt stays.
+    expect(
+      profilePrompt(`Be terse.\n\n# This talk page\nMine.\n\n${topic}`),
+    ).toBe("Be terse.\n\n# This talk page\nMine.");
+    expect(profilePrompt("Be terse.")).toBe("Be terse.");
   });
 });

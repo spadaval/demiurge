@@ -38,6 +38,7 @@ import {
   topicOfTab,
   useActiveTab,
 } from "./tab-routes";
+import { NextTurnAction } from "./topics";
 import { entryNames } from "./world";
 
 /** A message for the writer: an error, or a note about what isn't built yet. */
@@ -56,6 +57,8 @@ export function Shell() {
   // Narrow screens only: the rail opens over the page.
   const [railOpen, setRailOpen] = useState(false);
   const active = useActiveDocumentId();
+  // A topic sheet's masthead has Context, for the next turn's slip.
+  const topic = useParams({ strict: false }).topicId ?? null;
   // Any navigation (a document, an inspector view or record) closes it.
   const href = useRouterState({ select: (router) => router.location.href });
   // biome-ignore lint/correctness/useExhaustiveDependencies: following a link closes the rail
@@ -84,6 +87,7 @@ export function Shell() {
         <TabStrip onMessage={setMessage} />
         <StoryTimeStamp active={active} />
         <div className="masthead-controls">
+          {topic && <NextTurnAction id={topic} className="button" />}
           {active && <LayerToggles documentId={active} />}
           {active && (
             <>
