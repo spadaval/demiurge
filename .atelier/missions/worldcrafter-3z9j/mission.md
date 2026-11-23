@@ -8,7 +8,7 @@ labels:
 - editor
 - sync
 - polish
-lead: null
+lead: mcp:7d857dc0-4a0b-4b45-94fa-b528d1f91a2b
 planners:
 - ace64553-eec2-406a-84c3-c6360b8f5131
 created_at: 2026-11-22T22:38:26.476173643Z
