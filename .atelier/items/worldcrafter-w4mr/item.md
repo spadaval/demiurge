@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-w4mr
 title: 'Agent session and prompt inspector: view and edit system prompt, context packet, tool trace, and trace diffs'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -74,8 +74,11 @@ The deferred finding (story-time values inside raw results not set in `time`) st
 
 Round 3 (`af6c22f`): the rest of the query-reference finding. A query's data is now read for every string that is wholly a ref (so `readerOrder`'s `withheld` list), for refs stored as `{ kind, id }` (a fact's `about`; a candidate's needs its `questionId`), and for scene IDs under `scene`. Only what `parseRef` accepts is kept, and free text is never scanned. A test runs the reviewer's two cases on the lighthouse fixture: `show(fact:oil-runs-out)` names `count:oil` and `object:lamp`, and `readerOrder(before: confession)` names `open-question:why-leave`. `bun run check`: 1625 pass, 0 fail.
 
+Round 4 (`36fbea4`), after the lead's ruling to fix 3-aflb.2: the extractor reads each field by what it means. A `ref` or `on` value is checked whole with `parseRef`, so `actor:old man` links again. A `scene` value is always a scene's ID, so `act:one` becomes `scene:act:one` and `actor:mara` there is never taken for an actor. Refs stored as `{ kind, id }` are still read. A string is tried as a ref only as a list item outside `lines`, such as `withheld`, and only when its ID has no leading or trailing space. Tests cover a spaced ID through real `addActor` and `show` calls, and scene IDs holding a colon or another kind's prefix. `bun run check`: 1626 pass, 0 fail.
+
 ### Responses
 1-08b5.1: fixed in 9cfbadb
 1-08b5.2: fixed in 9cfbadb
 1-08b5.3: fixed in 9cfbadb
 2-rt52.2: fixed in af6c22f
+3-aflb.2: fixed in 36fbea4
