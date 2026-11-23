@@ -374,6 +374,7 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         ) {
           stores.add("storyRecords");
         }
+        if (write.kind === "saveAgentRecord") stores.add("agentRecords");
       }
       // A transaction needs at least one store.
       if (stores.size === 0) return okAsync([]);
@@ -414,6 +415,9 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
                 break;
               case "deleteStoryRecord":
                 tx.objectStore("storyRecords").delete(write.id);
+                break;
+              case "saveAgentRecord":
+                tx.objectStore("agentRecords").put(write.record);
                 break;
             }
           }

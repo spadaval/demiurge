@@ -242,15 +242,17 @@ export interface SnapshotCollection {
 /**
  * One write in a `StorageAdapter.batch`. The kinds are the ones accepting an
  * AI segment needs together (the document, its provenance record, and the
- * revision snapshot), and the story-bible record writes that saving a story
- * makes together; add a kind when another flow needs one.
+ * revision snapshot), the story-bible record writes that saving a story
+ * makes together, and the agent records a session step updates together; add
+ * a kind when another flow needs one.
  */
 export type BatchWrite =
   | { readonly kind: "saveDocument"; readonly record: StoredDocument }
   | { readonly kind: "saveAnnotation"; readonly record: AnnotationRecord }
   | { readonly kind: "saveSnapshot"; readonly snapshot: NewSnapshot }
   | { readonly kind: "saveStoryRecord"; readonly record: StoredStoryRecord }
-  | { readonly kind: "deleteStoryRecord"; readonly id: string };
+  | { readonly kind: "deleteStoryRecord"; readonly id: string }
+  | { readonly kind: "saveAgentRecord"; readonly record: StoredAgentRecord };
 
 /** The record type each collection holds; snapshots with their content. */
 export interface CollectionRecords {

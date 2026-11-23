@@ -19,10 +19,10 @@ import type {
   SnapshotInfo,
   StorageAdapter,
   StorageError,
+  StoredAgentRecord,
   StoredDocument,
   StoredOutline,
   StoredRequest,
-  StoredAgentRecord,
   StoredStoryRecord,
   StoredTimeline,
   WorldEntry,
@@ -195,6 +195,9 @@ export function createMemoryStorage(): StorageAdapter {
               break;
             case "deleteStoryRecord":
               storyRecords.delete(write.id);
+              break;
+            case "saveAgentRecord":
+              agentRecordMap.set(write.record.id, write.record);
               break;
           }
         }

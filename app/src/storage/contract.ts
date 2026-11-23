@@ -560,6 +560,47 @@ export function describeStorageContract(
         ]);
       });
 
+      test("saves agent records together, or none of them", async () => {
+        const agentRecord = (id: string, data: JsonValue) => ({
+          id: `s1/${id}`,
+          sessionId: "s1",
+          kind: id,
+          data,
+          updatedAt: 4,
+        });
+        await value(
+          storage.batch([
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("session", { steps: 1 }),
+            },
+            { kind: "saveAgentRecord", record: agentRecord("step", { n: 1 }) },
+          ]),
+        );
+        const failure = await error(
+          storage.batch([
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("session", { steps: 2 }),
+            },
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("step", unstorable),
+            },
+          ]),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "save",
+          collection: "agentRecords",
+          id: "s1/session",
+        });
+        expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
+          agentRecord("session", { steps: 1 }),
+          agentRecord("step", { n: 1 }),
+        ]);
+      });
+
       test("an empty batch succeeds", async () => {
         expect(await value(storage.batch([]))).toEqual([]);
       });
