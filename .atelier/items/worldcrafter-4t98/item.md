@@ -3,14 +3,15 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-4t98
 title: 'Sync-ready storage: tombstones for deletes'
-status: open
+status: building
 mission: worldcrafter-3z9j
 labels:
 - storage
 priority: high
 blocked_by:
 - worldcrafter-lgz8
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A6d73f777-f6d1-4f6c-b6f0-9f634b2c4463%3Adelegate-task%3Ae25748fa-1485-40bb-aacc-0b3e04eb63d8
 ready: null
 trivial: null
 caused_by: null
