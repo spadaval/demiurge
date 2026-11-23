@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-ji5d
 title: Cloudflare Worker sync backend for laptop and phone
-status: open
+status: building
 mission: worldcrafter-3z9j
 labels:
 - sync
@@ -11,7 +11,8 @@ labels:
 priority: medium
 blocked_by:
 - worldcrafter-4t98
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A6d73f777-f6d1-4f6c-b6f0-9f634b2c4463%3Adelegate-task%3A92879e3a-9e0a-4502-9bbf-4994df0ae044
 ready: null
 trivial: null
 caused_by: null
