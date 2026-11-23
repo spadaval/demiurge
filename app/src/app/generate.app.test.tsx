@@ -397,6 +397,47 @@ test("regenerate replaces the segment; its request can be seen again", async () 
   expect(plates()).toHaveLength(1);
 });
 
+test("when the text a request continues from is gone, the slip offers to put it together at the caret", async () => {
+  await render(withProfile());
+  await generateNext();
+  expect(query(".request-slip")?.textContent).toContain(
+    "continues the text after “Night fell.”",
+  );
+  const editor = workspace.session("doc1")?.editor;
+  if (!editor) throw new Error("expected the session");
+  // The writer deletes that paragraph and puts the caret in the one before.
+  await act(async () => {
+    editor.tf.removeNodes({ at: [2] });
+    editor.tf.select({ path: [1, 0], offset: 4 });
+  });
+  await until(
+    () =>
+      query(".request-slip")?.textContent?.includes(
+        "The text this request continues from is no longer in the document.",
+      ) ?? false,
+    "the note that the place is gone",
+  );
+  // Not "at the end", and it can't be sent to nowhere.
+  expect(query(".request-slip")?.textContent).not.toContain("at the end");
+  expect(button("Send", ".request-slip")?.disabled).toBe(true);
+  expect(button("Put it together again", ".request-slip")).toBeNull();
+
+  await click(button("Put it together at the caret", ".request-slip"));
+  await until(
+    () =>
+      query(".request-slip")?.textContent?.includes(
+        "continues the text after “Mara crossed the flats.”",
+      ) ?? false,
+    "the request put together at the caret",
+  );
+  expect(button("Send", ".request-slip")?.disabled).toBe(false);
+  scripts.push(stream("Here."));
+  await click(button("Send", ".request-slip"));
+  await until(() => plates()[0]?.dataset.status === "ready", "the output");
+  const prose = [...(query(".prose")?.children ?? [])];
+  expect(prose.indexOf(plates()[0] as HTMLElement)).toBe(2);
+});
+
 test("stop keeps the partial text", async () => {
   await render(withProfile());
   await generateNext();
