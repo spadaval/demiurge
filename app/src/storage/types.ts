@@ -13,15 +13,25 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-/** Every collection the adapter persists. Used to label errors. */
-export type CollectionName =
-  | "documents"
-  | "worldEntries"
-  | "annotations"
-  | "requests"
-  | "snapshots"
-  | "outlines"
-  | "timelines";
+/**
+ * Every collection the adapter persists, in the order a world dump lists
+ * them. Adding one here makes `WorldRecords` (and so `dump`, `restore` and the
+ * world file) require it.
+ */
+export const COLLECTION_NAMES = [
+  "documents",
+  "worldEntries",
+  "annotations",
+  "requests",
+  "snapshots",
+  "outlines",
+  "timelines",
+  "storyRecords",
+  "agentRecords",
+] as const;
+
+/** Names a collection, for errors and for the world dump. */
+export type CollectionName = (typeof COLLECTION_NAMES)[number];
 
 export type StorageOperation = "open" | "save" | "load" | "list" | "delete";
 
@@ -122,6 +132,38 @@ export interface StoredTimeline {
   readonly updatedAt: number;
 }
 
+/**
+ * One record of a world's story bible: an actor, a drive, a scene, a timeline
+ * event, and so on. The story module (`src/story/store.ts`) owns the kinds,
+ * how `id` is built from a record's own identity, the shape of `data`, and the
+ * checks on load; storage keeps `data` as JSON. A world has one bible, stored
+ * one record per item so that devices can sync and merge it record by record.
+ */
+export interface StoredStoryRecord {
+  /** `<kind>/<part>/...`, unique across the bible; see `src/story/store.ts`. */
+  readonly id: string;
+  readonly kind: string;
+  readonly data: JsonValue;
+  /** Epoch milliseconds, set by the caller when the record last changed. */
+  readonly updatedAt: number;
+}
+
+/**
+ * One record of a story agent session: the session itself, or one step of it
+ * (the request sent, what the model answered, the tool calls it made and what
+ * they did). The agent module (`src/agent/`) owns the kinds, how `id` is
+ * built, and the shape of `data`; storage keeps `data` as JSON.
+ */
+export interface StoredAgentRecord {
+  /** `<sessionId>/<part>/...`; see `src/agent/records.ts`. */
+  readonly id: string;
+  readonly sessionId: string;
+  readonly kind: string;
+  readonly data: JsonValue;
+  /** Epoch milliseconds, set by the caller when the record last changed. */
+  readonly updatedAt: number;
+}
+
 /** An assembled LLM request, kept so it can be viewed and debugged. */
 export interface StoredRequest {
   readonly id: string;
@@ -179,6 +221,13 @@ export interface AnnotationCollection extends Collection<AnnotationRecord> {
   ): ResultAsync<AnnotationRecord[], StorageError>;
 }
 
+export interface AgentRecordCollection extends Collection<StoredAgentRecord> {
+  /** The records of one session, ascending by ID. */
+  listForSession(
+    sessionId: string,
+  ): ResultAsync<StoredAgentRecord[], StorageError>;
+}
+
 /**
  * Revision history of documents. Snapshots are append-only and kept on
  * purpose, including after their document is deleted, so it can be recovered.
@@ -193,12 +242,39 @@ export interface SnapshotCollection {
 /**
  * One write in a `StorageAdapter.batch`. The kinds are the ones accepting an
  * AI segment needs together (the document, its provenance record, and the
- * revision snapshot); add a kind when another flow needs one.
+ * revision snapshot), the story-bible record writes that saving a story
+ * makes together, and the agent records a session step updates together; add
+ * a kind when another flow needs one.
  */
 export type BatchWrite =
   | { readonly kind: "saveDocument"; readonly record: StoredDocument }
   | { readonly kind: "saveAnnotation"; readonly record: AnnotationRecord }
-  | { readonly kind: "saveSnapshot"; readonly snapshot: NewSnapshot };
+  | { readonly kind: "saveSnapshot"; readonly snapshot: NewSnapshot }
+  | { readonly kind: "saveStoryRecord"; readonly record: StoredStoryRecord }
+  | { readonly kind: "deleteStoryRecord"; readonly id: string }
+  | { readonly kind: "saveAgentRecord"; readonly record: StoredAgentRecord };
+
+/** The record type each collection holds; snapshots with their content. */
+export interface CollectionRecords {
+  readonly documents: StoredDocument;
+  readonly worldEntries: WorldEntry;
+  readonly annotations: AnnotationRecord;
+  readonly requests: StoredRequest;
+  readonly snapshots: Snapshot;
+  readonly outlines: StoredOutline;
+  readonly timelines: StoredTimeline;
+  readonly storyRecords: StoredStoryRecord;
+  readonly agentRecords: StoredAgentRecord;
+}
+
+/**
+ * Every record of a world, by collection. Keyed collections are ascending by
+ * key, as `list` returns them; snapshots are ascending by ID and keep the ID
+ * and `createdAt` the store gave them.
+ */
+export type WorldRecords = {
+  readonly [Name in CollectionName]: readonly CollectionRecords[Name][];
+};
 
 /**
  * The only way the app persists data. Deleting a document does not delete its
@@ -217,6 +293,16 @@ export interface StorageAdapter {
   /** Keyed by `id`. A world has one timeline, saved and loaded whole. */
   readonly timelines: Collection<StoredTimeline>;
   /**
+   * Keyed by `id`. The world's story bible, one record per item; saved
+   * through `src/story/store.ts`, which writes only the records that changed.
+   */
+  readonly storyRecords: Collection<StoredStoryRecord>;
+  /**
+   * Keyed by `id`. Story agent sessions and their steps, written through
+   * `src/agent/records.ts`, kept so a session can be inspected and replayed.
+   */
+  readonly agentRecords: AgentRecordCollection;
+  /**
    * Applies `writes` in order as one atomic step: either all take effect or
    * none does. Resolves with the info of each snapshot saved, in order. A
    * failure names the first write's collection.
@@ -224,6 +310,19 @@ export interface StorageAdapter {
   batch(
     writes: readonly BatchWrite[],
   ): ResultAsync<SnapshotInfo[], StorageError>;
+  /**
+   * Every record in every collection, read as one consistent step: no write
+   * lands part-way through. For the world file (`storage/world-file.ts`).
+   */
+  dump(): ResultAsync<WorldRecords, StorageError>;
+  /**
+   * Writes every record of `records` as one atomic step, inserting or
+   * replacing by key. Snapshots keep their ID and `createdAt`, and later
+   * snapshot saves get IDs above every restored one. Restoring a dump into an
+   * empty store makes `dump` return it unchanged. A failure names the first
+   * collection that has a record.
+   */
+  restore(records: WorldRecords): ResultAsync<void, StorageError>;
   /** Releases the store. Later operations fail with a `StorageFailure`. */
   close(): void;
 }

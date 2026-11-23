@@ -1,0 +1,87 @@
+[
+  {
+    "id": "doc-arrival",
+    "title": "Arrival",
+    "content": [
+      { "type": "h2", "id": "b_arr0", "children": [{ "text": "Arrival" }] },
+      {
+        "type": "p",
+        "id": "b_arr1",
+        "children": [
+          { "text": "Ivo rowed in at dusk, past the " },
+          { "text": "Salt Light", "bold": true },
+          { "text": ", and asked for the " },
+          {
+            "type": "a",
+            "url": "kestrel-guild",
+            "children": [{ "text": "guild" }]
+          },
+          { "text": "'s keeper." }
+        ]
+      },
+      {
+        "type": "p",
+        "id": "b_arr2",
+        "listStyleType": "disc",
+        "indent": 1,
+        "children": [{ "text": "One barrel left.", "italic": true }]
+      },
+      {
+        "type": "placeholder",
+        "id": "b_arr3",
+        "children": [{ "text": "Mara answers the door." }]
+      }
+    ],
+    "updatedAt": 1763800000000
+  },
+  {
+    "id": "doc-storm-night",
+    "title": "The night the light failed",
+    "content": [
+      {
+        "type": "p",
+        "id": "b_storm1",
+        "children": [{ "text": "The wind took the shutters first." }]
+      },
+      {
+        "type": "ai_segment",
+        "id": "seg_storm",
+        "status": "ready",
+        "children": [
+          {
+            "type": "p",
+            "id": "b_storm2",
+            "children": [
+              {
+                "text": "By the second watch the lamp guttered — “unicode” and all. ✦"
+              }
+            ]
+          },
+          {
+            "type": "blockquote",
+            "id": "b_storm3",
+            "children": [
+              { "text": "No one trades salt for oil.", "code": true }
+            ]
+          }
+        ]
+      },
+      { "type": "hr", "id": "b_storm4", "children": [{ "text": "" }] }
+    ],
+    "updatedAt": 1763800000001
+  },
+  {
+    "id": "doc-confession",
+    "title": "Confession",
+    "content": [
+      {
+        "type": "p",
+        "id": "b_conf1",
+        "children": [
+          { "text": "\"I owe them a ship,\" Ivo said.", "strikethrough": true }
+        ]
+      }
+    ],
+    "updatedAt": 1763800000002
+  }
+]

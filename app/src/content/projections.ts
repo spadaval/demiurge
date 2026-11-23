@@ -59,6 +59,36 @@
  * Blocks with empty text are dropped too, so they have no span; an hr keeps
  * its marker but has no span either.
  *
+ * `addressable` (AI edits)
+ * ------------------------
+ * Every block a model may target, one per line, each prefixed with its ID so
+ * the model can name it in an edit operation (`replace`, `insertAfter`,
+ * `delete`; worldcrafter-yx9v):
+ *
+ *     [b_1] # Heading
+ *     [b_2] Paragraph text.
+ *     [b_3] > Quoted text.
+ *     [b_4] * * *               hr: an empty span after the marker
+ *     [b_5] - Item
+ *     [b_6]   1. Numbered
+ *     [b_7]                     empty paragraph: an empty span
+ *     [b_8] (placeholder) Describe the storm
+ *
+ * Unlike `prose`, nothing is dropped: empty blocks, hrs and placeholders all
+ * have a line and a span (an hr's is empty and sits after its marker), so
+ * every block ID in the document except an AI segment's is addressable and
+ * `toText(id, 0)` finds it. A placeholder's span holds its text and is marked
+ * `(placeholder)`, so a model can see it is an instruction to fill, not story.
+ * Writer notes are kept, unlike in `prose`: a model that rewrites a block
+ * must see all of its text, or its replacement would silently drop the notes.
+ * An AI segment is a container, as in `prose`: its child blocks appear inline
+ * with their own IDs and the segment has no line, whatever its status
+ * (whether a generating segment may be edited is the edit applier's call).
+ * Markers and numbering are those of `prose`. Lines are joined by a single
+ * `\n`; a soft line break is written as-is, so a line that does not start
+ * with `[<id>] ` continues the block above (the source map is exact either
+ * way).
+ *
  * `plain+map` (entity matching, extraction, consistency checks)
  * --------------------------------------------------------------
  * Every text block's text, in document order (AI segment children inline),
@@ -74,6 +104,7 @@ import {
   type ContentError,
   type Inline,
   type ListStyle,
+  type Placeholder,
   validateDocument,
 } from "./schema";
 import { type TextRange, writerNoteCuts } from "./writer-notes";
@@ -231,21 +262,67 @@ class Writer {
 }
 
 /**
- * The text blocks of a document in order, AI segment children inline, split
- * into runs of list-numbering siblings: an AI segment's children are one run,
- * and an AI segment or a placeholder ends the run of blocks before it.
+ * One step of `walkBlocks`: a text block with its list number (0 unless it is a
+ * numbered or bulleted item) or a placeholder. `restart` is true on the first
+ * block after a numbering reset that `prose` doesn't otherwise see: the
+ * start of the document, a placeholder, or either edge of an AI segment.
  */
-function siblingRuns(document: ContentDocument): Block[][] {
-  const runs: Block[][] = [[]];
+export type BlockStep =
+  | {
+      readonly kind: "block";
+      readonly block: Block;
+      readonly listNumber: number;
+      readonly restart: boolean;
+    }
+  | { readonly kind: "placeholder"; readonly placeholder: Placeholder };
+
+/**
+ * The blocks of a document in order, AI segment children inline, with list
+ * numbers. Numbered items count up from 1 among consecutive items at the
+ * same indent and style: a shallower item resets deeper counts, a non-list
+ * block resets all of them, and empty items count. An AI segment's children
+ * are numbered among themselves, and a placeholder or a segment edge
+ * restarts numbering, as in the editor and the export.
+ */
+export function* walkBlocks(document: ContentDocument): Generator<BlockStep> {
+  let counts = new Map<number, { style: ListStyle; count: number }>();
+  let restart = true;
+  const reset = () => {
+    counts = new Map();
+    restart = true;
+  };
+  const step = (block: Block): BlockStep => {
+    let listNumber = 0;
+    if (block.type === "p" && block.listStyleType && block.indent) {
+      const { indent, listStyleType: style } = block;
+      for (const deeper of counts.keys()) {
+        if (deeper > indent) counts.delete(deeper);
+      }
+      const previous = counts.get(indent);
+      listNumber = previous?.style === style ? previous.count + 1 : 1;
+      counts.set(indent, { style, count: listNumber });
+    } else {
+      counts.clear();
+    }
+    const result: BlockStep = { kind: "block", block, listNumber, restart };
+    restart = false;
+    return result;
+  };
   for (const block of document) {
-    if (block.type === "placeholder") runs.push([]);
-    else if (block.type === "ai_segment") runs.push(block.children, []);
-    else (runs.at(-1) as Block[]).push(block);
+    if (block.type === "placeholder") {
+      reset();
+      yield { kind: "placeholder", placeholder: block };
+    } else if (block.type === "ai_segment") {
+      reset();
+      for (const child of block.children) yield step(child);
+      reset();
+    } else {
+      yield step(block);
+    }
   }
-  return runs;
 }
 
-/** The marker `prose` writes before a block's text. */
+/** The marker `prose` and `addressable` write before a block's text. */
 function proseMarker(block: Block, listNumber: number): string {
   switch (block.type) {
     case "p":
@@ -270,39 +347,41 @@ function writeProse(document: ContentDocument): Projection {
 
   // Numbering counts empty items and restarts at a placeholder, as the
   // editor does, even though neither is written.
-  for (const siblings of siblingRuns(document)) {
-    const counts = new Map<number, { style: ListStyle; count: number }>();
-    listContinues = false;
-    for (const block of siblings) {
-      let listNumber = 0;
-      if (block.type === "p" && block.listStyleType && block.indent) {
-        const { indent, listStyleType: style } = block;
-        for (const deeper of counts.keys()) {
-          if (deeper > indent) counts.delete(deeper);
-        }
-        const previous = counts.get(indent);
-        listNumber = previous?.style === style ? previous.count + 1 : 1;
-        counts.set(indent, { style, count: listNumber });
-      } else {
-        counts.clear();
-        listContinues = false;
-      }
-
-      const text = blockText(block);
-      const cuts = writerNoteCuts(text);
-      const kept = cuts.reduce(
-        (length, cut) => length - (cut.end - cut.start),
-        text.length,
-      );
-      if (kept === 0 && block.type !== "hr") continue;
-      const listItem = listNumber > 0;
-      if (out.text !== "") {
-        out.insert(listItem && listContinues ? "\n" : "\n\n");
-      }
-      listContinues = listItem;
-      out.insert(proseMarker(block, listNumber));
-      if (block.type !== "hr") out.block(block.id, text, cuts);
+  for (const step of walkBlocks(document)) {
+    if (step.kind === "placeholder") continue;
+    const { block, listNumber, restart } = step;
+    const listItem = listNumber > 0;
+    if (restart || !listItem) listContinues = false;
+    const text = blockText(block);
+    const cuts = writerNoteCuts(text);
+    const kept = cuts.reduce(
+      (length, cut) => length - (cut.end - cut.start),
+      text.length,
+    );
+    if (kept === 0 && block.type !== "hr") continue;
+    if (out.text !== "") {
+      out.insert(listItem && listContinues ? "\n" : "\n\n");
     }
+    listContinues = listItem;
+    out.insert(proseMarker(block, listNumber));
+    if (block.type !== "hr") out.block(block.id, text, cuts);
+  }
+  return out.finish();
+}
+
+function writeAddressable(document: ContentDocument): Projection {
+  const out = new Writer();
+  for (const step of walkBlocks(document)) {
+    if (out.text !== "") out.insert("\n");
+    if (step.kind === "placeholder") {
+      const { id, children } = step.placeholder;
+      out.insert(`[${id}] (placeholder) `);
+      out.block(id, children[0].text);
+      continue;
+    }
+    const { block, listNumber } = step;
+    out.insert(`[${block.id}] ${proseMarker(block, listNumber)}`);
+    out.block(block.id, blockText(block));
   }
   return out.finish();
 }
@@ -310,10 +389,12 @@ function writeProse(document: ContentDocument): Projection {
 function writePlain(document: ContentDocument): Projection {
   const out = new Writer();
   let first = true;
-  for (const block of siblingRuns(document).flat()) {
+  for (const step of walkBlocks(document)) {
+    if (step.kind === "placeholder") continue;
+    // Not `out.text !== ""`: an empty first block writes no text.
     if (!first) out.insert("\n");
     first = false;
-    out.block(block.id, blockText(block));
+    out.block(step.block.id, blockText(step.block));
   }
   return out.finish();
 }
@@ -325,6 +406,16 @@ function writePlain(document: ContentDocument): Projection {
  */
 export function projectProse(value: unknown): Result<Projection, ContentError> {
   return validateDocument(value).map(writeProse);
+}
+
+/**
+ * The `addressable` projection, for AI edits by block ID. Validates first:
+ * anything outside the schema is an `invalid_content` error.
+ */
+export function projectAddressable(
+  value: unknown,
+): Result<Projection, ContentError> {
+  return validateDocument(value).map(writeAddressable);
 }
 
 /**

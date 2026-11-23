@@ -424,8 +424,13 @@ export function describeBetween(from: number, to: number): string {
   const days = Math.abs(daysBetween(from, to));
   if (days < 1) return describeYears(days / DAYS_PER_YEAR);
   // Counted by the calendar, as a writer counts: 23:00 to 01:00 the day
-  // after is one day on.
-  const midnight = (at: number) => Math.floor(msOf(at) / MS_PER_DAY);
+  // after is one day on. A position is a fraction of a year, so a midnight
+  // can come back a millisecond early; rounding to the minute first keeps
+  // it on its own day.
+  const midnight = (at: number) =>
+    Math.floor(
+      (Math.round(msOf(at) / MS_PER_MINUTE) * MS_PER_MINUTE) / MS_PER_DAY,
+    );
   const count = Math.abs(midnight(to) - midnight(from));
   const inDays = `${count} day${count === 1 ? "" : "s"}`;
   return days < 56

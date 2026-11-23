@@ -7,8 +7,10 @@ import type { ResultAsync } from "neverthrow";
 import type {
   Collection,
   JsonValue,
+  Snapshot,
   StorageAdapter,
   StorageError,
+  WorldRecords,
 } from "./types";
 
 /** A content tree with nested blocks, marks, links, an AI segment and block IDs. */
@@ -97,6 +99,19 @@ export const contentFixture: JsonValue = [
     children: [{ text: "" }],
   },
 ];
+
+/** A world with no records. */
+export const emptyWorld: WorldRecords = {
+  documents: [],
+  worldEntries: [],
+  annotations: [],
+  requests: [],
+  snapshots: [],
+  outlines: [],
+  timelines: [],
+  storyRecords: [],
+  agentRecords: [],
+};
 
 async function value<T>(result: ResultAsync<T, StorageError>): Promise<T> {
   return (await result)._unsafeUnwrap();
@@ -253,6 +268,23 @@ export function describeStorageContract(
       }),
     );
 
+    describeCollection(
+      "storyRecords",
+      () => storage.storyRecords,
+      (id, version) => ({
+        id,
+        kind: "drive",
+        data: {
+          id,
+          actorId: null,
+          want: `Version ${version}`,
+          origins: ["e1"],
+          turns: [{ how: "flipped", into: "d2", note: "" }],
+        },
+        updatedAt: version,
+      }),
+    );
+
     test("a document's content tree round-trips losslessly", async () => {
       const document = {
         id: "doc1",
@@ -264,6 +296,40 @@ export function describeStorageContract(
       const loaded = await value(storage.documents.load("doc1"));
       expect(loaded).toEqual(document);
       expect(loaded.content).toStrictEqual(contentFixture);
+    });
+
+    describeCollection(
+      "agentRecords",
+      () => storage.agentRecords,
+      (id, version) => ({
+        id,
+        sessionId: "s1",
+        kind: "step",
+        data: { request: { messages: [] }, version },
+        updatedAt: version,
+      }),
+    );
+
+    test("agent records can be listed for one session", async () => {
+      const record = (id: string, sessionId: string) => ({
+        id: `${sessionId}/${id}`,
+        sessionId,
+        kind: "step",
+        data: { id },
+        updatedAt: 1,
+      });
+      await value(storage.agentRecords.save(record("step/2", "s1")));
+      await value(storage.agentRecords.save(record("session", "s2")));
+      await value(storage.agentRecords.save(record("session", "s1")));
+      await value(storage.agentRecords.save(record("step/1", "s1")));
+      expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
+        record("session", "s1"),
+        record("step/1", "s1"),
+        record("step/2", "s1"),
+      ]);
+      expect(await value(storage.agentRecords.listForSession("none"))).toEqual(
+        [],
+      );
     });
 
     test("stored records are not shared with the caller", async () => {
@@ -443,8 +509,240 @@ export function describeStorageContract(
         expect(await value(storage.snapshots.list("doc1"))).toEqual([]);
       });
 
+      const storyRecord = (id: string, want: JsonValue) => ({
+        id,
+        kind: "drive",
+        data: { id, want },
+        updatedAt: 3,
+      });
+
+      test("saves and deletes story records together", async () => {
+        await value(storage.storyRecords.save(storyRecord("drive/a", "old")));
+        await value(storage.storyRecords.save(storyRecord("drive/b", "gone")));
+        expect(
+          await value(
+            storage.batch([
+              {
+                kind: "saveStoryRecord",
+                record: storyRecord("drive/a", "new"),
+              },
+              { kind: "deleteStoryRecord", id: "drive/b" },
+              { kind: "saveStoryRecord", record: storyRecord("drive/c", "c") },
+              { kind: "deleteStoryRecord", id: "drive/missing" },
+            ]),
+          ),
+        ).toEqual([]);
+        expect(await value(storage.storyRecords.list())).toEqual([
+          storyRecord("drive/a", "new"),
+          storyRecord("drive/c", "c"),
+        ]);
+      });
+
+      test("deletes no story record when a later write fails", async () => {
+        await value(storage.storyRecords.save(storyRecord("drive/a", "kept")));
+        const failure = await error(
+          storage.batch([
+            { kind: "deleteStoryRecord", id: "drive/a" },
+            {
+              kind: "saveStoryRecord",
+              record: storyRecord("drive/b", unstorable),
+            },
+          ]),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "delete",
+          collection: "storyRecords",
+          id: "drive/a",
+        });
+        expect(await value(storage.storyRecords.list())).toEqual([
+          storyRecord("drive/a", "kept"),
+        ]);
+      });
+
+      test("saves agent records together, or none of them", async () => {
+        const agentRecord = (id: string, data: JsonValue) => ({
+          id: `s1/${id}`,
+          sessionId: "s1",
+          kind: id,
+          data,
+          updatedAt: 4,
+        });
+        await value(
+          storage.batch([
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("session", { steps: 1 }),
+            },
+            { kind: "saveAgentRecord", record: agentRecord("step", { n: 1 }) },
+          ]),
+        );
+        const failure = await error(
+          storage.batch([
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("session", { steps: 2 }),
+            },
+            {
+              kind: "saveAgentRecord",
+              record: agentRecord("step", unstorable),
+            },
+          ]),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "save",
+          collection: "agentRecords",
+          id: "s1/session",
+        });
+        expect(await value(storage.agentRecords.listForSession("s1"))).toEqual([
+          agentRecord("session", { steps: 1 }),
+          agentRecord("step", { n: 1 }),
+        ]);
+      });
+
       test("an empty batch succeeds", async () => {
         expect(await value(storage.batch([]))).toEqual([]);
+      });
+    });
+
+    describe("dump and restore", () => {
+      const documentB = { id: "doc-b", title: "B", content: [], updatedAt: 2 };
+      const world: WorldRecords = {
+        documents: [
+          { id: "doc-a", title: "A", content: contentFixture, updatedAt: 1 },
+          documentB,
+        ],
+        worldEntries: [
+          { documentId: "doc-a", facts: { aliases: ["Mara"] }, updatedAt: 3 },
+        ],
+        annotations: [
+          {
+            id: "seg_01",
+            documentId: "doc-a",
+            kind: "ai_provenance",
+            data: { model: "local" },
+            updatedAt: 4,
+          },
+        ],
+        requests: [
+          {
+            id: "req-1",
+            documentId: null,
+            request: { messages: [] },
+            createdAt: 5,
+          },
+        ],
+        // IDs with a gap, and one for a document that no longer exists.
+        snapshots: [
+          {
+            id: 3,
+            documentId: "doc-a",
+            reason: "periodic",
+            createdAt: 6,
+            content: contentFixture,
+          },
+          {
+            id: 7,
+            documentId: "doc-gone",
+            reason: "repaired_on_load",
+            createdAt: 7,
+            content: { not: "a content tree" },
+          },
+        ],
+        outlines: [
+          {
+            id: "outline",
+            books: [
+              {
+                id: "book-1",
+                title: "One",
+                chapters: [{ id: "ch-1", title: "I", scenes: ["doc-a"] }],
+              },
+            ],
+            updatedAt: 8,
+          },
+        ],
+        timelines: [{ id: "timeline", timeline: { events: [] }, updatedAt: 9 }],
+        storyRecords: [
+          {
+            id: "actor/mara",
+            kind: "actor",
+            data: { id: "mara" },
+            updatedAt: 1,
+          },
+          { id: "story", kind: "story", data: { premise: "p" }, updatedAt: 1 },
+        ],
+        agentRecords: [
+          {
+            id: "s1/session",
+            sessionId: "s1",
+            kind: "session",
+            data: { role: "plan" },
+            updatedAt: 10,
+          },
+        ],
+      };
+
+      test("an empty store dumps empty collections", async () => {
+        expect(await value(storage.dump())).toEqual(emptyWorld);
+      });
+
+      test("dump returns every record a restore wrote, unchanged", async () => {
+        await value(storage.restore(world));
+        expect(await value(storage.dump())).toEqual(world);
+        expect(await value(storage.snapshots.load(7))).toEqual(
+          world.snapshots[1] as Snapshot,
+        );
+        expect(await value(storage.snapshots.list("doc-a"))).toEqual([
+          { id: 3, documentId: "doc-a", reason: "periodic", createdAt: 6 },
+        ]);
+      });
+
+      test("dump lists what the collections saved", async () => {
+        await value(storage.documents.save(documentB));
+        const info = await value(
+          storage.snapshots.save({
+            documentId: "doc-b",
+            reason: "periodic",
+            content: [],
+          }),
+        );
+        expect(await value(storage.dump())).toMatchObject({
+          documents: [documentB],
+          snapshots: [{ ...info, content: [] }],
+        });
+      });
+
+      test("snapshots saved after a restore get higher IDs", async () => {
+        await value(storage.restore(world));
+        const info = await value(
+          storage.snapshots.save({
+            documentId: "doc-a",
+            reason: "periodic",
+            content: [],
+          }),
+        );
+        expect(info.id).toBeGreaterThan(7);
+      });
+
+      test("a restore that fails part-way writes nothing", async () => {
+        const unstorable = [() => undefined] as unknown as JsonValue;
+        const failure = await error(
+          storage.restore({
+            ...world,
+            storyRecords: [
+              { id: "story", kind: "story", data: unstorable, updatedAt: 1 },
+            ],
+          }),
+        );
+        expect(failure).toMatchObject({
+          kind: "failure",
+          operation: "save",
+          collection: "documents",
+        });
+        expect(await value(storage.documents.list())).toEqual([]);
+        expect(await value(storage.snapshots.list("doc-a"))).toEqual([]);
       });
     });
 
@@ -456,7 +754,10 @@ export function describeStorageContract(
         await error(storage.documents.load("d")),
         await error(storage.worldEntries.list()),
         await error(storage.annotations.listForDocument("d")),
+        await error(storage.agentRecords.listForSession("s")),
         await error(storage.requests.delete("d")),
+        await error(storage.dump()),
+        await error(storage.restore({ ...emptyWorld, documents: [document] })),
         await error(
           storage.batch([{ kind: "saveDocument", record: document }]),
         ),

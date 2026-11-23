@@ -9,7 +9,7 @@ Plate wants a rich JSON tree: nodes, marks and custom elements carrying arbitrar
 The old codebase kept losing data at that seam:
 
 - **Persistence.** It originally stored markdown, then switched to saving the editor model ("Replace markdown with editor model persistence"). The open bugs in the backlog are still "Preserve AI segments during sync" and "Prevent conversion to plain text". Whole-document round trips through markdown dropped whatever markdown couldn't express.
-- **Entity candidates.** These were stored as marks inside the content tree. Each detection rerun rewrote the content, so it could clobber links. `docs/NER_OVERHAUL.md` exists because of this.
+- **Entity candidates.** These were stored as marks inside the content tree. Each detection rerun rewrote the content, so it could clobber links. The old app's `docs/NER_OVERHAUL.md` (removed with it, in Git history) exists because of this.
 - **Generation.** "Generate Next" serializes the whole document to markdown and streams markdown back into the tree. Output structure is never constrained, which is why we got the stray `<callout>` tag bug.
 - **No stable block IDs.** Nothing in the tree can be addressed reliably, so there's no safe way for an LLM to say "change *this* paragraph".
 
@@ -46,9 +46,11 @@ Tables, columns, media, equations, callouts, toggles and the rest are out until 
 
 This replaces an earlier goal: making the markdown lossless so it could become a storage format and keep plain files on disk open. That goal was dropped. The app's value is structure that lives outside the tree (annotations, world facts, story time, discussions), and markdown can only hold the prose. Editing such files outside the app would break block-ID anchors, and agents writing them would skip the proposal flow. Ownership comes from the export instead.
 
-### Markdown syntax (as built, `app/src/content/`)
+### Markdown (as built, `app/src/content/markdown.ts`)
 
-This was built when markdown was still meant to round-trip, so it carries every block ID and has a strict parser. Nothing in the product calls either one yet (only tests do). Under the 2026-10-19 decision it can become the readable one-way export, without the IDs, and the parser is no longer required. The full spec is the comment at the top of `app/src/content/markdown.ts`. In short:
+The readable one-way export is `exportReadableMarkdown`: CommonMark with GFM strikethrough, without block IDs, AI segment boundaries, placeholders or empty blocks, and with no parser. Its rules are documented on the function. The exact export and import is the world file (`app/src/storage/world-file.ts`, worldcrafter-qizl): every record of every storage collection as versioned JSON, imported only into an empty store.
+
+The ID-carrying format below was built when markdown was still meant to round-trip, so it carries every block ID and has a strict parser. Nothing in the product calls either one (only tests do); it is kept as is. The full spec is the comment at the top of `app/src/content/markdown.ts`. In short:
 
 - Every block ends with its ID as a trailing `{#id}` (alone when the block is empty): `Some _text_. {#b_2}`, `--- {#r_1}`.
 - Headings use `#`/`##`/`###`, quotes `> `, bullets `- `, numbered items `N. `. Nested items are indented to the parent's content column. An indent that can't be derived from nesting (a skipped level, or a list that starts indented) is written explicitly: `{#b_10 indent=4}`, with values from 1 to 32.
@@ -65,9 +67,9 @@ Plate stores some derived or invisible state that the schema doesn't allow (`lis
 | Projection | Used for | Notes |
 |---|---|---|
 | `prose` | continuation, summaries, world context | strips placeholders, writer notes and annotations; AI segments rendered inline |
-| `addressable` | AI edits | every block prefixed with its ID, e.g. `[b_7f3a] text…` |
+| `addressable` | AI edits | every block prefixed with its ID, e.g. `[b_7f3a] text…`; empty blocks, hrs and placeholders included |
 | `plain+map` | entity matching and extraction, consistency checks | flat text per block with an offset map |
-| `export` | reading, sharing outside the app | readable markdown, one-way; exact export and import go through an adapter that preserves the model |
+| `export` | reading, sharing outside the app | readable markdown, one-way (`exportReadableMarkdown`); exact export and import go through the world file (`storage/world-file.ts`), which preserves the model |
 
 **Writer notes are literal text, cut by `prose`** (worldcrafter-wknl, 2026-11-22). A note the writer types into the prose, `[[ like this ]]` in Fountain's syntax, stays ordinary text in the tree, so the schema doesn't change and the export keeps it. The workspace paints it as apparatus through `decorate`, and `prose` cuts it, with the whitespace that would double up around it. Both use one matcher (`app/src/content/writer-notes.ts`): a note runs from `[[` to the first `]]` with no `]` between, and brackets that never close stay prose. The cut ranges are recorded on the block's span, so the source map still maps block offsets both ways. `plain+map` keeps notes, so every block offset still has a position. A dedicated note node was the alternative not taken: it would add a schema type, its own projections and an editor element for text the writer already types inline, and a note typed as plain brackets would still reach the model until something converted it.
 
@@ -75,7 +77,7 @@ Plate stores some derived or invisible state that the schema doesn't allow (`lis
 
 1. **Generated content → inside one AI segment.** We parse only a tiny grammar (paragraphs + emphasis + links). Anything else is flattened to text. The model never gets to write arbitrary structure.
 2. **AI edits → block operations.** The model returns operations against block IDs from the `addressable` projection, e.g. `replace(b_7f3a, newText)`, `insertAfter(b_7f3a, text)`, `delete(b_7f3a)`. They are applied as reviewable suggestions. Inside a block we diff old text against new and keep marks and links on the unchanged spans. This is the same shape as Tiptap's AI Toolkit (read/insert/patch tools plus a diff-based review).
-3. **Import → the whole document or world**, once, explicitly, from the exact export.
+3. **Import → the whole world**, once, explicitly, from the exact export (the world file), into an empty store.
 
 **We never re-parse a whole document from markdown during normal editing.**
 

@@ -4,9 +4,11 @@ import {
   type FailureContext,
   failure,
   notFound,
+  restoreContext,
   snapshotInfo,
 } from "./internal";
 import type {
+  AgentRecordCollection,
   AnnotationCollection,
   AnnotationRecord,
   Collection,
@@ -17,7 +19,14 @@ import type {
   SnapshotInfo,
   StorageAdapter,
   StorageError,
+  StoredAgentRecord,
   StoredDocument,
+  StoredOutline,
+  StoredRequest,
+  StoredStoryRecord,
+  StoredTimeline,
+  WorldEntry,
+  WorldRecords,
 } from "./types";
 
 /**
@@ -43,6 +52,12 @@ export function createMemoryStorage(): StorageAdapter {
     }
   }
 
+  function sorted<T>(records: Map<string, T>): T[] {
+    return [...records.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([, record]) => record);
+  }
+
   function keyed<T>(
     collection: CollectionName,
     keyOf: (record: T) => string,
@@ -63,9 +78,7 @@ export function createMemoryStorage(): StorageAdapter {
         ),
       list: () =>
         run({ operation: "list", collection }, () =>
-          [...records.entries()]
-            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-            .map(([, record]) => structuredClone(record)),
+          structuredClone(sorted(records)),
         ),
       delete: (key) =>
         run({ operation: "delete", collection, id: key }, () => {
@@ -75,6 +88,24 @@ export function createMemoryStorage(): StorageAdapter {
   }
 
   const documentRecords = new Map<string, StoredDocument>();
+  const worldEntryRecords = new Map<string, WorldEntry>();
+  const requestRecords = new Map<string, StoredRequest>();
+  const outlineRecords = new Map<string, StoredOutline>();
+  const timelineRecords = new Map<string, StoredTimeline>();
+  const storyRecords = new Map<string, StoredStoryRecord>();
+  const agentRecordMap = new Map<string, StoredAgentRecord>();
+  const agentStore = keyed<StoredAgentRecord>(
+    "agentRecords",
+    (record) => record.id,
+    agentRecordMap,
+  );
+  const agentRecords: AgentRecordCollection = {
+    ...agentStore,
+    listForSession: (sessionId) =>
+      agentStore
+        .list()
+        .map((all) => all.filter((record) => record.sessionId === sessionId)),
+  };
   const annotationRecords = new Map<string, AnnotationRecord>();
   const annotationStore = keyed<AnnotationRecord>(
     "annotations",
@@ -130,12 +161,18 @@ export function createMemoryStorage(): StorageAdapter {
 
   return {
     documents: keyed("documents", (record) => record.id, documentRecords),
-    worldEntries: keyed("worldEntries", (record) => record.documentId),
+    worldEntries: keyed(
+      "worldEntries",
+      (record) => record.documentId,
+      worldEntryRecords,
+    ),
     annotations,
-    requests: keyed("requests", (record) => record.id),
+    requests: keyed("requests", (record) => record.id, requestRecords),
     snapshots,
-    outlines: keyed("outlines", (record) => record.id),
-    timelines: keyed("timelines", (record) => record.id),
+    outlines: keyed("outlines", (record) => record.id, outlineRecords),
+    timelines: keyed("timelines", (record) => record.id, timelineRecords),
+    storyRecords: keyed("storyRecords", (record) => record.id, storyRecords),
+    agentRecords,
     batch: (writes) =>
       run(batchContext(writes), () => {
         // Copy every value before changing anything, so a value that can't
@@ -143,15 +180,71 @@ export function createMemoryStorage(): StorageAdapter {
         const copies = structuredClone(writes);
         const saved: SnapshotInfo[] = [];
         for (const write of copies) {
-          if (write.kind === "saveDocument") {
-            documentRecords.set(write.record.id, write.record);
-          } else if (write.kind === "saveAnnotation") {
-            annotationRecords.set(write.record.id, write.record);
-          } else {
-            saved.push(addSnapshot(write.snapshot));
+          switch (write.kind) {
+            case "saveDocument":
+              documentRecords.set(write.record.id, write.record);
+              break;
+            case "saveAnnotation":
+              annotationRecords.set(write.record.id, write.record);
+              break;
+            case "saveSnapshot":
+              saved.push(addSnapshot(write.snapshot));
+              break;
+            case "saveStoryRecord":
+              storyRecords.set(write.record.id, write.record);
+              break;
+            case "deleteStoryRecord":
+              storyRecords.delete(write.id);
+              break;
+            case "saveAgentRecord":
+              agentRecordMap.set(write.record.id, write.record);
+              break;
           }
         }
         return saved;
+      }),
+    dump: () =>
+      run({ operation: "list" }, () =>
+        structuredClone({
+          documents: sorted(documentRecords),
+          worldEntries: sorted(worldEntryRecords),
+          annotations: sorted(annotationRecords),
+          requests: sorted(requestRecords),
+          snapshots: [...snapshotRecords.values()].sort((a, b) => a.id - b.id),
+          outlines: sorted(outlineRecords),
+          timelines: sorted(timelineRecords),
+          storyRecords: sorted(storyRecords),
+          agentRecords: sorted(agentRecordMap),
+        } satisfies WorldRecords),
+      ),
+    restore: (records) =>
+      run(restoreContext(records), () => {
+        // Copy everything first, so a value that can't be stored fails the
+        // restore with nothing written.
+        const copy = structuredClone(records);
+        const put = <T>(
+          target: Map<string, T>,
+          list: readonly T[],
+          keyOf: (record: T) => string,
+        ) => {
+          for (const record of list) target.set(keyOf(record), record);
+        };
+        put(documentRecords, copy.documents, (record) => record.id);
+        put(
+          worldEntryRecords,
+          copy.worldEntries,
+          (record) => record.documentId,
+        );
+        put(annotationRecords, copy.annotations, (record) => record.id);
+        put(requestRecords, copy.requests, (record) => record.id);
+        put(outlineRecords, copy.outlines, (record) => record.id);
+        put(timelineRecords, copy.timelines, (record) => record.id);
+        put(storyRecords, copy.storyRecords, (record) => record.id);
+        put(agentRecordMap, copy.agentRecords, (record) => record.id);
+        for (const snapshot of copy.snapshots) {
+          snapshotRecords.set(snapshot.id, snapshot);
+          nextSnapshotId = Math.max(nextSnapshotId, snapshot.id + 1);
+        }
       }),
     close: () => {
       closed = true;

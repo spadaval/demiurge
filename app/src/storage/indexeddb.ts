@@ -4,26 +4,36 @@ import {
   type FailureContext,
   failure,
   notFound,
+  restoreContext,
 } from "./internal";
-import type {
-  AnnotationCollection,
-  AnnotationRecord,
-  Collection,
-  CollectionName,
-  Snapshot,
-  SnapshotCollection,
-  SnapshotInfo,
-  StorageAdapter,
-  StorageError,
+import {
+  type AgentRecordCollection,
+  type AnnotationCollection,
+  type AnnotationRecord,
+  COLLECTION_NAMES,
+  type Collection,
+  type CollectionName,
+  type Snapshot,
+  type SnapshotCollection,
+  type SnapshotInfo,
+  type StorageAdapter,
+  type StorageError,
+  type StoredAgentRecord,
+  type WorldRecords,
 } from "./types";
 
 /**
  * Bump when the stores or indexes change, and add a step to `upgrade` that
  * moves version N-1 data forward. Never edit an existing step.
+ *
+ * 1: documents, world entries, annotations, requests, snapshots, outlines,
+ *    timelines. 2: story-bible records (`storyRecords`). 3: story agent
+ *    sessions (`agentRecords`).
  */
-export const DB_VERSION = 1;
+export const DB_VERSION = 3;
 
 const DOCUMENT_INDEX = "byDocument";
+const SESSION_INDEX = "bySession";
 
 /**
  * Snapshot content lives apart from snapshot metadata so listing history
@@ -39,8 +49,19 @@ interface SnapshotContentRecord {
   readonly content: Snapshot["content"];
 }
 
-function upgrade(db: IDBDatabase, oldVersion: number): void {
-  if (oldVersion < 1) {
+/**
+ * Moves a database from `oldVersion` to `newVersion` by running each step in
+ * between. `newVersion` is `DB_VERSION` except in tests that build a database
+ * as an older release left it.
+ */
+export function upgrade(
+  db: IDBDatabase,
+  oldVersion: number,
+  newVersion: number = DB_VERSION,
+): void {
+  const step = (version: number) =>
+    oldVersion < version && version <= newVersion;
+  if (step(1)) {
     db.createObjectStore("documents", { keyPath: "id" });
     db.createObjectStore("worldEntries", { keyPath: "documentId" });
     db.createObjectStore("annotations", { keyPath: "id" }).createIndex(
@@ -58,6 +79,15 @@ function upgrade(db: IDBDatabase, oldVersion: number): void {
     // release, schema changes bump DB_VERSION instead.
     db.createObjectStore("outlines", { keyPath: "id" });
     db.createObjectStore("timelines", { keyPath: "id" });
+  }
+  if (step(2)) {
+    db.createObjectStore("storyRecords", { keyPath: "id" });
+  }
+  if (step(3)) {
+    db.createObjectStore("agentRecords", { keyPath: "id" }).createIndex(
+      SESSION_INDEX,
+      "sessionId",
+    );
   }
 }
 
@@ -235,6 +265,17 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
       ),
   };
 
+  const agentRecords: AgentRecordCollection = {
+    ...keyed<StoredAgentRecord>("agentRecords", (record) => record.id),
+    // The index orders equal session IDs by primary key, so this is by ID.
+    listForSession: (sessionId) =>
+      run<StoredAgentRecord[]>(
+        { operation: "list", collection: "agentRecords", id: sessionId },
+        "readonly",
+        (store) => store.index(SESSION_INDEX).getAll(sessionId),
+      ),
+  };
+
   const snapshots: SnapshotCollection = {
     save: (input) => {
       const info: Omit<SnapshotInfo, "id"> = {
@@ -316,6 +357,8 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
     snapshots,
     outlines: keyed("outlines", (record) => record.id),
     timelines: keyed("timelines", (record) => record.id),
+    storyRecords: keyed("storyRecords", (record) => record.id),
+    agentRecords,
     batch: (writes) => {
       const stores = new Set<StoreName>();
       for (const write of writes) {
@@ -325,6 +368,13 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
           stores.add("snapshots");
           stores.add(SNAPSHOT_CONTENT);
         }
+        if (
+          write.kind === "saveStoryRecord" ||
+          write.kind === "deleteStoryRecord"
+        ) {
+          stores.add("storyRecords");
+        }
+        if (write.kind === "saveAgentRecord") stores.add("agentRecords");
       }
       // A transaction needs at least one store.
       if (stores.size === 0) return okAsync([]);
@@ -360,6 +410,15 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
                 added.push({ info, add });
                 break;
               }
+              case "saveStoryRecord":
+                tx.objectStore("storyRecords").put(write.record);
+                break;
+              case "deleteStoryRecord":
+                tx.objectStore("storyRecords").delete(write.id);
+                break;
+              case "saveAgentRecord":
+                tx.objectStore("agentRecords").put(write.record);
+                break;
             }
           }
           return () =>
@@ -367,6 +426,92 @@ function createAdapter(db: IDBDatabase): StorageAdapter {
         },
       );
     },
+    dump: () =>
+      runIn(
+        { operation: "list" },
+        [...COLLECTION_NAMES, SNAPSHOT_CONTENT],
+        "readonly",
+        (tx) => {
+          const all = (store: StoreName) => tx.objectStore(store).getAll();
+          const requests = {
+            documents: all("documents"),
+            worldEntries: all("worldEntries"),
+            annotations: all("annotations"),
+            requests: all("requests"),
+            snapshots: all("snapshots"),
+            snapshotContent: all(SNAPSHOT_CONTENT),
+            outlines: all("outlines"),
+            timelines: all("timelines"),
+            storyRecords: all("storyRecords"),
+            agentRecords: all("agentRecords"),
+          };
+          return () => {
+            const read = <T>(request: IDBRequest) => request.result as T[];
+            return {
+              records: {
+                documents: read(requests.documents),
+                worldEntries: read(requests.worldEntries),
+                annotations: read(requests.annotations),
+                requests: read(requests.requests),
+                outlines: read(requests.outlines),
+                timelines: read(requests.timelines),
+                storyRecords: read(requests.storyRecords),
+                agentRecords: read(requests.agentRecords),
+              } as Omit<WorldRecords, "snapshots">,
+              infos: read<SnapshotInfo>(requests.snapshots),
+              contents: read<SnapshotContentRecord>(requests.snapshotContent),
+            };
+          };
+        },
+      ).andThen(({ records, infos, contents }) => {
+        const byId = new Map(contents.map((record) => [record.id, record]));
+        const snapshots: Snapshot[] = [];
+        for (const info of infos) {
+          const record = byId.get(info.id);
+          if (record === undefined) {
+            return errAsync(
+              failure(
+                { operation: "list", collection: "snapshots", id: info.id },
+                new Error(
+                  "snapshot metadata exists but its content is missing",
+                ),
+              ),
+            );
+          }
+          snapshots.push({ ...info, content: record.content });
+        }
+        return okAsync<WorldRecords>({ ...records, snapshots });
+      }),
+    restore: (records) =>
+      runIn(
+        restoreContext(records),
+        [...COLLECTION_NAMES, SNAPSHOT_CONTENT],
+        "readwrite",
+        (tx) => {
+          const putAll = (store: StoreName, list: readonly unknown[]) => {
+            const target = tx.objectStore(store);
+            for (const record of list) target.put(record);
+          };
+          putAll("documents", records.documents);
+          putAll("worldEntries", records.worldEntries);
+          putAll("annotations", records.annotations);
+          putAll("requests", records.requests);
+          putAll("outlines", records.outlines);
+          putAll("timelines", records.timelines);
+          putAll("storyRecords", records.storyRecords);
+          putAll("agentRecords", records.agentRecords);
+          // An explicit key above the key generator's moves it past that
+          // key, so later snapshot saves get higher IDs.
+          for (const { content, ...info } of records.snapshots) {
+            tx.objectStore("snapshots").put(info);
+            tx.objectStore(SNAPSHOT_CONTENT).put({
+              id: info.id,
+              content,
+            } satisfies SnapshotContentRecord);
+          }
+          return () => undefined;
+        },
+      ),
     close: () => db.close(),
   };
 }

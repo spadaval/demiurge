@@ -1,5 +1,10 @@
 import { err, ok, type Result, ResultAsync } from "neverthrow";
-import { errorMessage, isRecord, parseLogprobs } from "./parse";
+import {
+  errorMessage,
+  isRecord,
+  parseLogprobs,
+  ToolCallAssembly,
+} from "./parse";
 import { SseParser } from "./sse";
 import type {
   BackendProfile,
@@ -13,6 +18,8 @@ import type {
   Sampler,
   StreamDelta,
   TokenLogprob,
+  ToolCallMessage,
+  ToolResultMessage,
 } from "./types";
 
 /** Later layers win; keys set to `undefined` leave earlier values alone. */
@@ -28,8 +35,8 @@ export function mergeSampler(...layers: Sampler[]): Sampler {
 
 /**
  * Assembles the exact request for `profile`: the profile's default sampler
- * merged with `options.sampler`, then model, input and `stream`, which always
- * win over same-named sampler keys.
+ * merged with `options.sampler`, then model, input (with its `tools` and
+ * `tool_choice`) and `stream`, which always win over same-named sampler keys.
  */
 export function buildRequest(
   profile: BackendProfile,
@@ -42,8 +49,13 @@ export function buildRequest(
     if (value !== undefined) body[key] = value;
   }
   if (profile.model !== undefined) body.model = profile.model;
-  if (input.kind === "chat") body.messages = input.messages;
-  else body.prompt = input.prompt;
+  if (input.kind === "chat") {
+    body.messages = input.messages;
+    if (input.tools?.length) body.tools = input.tools;
+    if (input.toolChoice !== undefined) body.tool_choice = input.toolChoice;
+  } else {
+    body.prompt = input.prompt;
+  }
   body.stream = options.stream;
 
   const endpoint = input.kind;
@@ -87,13 +99,117 @@ export function retarget(
 export const addressedTo = (profile: BackendProfile, request: LlmRequest) =>
   request.url === endpointUrl(profile, request.endpoint);
 
-const ROLES = new Set(["system", "user", "assistant"]);
+const TEXT_ROLES = new Set(["system", "user", "assistant"]);
+
+/** What is wrong with a chat body's `messages`, if anything. */
+function messagesProblem(messages: unknown): string | undefined {
+  if (!Array.isArray(messages)) return "A chat request needs messages";
+  /** Calls of the last assistant turn not yet answered by a tool result. */
+  const unanswered = new Set<string>();
+  const pending = () =>
+    `the calls ${[...unanswered].join(", ")} have no tool result`;
+  for (const [i, m] of messages.entries()) {
+    const at = `Message ${i}`;
+    if (!isRecord(m) || typeof m.role !== "string") {
+      return `${at} needs a role (system, user, assistant or tool)`;
+    }
+    if (m.role === "tool") {
+      if (typeof m.tool_call_id !== "string" || typeof m.content !== "string") {
+        return `${at} is a tool result, which needs a tool_call_id and text content`;
+      }
+      if (!unanswered.delete(m.tool_call_id)) {
+        return `${at} answers tool call ${m.tool_call_id}, which the assistant turn before it did not make or another result already answered`;
+      }
+      continue;
+    }
+    if (unanswered.size > 0) return `Before message ${i}, ${pending()}`;
+    if (!TEXT_ROLES.has(m.role)) {
+      return `${at} has role "${m.role}"; use system, user, assistant or tool`;
+    }
+    if (m.role === "assistant" && m.tool_calls !== undefined) {
+      const calls = m.tool_calls;
+      if (!Array.isArray(calls) || calls.length === 0) {
+        return `${at}'s tool_calls must list at least one call`;
+      }
+      for (const call of calls) {
+        const fn = isRecord(call) ? call.function : undefined;
+        if (
+          !isRecord(call) ||
+          typeof call.id !== "string" ||
+          call.type !== "function" ||
+          !isRecord(fn) ||
+          typeof fn.name !== "string" ||
+          typeof fn.arguments !== "string"
+        ) {
+          return `${at} has a tool call without an id, type "function", a function name and arguments text`;
+        }
+        if (unanswered.has(call.id)) {
+          return `${at} makes tool call ${call.id} twice`;
+        }
+        unanswered.add(call.id);
+      }
+      if (m.content !== null && typeof m.content !== "string") {
+        return `${at} needs text content or null`;
+      }
+      continue;
+    }
+    if (typeof m.content !== "string") return `${at} needs text content`;
+  }
+  if (unanswered.size > 0) return `At the end of the messages, ${pending()}`;
+  return undefined;
+}
+
+/** What is wrong with a chat body's `tools` and `tool_choice`, if anything. */
+function toolsProblem(tools: unknown, choice: unknown): string | undefined {
+  const names = new Set<string>();
+  if (tools !== undefined) {
+    if (!Array.isArray(tools)) return "tools must be a list";
+    for (const [i, tool] of tools.entries()) {
+      const fn = isRecord(tool) ? tool.function : undefined;
+      if (
+        !isRecord(tool) ||
+        tool.type !== "function" ||
+        !isRecord(fn) ||
+        typeof fn.name !== "string" ||
+        fn.name === ""
+      ) {
+        return `Tool ${i} needs type "function" and a function name`;
+      }
+      if (fn.parameters !== undefined && !isRecord(fn.parameters)) {
+        return `Tool ${fn.name}'s parameters must be a JSON Schema object`;
+      }
+      if (names.has(fn.name)) return `Two tools are named ${fn.name}`;
+      names.add(fn.name);
+    }
+  }
+  if (choice === undefined || choice === "auto" || choice === "none") {
+    return undefined;
+  }
+  if (choice === "required") {
+    return names.size > 0 ? undefined : 'tool_choice "required" needs tools';
+  }
+  const named =
+    isRecord(choice) && isRecord(choice.function) ? choice.function.name : null;
+  if (
+    !isRecord(choice) ||
+    choice.type !== "function" ||
+    typeof named !== "string"
+  ) {
+    return 'tool_choice must be "auto", "none", "required" or a function to call';
+  }
+  if (!names.has(named))
+    return `tool_choice names ${named}, which is not a tool`;
+  return undefined;
+}
 
 /**
  * Checks that `request` can be sent with `profile`: it names the profile, its
  * URL is the profile's endpoint (so an edited URL can't carry the profile's
  * key to another host), and its body has the input its endpoint reads
  * (`messages` for chat, `prompt` for completions) and not the other one.
+ * Chat messages must hold together as a tool conversation: every tool result
+ * answers a call of the assistant turn before it, and every call is answered
+ * before the conversation moves on, as OpenAI requires.
  */
 export function checkRequest(
   profile: BackendProfile,
@@ -114,21 +230,10 @@ export function checkRequest(
     );
   }
   if (endpoint === "chat") {
-    const { messages } = body;
-    const valid =
-      Array.isArray(messages) &&
-      messages.every(
-        (m) =>
-          isRecord(m) &&
-          typeof m.role === "string" &&
-          ROLES.has(m.role) &&
-          typeof m.content === "string",
-      );
-    if (!valid) {
-      return invalid(
-        "A chat request needs messages, each with a role (system, user or assistant) and text content",
-      );
-    }
+    const problem =
+      messagesProblem(body.messages) ??
+      toolsProblem(body.tools, body.tool_choice);
+    if (problem !== undefined) return invalid(problem);
     if (body.prompt !== undefined) {
       return invalid("A chat request can't have a prompt; use messages");
     }
@@ -138,6 +243,9 @@ export function checkRequest(
     }
     if (body.messages !== undefined) {
       return invalid("A completion request can't have messages; use prompt");
+    }
+    if (body.tools !== undefined || body.tool_choice !== undefined) {
+      return invalid("A completion request can't have tools; use chat");
     }
   }
   if (body.stream !== undefined && typeof body.stream !== "boolean") {
@@ -250,7 +358,7 @@ async function sendAsync(
         message: `${url} returned a body that is not JSON`,
       });
     }
-    return assembly.add(payload).map(() => assembly.result());
+    return assembly.add(payload).andThen(() => assembly.result());
   }
 
   if (!response.body) {
@@ -284,7 +392,7 @@ async function readStream(
     const events = chunk.done ? parser.end() : parser.push(chunk.value);
     for (const data of events) {
       if (signal?.aborted) return err(aborted);
-      if (data === "[DONE]") return ok(assembly.result());
+      if (data === "[DONE]") return assembly.result();
       let payload: unknown;
       try {
         payload = JSON.parse(data);
@@ -297,7 +405,8 @@ async function readStream(
       }
       const delta = assembly.add(payload);
       if (delta.isErr()) return err(delta.error);
-      if (onDelta && (delta.value.text || delta.value.logprobs.length)) {
+      const { text, logprobs, toolCalls } = delta.value;
+      if (onDelta && (text || logprobs.length || toolCalls.length)) {
         try {
           onDelta(delta.value);
         } catch (cause) {
@@ -320,7 +429,7 @@ async function readStream(
       message: `${url} ended the stream before it finished`,
     });
   }
-  return ok(assembly.result());
+  return assembly.result();
 }
 
 function describe(cause: unknown): string {
@@ -339,6 +448,7 @@ class Assembly {
   private logprobs: TokenLogprob[] | null = null;
   finishReason: string | null = null;
   private model: string | null = null;
+  private toolCalls = new ToolCallAssembly();
 
   constructor(private readonly request: LlmRequest) {}
 
@@ -363,17 +473,26 @@ class Assembly {
     const choice: unknown = payload.choices.find(
       (c: unknown) => isRecord(c) && (c.index ?? 0) === 0,
     );
-    const delta: StreamDelta = { text: "", logprobs: [] };
+    const delta: StreamDelta = { text: "", logprobs: [], toolCalls: [] };
     if (!isRecord(choice)) return ok(delta);
 
-    const holder =
-      this.request.endpoint === "chat"
-        ? (choice.delta ?? choice.message)
-        : choice;
-    const field = this.request.endpoint === "chat" ? "content" : "text";
+    const chat = this.request.endpoint === "chat";
+    const holder = chat ? (choice.delta ?? choice.message) : choice;
+    const field = chat ? "content" : "text";
     if (isRecord(holder) && typeof holder[field] === "string") {
       delta.text = holder[field];
       this.text.push(delta.text);
+    }
+    if (chat && isRecord(holder)) {
+      const calls = this.toolCalls.add(holder.tool_calls);
+      if (calls.isErr()) {
+        return err({
+          kind: "malformed",
+          url,
+          message: `${url} sent ${calls.error}`,
+        });
+      }
+      delta.toolCalls = calls.value;
     }
     const logprobs = parseLogprobs(choice.logprobs);
     if (logprobs) {
@@ -387,12 +506,44 @@ class Assembly {
     return ok(delta);
   }
 
-  result(): Completion {
-    return {
-      text: this.text.join(""),
-      logprobs: this.logprobs,
-      finishReason: this.finishReason,
-      model: this.model,
-    };
+  result(): Result<Completion, LlmError> {
+    const { url } = this.request;
+    return this.toolCalls
+      .result()
+      .mapErr(
+        (reason): LlmError => ({
+          kind: "malformed",
+          url,
+          message: `${url} sent ${reason}`,
+        }),
+      )
+      .map((toolCalls) => ({
+        text: this.text.join(""),
+        logprobs: this.logprobs,
+        toolCalls,
+        finishReason: this.finishReason,
+        model: this.model,
+      }));
   }
+}
+
+/**
+ * The assistant turn to send back after `completion` called tools, so the
+ * next request carries the calls its tool results answer. Null when it
+ * called none: its text is then an ordinary assistant message.
+ */
+export function toolCallMessage(
+  completion: Completion,
+): ToolCallMessage | null {
+  if (completion.toolCalls.length === 0) return null;
+  return {
+    role: "assistant",
+    content: completion.text === "" ? null : completion.text,
+    tool_calls: completion.toolCalls,
+  };
+}
+
+/** The tool turn answering the call with id `callId`. */
+export function toolResult(callId: string, content: string): ToolResultMessage {
+  return { role: "tool", tool_call_id: callId, content };
 }

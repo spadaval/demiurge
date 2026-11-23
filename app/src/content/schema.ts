@@ -63,7 +63,7 @@ export type HorizontalRule = { type: "hr"; id: string; children: [Text] };
 
 /** Blocks allowed anywhere, including inside an AI segment. */
 export type Block = Paragraph | Heading | Blockquote | HorizontalRule;
-const BLOCK_TYPES = ["p", "h1", "h2", "h3", "blockquote", "hr"] as const;
+export const BLOCK_TYPES = ["p", "h1", "h2", "h3", "blockquote", "hr"] as const;
 
 export const AI_SEGMENT_STATUSES = ["generating", "ready"] as const;
 export type AiSegmentStatus = (typeof AI_SEGMENT_STATUSES)[number];

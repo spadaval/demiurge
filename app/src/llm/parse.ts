@@ -1,4 +1,12 @@
-import type { TokenAlternative, TokenLogprob } from "./types";
+import { err, ok, type Result } from "neverthrow";
+import type {
+  JsonObject,
+  TokenAlternative,
+  TokenLogprob,
+  ToolArgumentsError,
+  ToolCall,
+  ToolCallDelta,
+} from "./types";
 
 type Obj = Record<string, unknown>;
 
@@ -97,4 +105,128 @@ export function errorMessage(value: unknown): string | undefined {
   }
   if (typeof value.message === "string") return value.message;
   return undefined;
+}
+
+type Slot = { id: string | null; name: string | null; arguments: string };
+
+/**
+ * Accumulates choice 0's tool calls from a message's `tool_calls` or from
+ * successive stream deltas. Servers differ in small ways, all absorbed here:
+ *
+ * - OpenAI, OpenRouter and llama.cpp stream a call as pieces sharing an
+ *   `index`, the id and name on the first piece only.
+ * - Some providers behind OpenRouter (Gemini) give every parallel call
+ *   index 0; a new id at a known index starts a new call.
+ * - Some omit `index` when each call arrives whole; its position stands in.
+ * - Some send `arguments` as a JSON object rather than text.
+ * - Some omit the id; the call gets `call_<n>` so a result can answer it.
+ * - Some send empty arguments for a call without parameters; they become
+ *   `{}`, which every server accepts back in the assistant turn.
+ */
+export class ToolCallAssembly {
+  private slots: Slot[] = [];
+  private byIndex = new Map<number, number>();
+
+  /** Adds one `tool_calls` array; Err with what was wrong with it. */
+  add(value: unknown): Result<ToolCallDelta[], string> {
+    if (value === undefined || value === null) return ok([]);
+    if (!Array.isArray(value)) return err("tool_calls that is not a list");
+    const deltas: ToolCallDelta[] = [];
+    for (const [position, entry] of value.entries()) {
+      if (!isRecord(entry)) return err("a tool call that is not an object");
+      const fn = entry.function ?? {};
+      if (!isRecord(fn))
+        return err("a tool call whose function is not an object");
+      let text: string;
+      let whole = false;
+      if (fn.arguments === undefined || fn.arguments === null) text = "";
+      else if (typeof fn.arguments === "string") text = fn.arguments;
+      else if (isRecord(fn.arguments)) {
+        text = JSON.stringify(fn.arguments);
+        whole = true;
+      } else {
+        return err("tool call arguments that are neither text nor an object");
+      }
+      const id = nonEmpty(entry.id);
+      const name = nonEmpty(fn.name);
+
+      const key = typeof entry.index === "number" ? entry.index : position;
+      let index = this.byIndex.get(key);
+      const known = index === undefined ? undefined : this.slots[index];
+      if (
+        index === undefined ||
+        known === undefined ||
+        (id !== undefined && known.id !== null && known.id !== id)
+      ) {
+        index = this.slots.push({ id: null, name: null, arguments: "" }) - 1;
+        this.byIndex.set(key, index);
+      }
+      const slot = this.slots[index] as Slot;
+      slot.id ??= id ?? null;
+      slot.name ??= name ?? null;
+      slot.arguments = whole ? text : slot.arguments + text;
+
+      const delta: ToolCallDelta = { index, arguments: text };
+      if (id !== undefined) delta.id = id;
+      if (name !== undefined) delta.name = name;
+      deltas.push(delta);
+    }
+    return ok(deltas);
+  }
+
+  /** The finished calls; Err when one never got a function name. */
+  result(): Result<ToolCall[], string> {
+    const calls: ToolCall[] = [];
+    for (const [i, slot] of this.slots.entries()) {
+      if (slot.name === null)
+        return err(`tool call ${i} without a function name`);
+      calls.push({
+        id: slot.id ?? `call_${i}`,
+        type: "function",
+        function: {
+          name: slot.name,
+          arguments: slot.arguments.trim() === "" ? "{}" : slot.arguments,
+        },
+      });
+    }
+    return ok(calls);
+  }
+}
+
+function nonEmpty(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** `call`'s arguments as an object, or why they aren't one. */
+export function parseToolArguments(
+  call: ToolCall,
+): Result<JsonObject, ToolArgumentsError> {
+  const { name, arguments: text } = call.function;
+  const invalid = (message: string) =>
+    err<JsonObject, ToolArgumentsError>({
+      kind: "invalid_arguments",
+      call,
+      message,
+    });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    return invalid(
+      `The arguments for ${name} are not valid JSON (${reason}): ${text.slice(0, 200)}`,
+    );
+  }
+  if (!isRecord(parsed)) {
+    const what = Array.isArray(parsed)
+      ? "a list"
+      : parsed === null
+        ? "null"
+        : `a ${typeof parsed}`;
+    return invalid(
+      `The arguments for ${name} must be a JSON object, not ${what}`,
+    );
+  }
+  // JSON.parse yields only JSON values, so an object it returns is a JsonObject.
+  return ok(parsed as JsonObject);
 }
