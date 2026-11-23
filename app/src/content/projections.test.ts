@@ -16,6 +16,7 @@ import {
   type TopBlock,
 } from "./schema";
 import { fixture, generateTrees, p } from "./test-trees";
+import { type TextRange, writerNoteCuts } from "./writer-notes";
 
 const prose = (tree: unknown): Projection => projectProse(tree)._unsafeUnwrap();
 const plain = (tree: unknown): Projection => projectPlain(tree)._unsafeUnwrap();
@@ -40,6 +41,17 @@ function textBlocks(tree: ContentDocument): Block[] {
   );
 }
 
+/** `text` without the `cuts` ranges. */
+function withoutCuts(text: string, cuts: readonly TextRange[] = []): string {
+  let kept = "";
+  let from = 0;
+  for (const cut of cuts) {
+    kept += text.slice(from, cut.start);
+    from = cut.end;
+  }
+  return kept + text.slice(from);
+}
+
 /** Each block's own text by ID: text blocks and placeholders. */
 function ownTexts(tree: ContentDocument): Map<string, string> {
   const texts = new Map(
@@ -55,8 +67,9 @@ function ownTexts(tree: ContentDocument): Map<string, string> {
 
 /**
  * Checks the source-map contract against the tree: every mapped character is
- * the same character of its block's text, each included block's text appears
- * whole in one span, and the inverse agrees. Returns the unmapped characters.
+ * the same character of its block's text, each included block's text (less
+ * its cuts) appears whole in one span, and the inverse agrees. Returns the
+ * unmapped characters.
  */
 function checkMap(
   tree: ContentDocument,
@@ -69,20 +82,27 @@ function checkMap(
   let previousEnd = -1;
   for (const span of map.spans) {
     const own = texts.get(span.blockId) as string;
-    expect(text.slice(span.start, span.end)).toBe(own);
+    const cuts = span.cuts ?? [];
+    expect(text.slice(span.start, span.end)).toBe(withoutCuts(own, cuts));
     // Spans are in order and never adjacent, so positions are unambiguous.
     expect(span.start).toBeGreaterThan(previousEnd);
     previousEnd = span.end;
     for (let offset = 0; offset <= own.length; offset++) {
-      expect(map.toText(span.blockId, offset)).toBe(span.start + offset);
+      const kept = withoutCuts(own.slice(0, offset), cuts).length;
+      expect(map.toText(span.blockId, offset)).toBe(span.start + kept);
     }
     expect(map.toText(span.blockId, own.length + 1)).toBeNull();
     expect(map.toText(span.blockId, -1)).toBeNull();
-    expect(map.toBlockRange(span.start, span.end)).toEqual({
-      blockId: span.blockId,
-      start: 0,
-      end: own.length,
-    });
+    const first = cuts[0]?.start === 0 ? (cuts[0]?.end ?? 0) : 0;
+    const last =
+      cuts.at(-1)?.end === own.length ? (cuts.at(-1)?.start ?? 0) : own.length;
+    if (span.end > span.start) {
+      expect(map.toBlockRange(span.start, span.end)).toEqual({
+        blockId: span.blockId,
+        start: first,
+        end: last,
+      });
+    }
     expect(map.toBlockRange(span.start, span.end + 1)).toBeNull();
     expect(map.toBlockRange(span.start - 1, span.end)).toBeNull();
   }
@@ -110,7 +130,11 @@ function checkMap(
 
 const proseIds = (tree: ContentDocument) =>
   textBlocks(tree)
-    .filter((block) => block.type !== "hr" && blockText(block) !== "")
+    .filter(
+      (block) =>
+        block.type !== "hr" &&
+        withoutCuts(blockText(block), writerNoteCuts(blockText(block))) !== "",
+    )
     .map((block) => block.id);
 
 const plainIds = (tree: ContentDocument) =>
@@ -674,6 +698,99 @@ describe("surrogate pairs", () => {
       end: 12,
     });
     checkMap(tree, projection, ["x", "u"]);
+  });
+});
+
+describe("prose: writer notes", () => {
+  const one = (text: string) => prose([p("b", { text })]).text;
+
+  test("a multi-word note is cut with the space before it", () => {
+    expect(one("The door held. [[ does Kesh already know? ]] She left.")).toBe(
+      "The door held. She left.",
+    );
+  });
+
+  test("several notes in one paragraph are all cut", () => {
+    expect(one("a [[one]] b [[ two words ]] c [[three]][[four]] d")).toBe(
+      "a b c d",
+    );
+    expect(one("a [[one]] [[two]] b")).toBe("a b");
+  });
+
+  test("notes at the ends of a block take their whitespace with them", () => {
+    expect(one("[[ open ]] The door. [[ close ]]")).toBe("The door.");
+    expect(one("  [[x]]  [[y]] a")).toBe("a");
+  });
+
+  test("a note against a word leaves the words as they were", () => {
+    expect(one("a [[x]]b")).toBe("a b");
+    expect(one("a[[x]]b")).toBe("ab");
+    expect(one("one\n[[x]]\ntwo")).toBe("one\ntwo");
+  });
+
+  test("unclosed or broken brackets stay in the prose", () => {
+    expect(one("a [[ never closed")).toBe("a [[ never closed");
+    expect(one("a [[ half ] closed ]] b")).toBe("a [[ half ] closed ]] b");
+    expect(one("a [x] b ]] c")).toBe("a [x] b ]] c");
+    expect(one("a [[ closed ]] b [[ open")).toBe("a b [[ open");
+  });
+
+  test("a note across marks and links is cut whole", () => {
+    const tree: ContentDocument = [
+      p(
+        "b",
+        { text: "See [[ check " },
+        { type: "a", url: "old-mill", children: [{ text: "the mill" }] },
+        { text: " ]] the ", italic: true },
+        { text: "gate." },
+      ),
+    ];
+    const projection = prose(tree);
+    expect(projection.text).toBe("See the gate.");
+    checkMap(tree, projection, ["b"]);
+  });
+
+  test("a block that holds only notes is dropped", () => {
+    const tree: ContentDocument = [
+      p("a", { text: "Before." }),
+      p("n", { text: " [[ fix this scene ]] " }),
+      { type: "h2", id: "h", children: [{ text: "[[ title? ]] Arrival" }] },
+    ];
+    const projection = prose(tree);
+    expect(projection.text).toBe("Before.\n\n## Arrival");
+    expect(projection.map.toText("n", 0)).toBeNull();
+    checkMap(tree, projection, ["a", "h"]);
+  });
+
+  test("offsets map across a cut", () => {
+    const text = "a [[x]] b";
+    const { map } = prose([p("b", { text })]);
+    // "a b": the space at 1 is the one after the note, at block offset 7.
+    expect(map.spans).toEqual([
+      { blockId: "b", start: 0, end: 3, cuts: [{ start: 1, end: 7 }] },
+    ]);
+    expect(map.toBlock(0)).toEqual({ blockId: "b", offset: 0 });
+    expect(map.toBlock(1)).toEqual({ blockId: "b", offset: 7 });
+    expect(map.toBlock(2)).toEqual({ blockId: "b", offset: 8 });
+    // Every block offset inside the note collapses to where it was cut.
+    for (let offset = 1; offset <= 7; offset++) {
+      expect(map.toText("b", offset)).toBe(1);
+    }
+    expect(map.toText("b", text.length)).toBe(3);
+    expect(map.toText("b", text.length + 1)).toBeNull();
+    // A range over the cut covers the note; a collapsed one sits before it.
+    expect(map.toBlockRange(0, 2)).toEqual({ blockId: "b", start: 0, end: 8 });
+    expect(map.toBlockRange(1, 1)).toEqual({ blockId: "b", start: 1, end: 1 });
+  });
+
+  test("plain+map keeps notes, so every block offset has a position", () => {
+    const tree: ContentDocument = [p("b", { text: "a [[x]] b" })];
+    expect(plain(tree).text).toBe("a [[x]] b");
+  });
+
+  test("addressable keeps notes, so a rewrite of the block sees them", () => {
+    const tree: ContentDocument = [p("b", { text: "a [[x]] b" })];
+    expect(addressable(tree).text).toBe("[b] a [[x]] b");
   });
 });
 

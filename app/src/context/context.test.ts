@@ -308,6 +308,41 @@ for (const [name, open] of [
       ).toMatchObject({ kind: "cursor_not_found" });
     });
 
+    test("writer notes never reach the request, its cards or its window", async () => {
+      const content = [
+        p("n1", {
+          text: "Snow fell. [[ is Mira Vale here yet? ]] Al rode north.",
+        }),
+        p("n2", { text: "[[ cut this whole paragraph? ]]" }),
+      ];
+      const assembled = await built("s3", {
+        content,
+        pins: [],
+        window: { minimum: 10, preferred: 10_000 },
+      });
+      expect(assembled.breakdown.window.text).toBe("Snow fell. Al rode north.");
+      expect(JSON.stringify(assembled.request.body)).not.toContain("[[");
+      // Mira Vale is named only in a note, so she gets no card.
+      expect(included(assembled)).toEqual(["aldric"]);
+
+      // A cursor inside a note cuts where the note was; one in a block that
+      // held only notes falls back to the end of the block before it.
+      const inNote = await built("s3", {
+        content,
+        cursor: { blockId: "n1", offset: "Snow fell. [[ is".length },
+        window: { minimum: 5, preferred: 10_000 },
+      });
+      expect(inNote.breakdown.window.text).toBe("Snow fell.");
+      const inNoteBlock = await built("s3", {
+        content,
+        cursor: { blockId: "n2", offset: 4 },
+        window: { minimum: 5, preferred: 10_000 },
+      });
+      expect(inNoteBlock.breakdown.window.text).toBe(
+        "Snow fell. Al rode north.",
+      );
+    });
+
     test("cards are exactly the entries mentioned in the window plus the pins", async () => {
       const assembled = await built("s3");
       // Bren is named only before the window, Ardelia only in the generating
