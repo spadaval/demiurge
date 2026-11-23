@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-rxvy
 title: 'Anchored conversation: open a scoped talk topic from any scene, passage, or bible record'
-status: open
+status: building
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -12,7 +12,8 @@ priority: medium
 blocked_by:
 - worldcrafter-lhh3
 - worldcrafter-wqh0
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A3f69cce6-a3b3-462c-8abc-fa3ad7d4dffd%3Adelegate-task%3A2fc5e96a-c15f-4ecf-83ab-186fd8493995
 ready: null
 trivial: null
 caused_by: null
