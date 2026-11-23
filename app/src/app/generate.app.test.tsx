@@ -1027,3 +1027,37 @@ test("while a section change is put together, the old request can't be sent, and
     )?.value,
   ).not.toContain("## People in it");
 });
+
+test("a request put together at the caret during a section change is the one shown", async () => {
+  await linkArrivalToDoc1();
+  await render(withProfile());
+  await generateNext();
+  expect(services.generation.slip.get()?.record.after).toBe("p2");
+
+  const list = storage.storyRecords.list.bind(storage.storyRecords);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  storage.storyRecords.list = (...args) =>
+    ResultAsync.fromSafePromise(held).andThen(() => list(...args));
+
+  const changed = services.generation.selectSections({
+    pinned: [],
+    excluded: ["People in it"],
+  });
+  const atCaret = services.generation.openRequest("doc1", "p1");
+  release();
+  storage.storyRecords.list = list;
+  await act(async () => {
+    await Promise.all([changed, atCaret]);
+  });
+
+  const shown = services.generation.slip.get();
+  expect(shown?.record.after).toBe("p1");
+  expect(shown?.assembling).toBe(false);
+  // The newer request was assembled with the change.
+  expect(JSON.stringify(shown?.record.request.body)).not.toContain(
+    "## People in it",
+  );
+});

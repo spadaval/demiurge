@@ -167,6 +167,8 @@ export function createGeneration(options: GenerationOptions): Generation {
   const notice = createStore<GenerationNotice | null>(null);
   /** Each document's bible section pins and exclusions. */
   const selections = new Map<string, SectionSelection>();
+  /** Counts `openRequest` calls: only the latest may show its request. */
+  let assemblies = 0;
   /** Each document's send or regenerate in progress. */
   const running = new Map<string, Promise<void>>();
 
@@ -288,11 +290,13 @@ export function createGeneration(options: GenerationOptions): Generation {
     selections.get(documentId) ?? NO_SELECTION;
 
   /**
-   * Assembles a request and shows it, unless the slip changed meanwhile
-   * (closed, replaced, or sent): the slip shown when it started is the one
-   * it replaces, so a late result never reopens or overwrites another.
+   * Assembles a request and shows it, unless a later `openRequest` started
+   * or the slip changed meanwhile (closed, replaced, or sent): the slip
+   * shown when it started is the one it replaces, so a late result never
+   * reopens a slip, overwrites another, or undoes a newer request.
    */
   const openRequest = async (documentId: string, after?: string | null) => {
+    const ticket = ++assemblies;
     const startedOver = slip.get();
     const session = workspace.session(documentId);
     const generator = generatorOf(documentId);
@@ -316,7 +320,7 @@ export function createGeneration(options: GenerationOptions): Generation {
       layout: "chat",
       budget: REQUEST_BUDGET,
     });
-    if (slip.get() !== startedOver) return;
+    if (ticket !== assemblies || slip.get() !== startedOver) return;
     if (prepared.isErr()) {
       if (startedOver?.assembling) {
         slip.set({ ...startedOver, assembling: false });
@@ -381,9 +385,12 @@ export function createGeneration(options: GenerationOptions): Generation {
       selections.set(shown.documentId, selection);
       const assembling: Slip = { ...shown, assembling: true };
       slip.set(assembling);
-      await openRequest(shown.documentId, shown.record.after);
-      // It gave up before assembling (the document closed, say).
-      if (slip.get() === assembling) slip.set(shown);
+      const rebuilt = openRequest(shown.documentId, shown.record.after);
+      const ticket = assemblies;
+      await rebuilt;
+      // It gave up before assembling (the document closed, say), and no
+      // later request is on its way.
+      if (slip.get() === assembling && assemblies === ticket) slip.set(shown);
     },
 
     async showSegmentRequest(documentId, segmentId) {
