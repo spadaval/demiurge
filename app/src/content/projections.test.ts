@@ -2,14 +2,25 @@ import { describe, expect, test } from "bun:test";
 import {
   blockText,
   type Projection,
+  projectAddressable,
   projectPlain,
   projectProse,
 } from "./projections";
-import type { Block, ContentDocument } from "./schema";
+import {
+  AI_SEGMENT_STATUSES,
+  BLOCK_TYPES,
+  type Block,
+  type ContentDocument,
+  LIST_STYLES,
+  MARKS,
+  type TopBlock,
+} from "./schema";
 import { fixture, generateTrees, p } from "./test-trees";
 
 const prose = (tree: unknown): Projection => projectProse(tree)._unsafeUnwrap();
 const plain = (tree: unknown): Projection => projectPlain(tree)._unsafeUnwrap();
+const addressable = (tree: unknown): Projection =>
+  projectAddressable(tree)._unsafeUnwrap();
 
 const item = (
   id: string,
@@ -29,6 +40,19 @@ function textBlocks(tree: ContentDocument): Block[] {
   );
 }
 
+/** Each block's own text by ID: text blocks and placeholders. */
+function ownTexts(tree: ContentDocument): Map<string, string> {
+  const texts = new Map(
+    textBlocks(tree).map((block) => [block.id, blockText(block)]),
+  );
+  for (const block of tree) {
+    if (block.type === "placeholder") {
+      texts.set(block.id, block.children[0].text);
+    }
+  }
+  return texts;
+}
+
 /**
  * Checks the source-map contract against the tree: every mapped character is
  * the same character of its block's text, each included block's text appears
@@ -39,13 +63,12 @@ function checkMap(
   { text, map }: Projection,
   expectedIds: string[],
 ): string {
-  const blocks = new Map(textBlocks(tree).map((block) => [block.id, block]));
+  const texts = ownTexts(tree);
   expect(map.spans.map((span) => span.blockId)).toEqual(expectedIds);
 
   let previousEnd = -1;
   for (const span of map.spans) {
-    const block = blocks.get(span.blockId) as Block;
-    const own = blockText(block);
+    const own = texts.get(span.blockId) as string;
     expect(text.slice(span.start, span.end)).toBe(own);
     // Spans are in order and never adjacent, so positions are unambiguous.
     expect(span.start).toBeGreaterThan(previousEnd);
@@ -71,7 +94,7 @@ function checkMap(
       unmapped += text[offset];
       continue;
     }
-    const own = blockText(blocks.get(position.blockId) as Block);
+    const own = texts.get(position.blockId) as string;
     expect(own[position.offset]).toBe(text[offset] as string);
     expect(map.toText(position.blockId, position.offset)).toBe(offset);
   }
@@ -313,6 +336,277 @@ describe("plain+map", () => {
   });
 });
 
+const addressableIds = (tree: ContentDocument) =>
+  tree.flatMap((block) =>
+    block.type === "ai_segment"
+      ? block.children.map((child) => child.id)
+      : [block.id],
+  );
+
+describe("addressable", () => {
+  test("fixture", () => {
+    const projection = addressable(fixture);
+    expect(projection.text).toBe(
+      [
+        "[h_1] # The Old Mill",
+        "[h_2] ## Arrival",
+        "[h_3] ### Night one",
+        "[b_1] Plain, bold, italic, struck and code.",
+        "[b_2] See the mill or the web.",
+        "[q_1] > Quoted line",
+        "[r_1] * * *",
+        "[l_1] - one",
+        "[l_2]   - nested",
+        "[l_3]     1. deep",
+        "[l_4]     2. deeper",
+        "[l_5] - two",
+        "[b_3] Between lists.",
+        "[n_1] 1. first",
+        "[n_2] 2. second",
+        "[a_1] Generated prose.",
+        "[a_2] - item",
+        "[a_3] ## Generated heading",
+        "[a_4] ",
+        "[ph_1] (placeholder) Describe the storm",
+        "[ph_2] (placeholder) ",
+        "[b_4] ",
+      ].join("\n"),
+    );
+    const unmapped = checkMap(fixture, projection, addressableIds(fixture));
+    // Every line starts with its block's ID; nothing else is unmapped but
+    // markers and line breaks.
+    expect(
+      unmapped.split("\n").every((line) => /^\[[\w-]+\] /.test(line)),
+    ).toBe(true);
+    // Every block is addressable, the hr and empty blocks included; an AI
+    // segment is not (its children are).
+    const hrLine = "[r_1] * * *";
+    expect(projection.map.toText("r_1", 0)).toBe(
+      projection.text.indexOf(hrLine) + hrLine.length,
+    );
+    expect(projection.map.toText("b_4", 0)).toBe(projection.text.length);
+    expect(projection.map.toText("ph_1", 0)).toBe(
+      projection.text.indexOf("Describe the storm"),
+    );
+    expect(projection.map.toText("seg_1", 0)).toBeNull();
+  });
+
+  test("numbering matches prose, and empty items keep their line", () => {
+    const tree: ContentDocument = [
+      item("a", "decimal", 1, "a"),
+      item("g", "decimal", 1, ""),
+      item("h", "decimal", 1, "h"),
+      { type: "placeholder", id: "ph", children: [{ text: "Next" }] },
+      item("k", "decimal", 1, "k"),
+    ];
+    expect(addressable(tree).text).toBe(
+      [
+        "[a] 1. a",
+        "[g] 2. ",
+        "[h] 3. h",
+        "[ph] (placeholder) Next",
+        "[k] 1. k",
+      ].join("\n"),
+    );
+  });
+
+  test("soft line breaks are kept inside the block's span", () => {
+    const tree: ContentDocument = [
+      { type: "blockquote", id: "q", children: [{ text: "one\ntwo" }] },
+      p("n", { text: "next" }),
+    ];
+    const projection = addressable(tree);
+    expect(projection.text).toBe("[q] > one\ntwo\n[n] next");
+    expect(projection.map.toBlock(10)).toEqual({ blockId: "q", offset: 4 });
+    checkMap(tree, projection, ["q", "n"]);
+  });
+
+  test("an empty document projects to nothing", () => {
+    expect(addressable([]).text).toBe("");
+  });
+
+  test("rejects a tree outside the schema", () => {
+    expect(
+      projectAddressable([
+        { type: "p", id: "dup", children: [{ text: "a" }] },
+        { type: "p", id: "dup", children: [{ text: "b" }] },
+      ])._unsafeUnwrapErr(),
+    ).toMatchObject({ kind: "invalid_content", path: "[1]" });
+  });
+});
+
+/**
+ * Every node type, mark, list style and AI segment status the schema allows,
+ * each alone in a document, with what each projection makes of it. A new
+ * node type fails "covers every node type" until it has a row here.
+ */
+describe("every node type has all three projections", () => {
+  type Row = {
+    tree: TopBlock[];
+    prose: string;
+    addressable: string;
+    plain: string;
+  };
+  const rows: Record<string, Row> = {
+    paragraph: {
+      tree: [p("b", { text: "Text" })],
+      prose: "Text",
+      addressable: "[b] Text",
+      plain: "Text",
+    },
+    "empty paragraph": {
+      tree: [p("b", { text: "" })],
+      prose: "",
+      addressable: "[b] ",
+      plain: "",
+    },
+    "bulleted item": {
+      tree: [item("b", "disc", 2, "Item")],
+      prose: "  - Item",
+      addressable: "[b]   - Item",
+      plain: "Item",
+    },
+    "numbered item": {
+      tree: [item("b", "decimal", 1, "Item")],
+      prose: "1. Item",
+      addressable: "[b] 1. Item",
+      plain: "Item",
+    },
+    h1: {
+      tree: [{ type: "h1", id: "b", children: [{ text: "Title" }] }],
+      prose: "# Title",
+      addressable: "[b] # Title",
+      plain: "Title",
+    },
+    h2: {
+      tree: [{ type: "h2", id: "b", children: [{ text: "Title" }] }],
+      prose: "## Title",
+      addressable: "[b] ## Title",
+      plain: "Title",
+    },
+    h3: {
+      tree: [{ type: "h3", id: "b", children: [{ text: "Title" }] }],
+      prose: "### Title",
+      addressable: "[b] ### Title",
+      plain: "Title",
+    },
+    blockquote: {
+      tree: [{ type: "blockquote", id: "b", children: [{ text: "Said" }] }],
+      prose: "> Said",
+      addressable: "[b] > Said",
+      plain: "Said",
+    },
+    hr: {
+      tree: [{ type: "hr", id: "b", children: [{ text: "" }] }],
+      prose: "* * *",
+      addressable: "[b] * * *",
+      plain: "",
+    },
+    "marks and links": {
+      tree: [
+        p(
+          "b",
+          { text: "a", bold: true },
+          { text: "b", italic: true },
+          { text: "c", strikethrough: true },
+          { text: "d", code: true },
+          { type: "a", url: "old-mill", children: [{ text: "mill" }] },
+          { text: " " },
+          {
+            type: "a",
+            url: "https://example.com",
+            children: [{ text: "web", bold: true }],
+          },
+          { text: "." },
+        ),
+      ],
+      prose: "abcdmill web.",
+      addressable: "[b] abcdmill web.",
+      plain: "abcdmill web.",
+    },
+    "ready AI segment": {
+      tree: [
+        {
+          type: "ai_segment",
+          id: "s",
+          status: "ready",
+          children: [p("b", { text: "Made" }), p("c", { text: "up" })],
+        },
+      ],
+      prose: "Made\n\nup",
+      addressable: "[b] Made\n[c] up",
+      plain: "Made\nup",
+    },
+    "generating AI segment": {
+      tree: [
+        {
+          type: "ai_segment",
+          id: "s",
+          status: "generating",
+          children: [{ type: "h2", id: "b", children: [{ text: "So far" }] }],
+        },
+      ],
+      prose: "## So far",
+      addressable: "[b] ## So far",
+      plain: "So far",
+    },
+    placeholder: {
+      tree: [{ type: "placeholder", id: "b", children: [{ text: "Fill" }] }],
+      prose: "",
+      addressable: "[b] (placeholder) Fill",
+      plain: "",
+    },
+  };
+
+  test("covers every node type, mark, list style and status", () => {
+    const seen = new Set<string>();
+    const visit = (node: unknown) => {
+      if (typeof node !== "object" || node === null) return;
+      const record = node as Record<string, unknown>;
+      if (typeof record.type === "string") seen.add(record.type);
+      if (typeof record.listStyleType === "string") {
+        seen.add(`list:${record.listStyleType}`);
+      }
+      if (typeof record.status === "string")
+        seen.add(`status:${record.status}`);
+      for (const mark of MARKS) if (record[mark]) seen.add(`mark:${mark}`);
+      if (Array.isArray(record.children)) record.children.forEach(visit);
+    };
+    for (const row of Object.values(rows)) row.tree.forEach(visit);
+    expect([...seen].sort()).toEqual(
+      [
+        ...BLOCK_TYPES,
+        "ai_segment",
+        "placeholder",
+        "a",
+        ...LIST_STYLES.map((style) => `list:${style}`),
+        ...AI_SEGMENT_STATUSES.map((status) => `status:${status}`),
+        ...MARKS.map((mark) => `mark:${mark}`),
+      ].sort(),
+    );
+  });
+
+  test.each(Object.entries(rows))("%s", (_, row) => {
+    const projections = {
+      prose: prose(row.tree),
+      addressable: addressable(row.tree),
+      plain: plain(row.tree),
+    };
+    expect({
+      prose: projections.prose.text,
+      addressable: projections.addressable.text,
+      plain: projections.plain.text,
+    }).toEqual({
+      prose: row.prose,
+      addressable: row.addressable,
+      plain: row.plain,
+    });
+    checkMap(row.tree, projections.prose, proseIds(row.tree));
+    checkMap(row.tree, projections.addressable, addressableIds(row.tree));
+    checkMap(row.tree, projections.plain, plainIds(row.tree));
+  });
+});
+
 // Offsets are UTF-16 units: an astral character (emoji) is two of them.
 describe("surrogate pairs", () => {
   const tree: ContentDocument = [
@@ -399,6 +693,17 @@ describe("generated trees", () => {
       const ids = plainIds(tree);
       const unmapped = checkMap(tree, plain(tree), ids);
       expect(unmapped).toBe("\n".repeat(Math.max(ids.length - 1, 0)));
+    }
+  });
+
+  test("addressable: every block has a span; only ID prefixes and markers do not", () => {
+    for (const tree of trees) {
+      const unmapped = checkMap(tree, addressable(tree), addressableIds(tree));
+      for (const line of unmapped.split("\n")) {
+        expect(line).toMatch(
+          /^\[[A-Za-z0-9_-]+\] (\(placeholder\) | *(- |\d+\. )|#{1,3} |> |\* \* \*)?$/,
+        );
+      }
     }
   });
 });

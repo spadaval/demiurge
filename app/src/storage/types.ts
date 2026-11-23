@@ -13,16 +13,24 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-/** Every collection the adapter persists. Used to label errors. */
-export type CollectionName =
-  | "documents"
-  | "worldEntries"
-  | "annotations"
-  | "requests"
-  | "snapshots"
-  | "outlines"
-  | "timelines"
-  | "storyRecords";
+/**
+ * Every collection the adapter persists, in the order a world dump lists
+ * them. Adding one here makes `WorldRecords` (and so `dump`, `restore` and the
+ * world file) require it.
+ */
+export const COLLECTION_NAMES = [
+  "documents",
+  "worldEntries",
+  "annotations",
+  "requests",
+  "snapshots",
+  "outlines",
+  "timelines",
+  "storyRecords",
+] as const;
+
+/** Names a collection, for errors and for the world dump. */
+export type CollectionName = (typeof COLLECTION_NAMES)[number];
 
 export type StorageOperation = "open" | "save" | "load" | "list" | "delete";
 
@@ -220,6 +228,27 @@ export type BatchWrite =
   | { readonly kind: "saveStoryRecord"; readonly record: StoredStoryRecord }
   | { readonly kind: "deleteStoryRecord"; readonly id: string };
 
+/** The record type each collection holds; snapshots with their content. */
+export interface CollectionRecords {
+  readonly documents: StoredDocument;
+  readonly worldEntries: WorldEntry;
+  readonly annotations: AnnotationRecord;
+  readonly requests: StoredRequest;
+  readonly snapshots: Snapshot;
+  readonly outlines: StoredOutline;
+  readonly timelines: StoredTimeline;
+  readonly storyRecords: StoredStoryRecord;
+}
+
+/**
+ * Every record of a world, by collection. Keyed collections are ascending by
+ * key, as `list` returns them; snapshots are ascending by ID and keep the ID
+ * and `createdAt` the store gave them.
+ */
+export type WorldRecords = {
+  readonly [Name in CollectionName]: readonly CollectionRecords[Name][];
+};
+
 /**
  * The only way the app persists data. Deleting a document does not delete its
  * world entry, annotations or requests; callers delete those explicitly. Its
@@ -249,6 +278,19 @@ export interface StorageAdapter {
   batch(
     writes: readonly BatchWrite[],
   ): ResultAsync<SnapshotInfo[], StorageError>;
+  /**
+   * Every record in every collection, read as one consistent step: no write
+   * lands part-way through. For the world file (`storage/world-file.ts`).
+   */
+  dump(): ResultAsync<WorldRecords, StorageError>;
+  /**
+   * Writes every record of `records` as one atomic step, inserting or
+   * replacing by key. Snapshots keep their ID and `createdAt`, and later
+   * snapshot saves get IDs above every restored one. Restoring a dump into an
+   * empty store makes `dump` return it unchanged. A failure names the first
+   * collection that has a record.
+   */
+  restore(records: WorldRecords): ResultAsync<void, StorageError>;
   /** Releases the store. Later operations fail with a `StorageFailure`. */
   close(): void;
 }

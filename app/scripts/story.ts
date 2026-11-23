@@ -1743,7 +1743,7 @@ export const READS: Record<ReadName, Spec> = {
     flags: {
       before: {
         value: "<scene-id>",
-        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, each way it was told and where first (planted in 3, revealed in 7), and, if the scene has a viewpoint, whether that actor doesn't know it (by their knowledge records of it; without any, they know an event they take part in and the objects in it, a version they tell, what a scene through their eyes shows, reveals, implies or pays off, and what a scene they are in, or whose events they take part in, reveals or pays off, from that scene's latest event on); then what was held back and not yet told or answered; then each count's value as the scene opens and each change from its earliest event to its latest",
+        help: "instead, only what the scenes before it have told the reader, in short labels, each with how long before the scene it happens, each way it was told and where first (planted in 3, revealed in 7), and, if the scene has a viewpoint, whether that actor doesn't know it (by their knowledge records of it; without any, they know an event they take part in and the objects in it, a version they tell, what a scene through their eyes shows, reveals, implies or pays off, and what a scene they or their group are in, or whose events they take part in, reveals or pays off, from that scene's latest event on; revealing someone's knowledge of a thing tells the thing), as the scene opens, with any of their records that starts or ends at an event it shows marked as changing in this scene; then what was held back and not yet told or answered; then each count's value as the scene opens and each change from its earliest event to its latest",
       },
     },
     summary:
@@ -1885,7 +1885,10 @@ export function helpText(): string {
     "has been told that they don't know: a told record is marked only when",
     "someone's knowledge of it is recorded, and they hold it by their own",
     "knowledge records or, without any, by taking part in it, telling it, or",
-    "being told it in a scene through their eyes or one they are in. Who",
+    "being told it in a scene through their eyes or one they are in (or",
+    "their group is in); revealing someone's knowledge of a thing tells it.",
+    "Marks are as the scene opens; a record of theirs that starts or ends",
+    "at an event the scene shows is marked as changing in this scene. Who",
     "belongs to a group, and from and until when, is a membership",
     "(add-membership); show actor: lists it for the member and the group.",
     "",

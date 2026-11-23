@@ -35,6 +35,7 @@ import {
   type FirstTold,
   knowledgeAlways,
   sceneNow,
+  sceneSpan,
   type Telling,
   type TellingHow,
   type ToldSoFar,
@@ -43,6 +44,7 @@ import {
   toldBefore,
   trueOrder,
   viewpointGap,
+  viewpointTurns,
 } from "./learning";
 import { type Mention, whatMentions } from "./mentions";
 import { membershipsInStoryOrder } from "./order";
@@ -806,24 +808,40 @@ function toldBeforeLines(story: Story, index: number): string[] {
       : viewpoint.name.trim() === ""
         ? viewpoint.id
         : viewpoint.name;
-  /** `; Mara doesn't know yet`, from the knowledge records, or nothing. */
+  // Marks are taken as the scene opens, by story order, so a scene whose
+  // events have no position is still placed.
+  const opens = sceneSpan(story, scene)?.opens;
+  /**
+   * `; Mara doesn't know yet`, from the knowledge records, then what changes
+   * during the scene: `; Mara believes until event:bell, in this scene`.
+   */
   const unawareText = (ref: Ref) => {
     if (viewpoint === undefined) return "";
-    const gap = viewpointGap(story, viewpoint.id, ref, anchor, index);
-    if (gap === undefined) return "";
-    const how = gap.later
-      ? "doesn't know yet"
-      : gap.ended === undefined
-        ? "doesn't know"
-        : `no longer ${gap.ended}`;
+    const gap = viewpointGap(story, viewpoint.id, ref, opens, index);
+    const how =
+      gap === undefined
+        ? undefined
+        : gap.later
+          ? "doesn't know yet"
+          : gap.ended === undefined
+            ? "doesn't know"
+            : `no longer ${gap.ended}`;
     const believes =
-      gap.believes.length === 0
+      gap === undefined || gap.believes.length === 0
         ? ""
         : `, believes ${gap.believes.map((r) => shortDescribe(story, r)).join(" and ")}`;
-    return `; ${name} ${how}${believes}`;
+    const turns = viewpointTurns(story, viewpoint.id, ref, scene).map(
+      (t) =>
+        `; ${name} ${t.how === "knows" ? "knows" : "believes"}${formatRef(t.what) === formatRef(ref) ? "" : ` ${formatRef(t.what)}`} ${t.turn === "starts" ? "from" : "until"} ${formatRef({ kind: "event", id: t.event })}, in this scene`,
+    );
+    return `${how === undefined ? "" : `; ${name} ${how}${believes}`}${turns.join("")}`;
   };
+  const opening =
+    viewpoint === undefined || opens === undefined || opens === anchor
+      ? ""
+      : ` as it opens at ${placedEvent(story, opens)}`;
   return [
-    `Before ${index + 1}. ${shortDescribe(story, { kind: "scene", id: scene.id })}${viewpoint === undefined ? "" : `, through the eyes of ${name}`}${anchor === undefined ? "" : `, at ${placedEvent(story, anchor)} (the latest event it shows)`}, the reader has been told:`,
+    `Before ${index + 1}. ${shortDescribe(story, { kind: "scene", id: scene.id })}${viewpoint === undefined ? "" : `, through the eyes of ${name}${opening}`}${anchor === undefined ? "" : `, at ${placedEvent(story, anchor)} (the latest event it shows)`}, the reader has been told:`,
     ...(told.length === 0 ? ["(nothing yet)"] : told.map(line)),
     ...(withheld.length === 0
       ? []
