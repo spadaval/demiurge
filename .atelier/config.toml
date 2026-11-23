@@ -4,6 +4,8 @@ base_branch = "master"
 
 # Type check, lint and tests of the app. `merge` runs this in a fresh
 # checkout of the merged tree, which has no `app/node_modules`, so it
-# installs from the lockfile first (from bun's cache when it can).
+# installs from the lockfile first, from bun's cache when it can. Its
+# package list goes to /dev/null so that the 20 lines `merge` prints on a
+# failure show the error; install errors go to stderr and still show.
 [[merge_check]]
-run = "cd app && bun install --frozen-lockfile && bun run check"
+run = "cd app && bun install --frozen-lockfile > /dev/null && bun run check"
