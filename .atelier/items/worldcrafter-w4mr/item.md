@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-w4mr
 title: 'Agent session and prompt inspector: view and edit system prompt, context packet, tool trace, and trace diffs'
-status: changes_requested
+status: in_review
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -72,8 +72,10 @@ The deferred finding (story-time values inside raw results not set in `time`) st
 
 `cd app && bun run check`: 1624 pass, 0 fail.
 
+Round 3 (`af6c22f`): the rest of the query-reference finding. A query's data is now read for every string that is wholly a ref (so `readerOrder`'s `withheld` list), for refs stored as `{ kind, id }` (a fact's `about`; a candidate's needs its `questionId`), and for scene IDs under `scene`. Only what `parseRef` accepts is kept, and free text is never scanned. A test runs the reviewer's two cases on the lighthouse fixture: `show(fact:oil-runs-out)` names `count:oil` and `object:lamp`, and `readerOrder(before: confession)` names `open-question:why-leave`. `bun run check`: 1625 pass, 0 fail.
+
 ### Responses
 1-08b5.1: fixed in 9cfbadb
 1-08b5.2: fixed in 9cfbadb
 1-08b5.3: fixed in 9cfbadb
-
+2-rt52.2: fixed in af6c22f
