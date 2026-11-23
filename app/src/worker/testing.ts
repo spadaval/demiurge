@@ -19,7 +19,7 @@ import type { SqlRunner, SqlValue } from "./ledger";
 export function sqliteState(db = new Database(":memory:")): DurableObjectState {
   const sql: SqlRunner = {
     exec: (query: string, ...bindings: SqlValue[]) =>
-      db.query<Record<string, unknown>, SqlValue[]>(query).all(...bindings),
+      db.query<Record<string, unknown>, SqlValue[]>(query).iterate(...bindings),
   };
   return {
     storage: {

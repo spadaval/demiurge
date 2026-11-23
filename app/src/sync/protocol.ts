@@ -43,10 +43,17 @@ export const SYNCED_COLLECTIONS: readonly SyncedCollectionName[] =
 export const MAX_PULL_CHANGES = 200;
 export const MAX_PUSH_CHANGES = 100;
 /**
- * Largest record, as JSON characters, the Worker keeps: a Durable Object's
- * SQLite row holds at most 2 MB.
+ * Largest record, as UTF-8 bytes of JSON, the Worker keeps: a Durable
+ * Object's SQLite row holds at most 2 MB.
  */
-export const MAX_RECORD_LENGTH = 1_900_000;
+export const MAX_RECORD_BYTES = 1_900_000;
+/**
+ * Most UTF-8 bytes of record JSON one pull page carries, besides its first
+ * record (one record always fits, so a pull always makes progress). A
+ * Worker isolate has 128 MB; the page is held as SQLite rows, parsed
+ * records and the encoded response at once, so this stays far below that.
+ */
+export const MAX_PULL_BYTES = 8_000_000;
 /** Longest record key the Worker accepts. */
 export const MAX_KEY_LENGTH = 1024;
 /** World IDs are path segments, so they are kept to a safe alphabet. */

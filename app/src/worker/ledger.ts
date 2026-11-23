@@ -11,8 +11,9 @@
 
 import type { SyncedCollectionName } from "../storage/types";
 import {
+  MAX_PULL_BYTES,
   MAX_PULL_CHANGES,
-  MAX_RECORD_LENGTH,
+  MAX_RECORD_BYTES,
   type PullRequest,
   type PullResponse,
   type PushChange,
@@ -104,12 +105,13 @@ export function openLedger({ sql, transaction, now }: LedgerOptions): Ledger {
   ): PushResult => {
     const { collection, key } = change;
     const json = change.record === null ? null : JSON.stringify(change.record);
-    if (json !== null && json.length > MAX_RECORD_LENGTH) {
+    const bytes = json === null ? 0 : utf8Bytes(json);
+    if (bytes > MAX_RECORD_BYTES) {
       return {
         status: "rejected",
         collection,
         key,
-        reason: `the record is ${json.length} characters of JSON; the most is ${MAX_RECORD_LENGTH}`,
+        reason: `the record is ${bytes} bytes of JSON; the most is ${MAX_RECORD_BYTES}`,
       };
     }
     const held = current(collection, key);
@@ -143,16 +145,28 @@ export function openLedger({ sql, transaction, now }: LedgerOptions): Ledger {
 
   return {
     pull: ({ since }) => {
-      const rows = [
-        ...sql.exec(
-          `SELECT collection, key, rev, synced_at, record, deleted_at
-             FROM records WHERE rev > ? ORDER BY rev LIMIT ?`,
-          since,
-          MAX_PULL_CHANGES + 1,
-        ),
-      ];
-      const more = rows.length > MAX_PULL_CHANGES;
-      const changes = rows.slice(0, MAX_PULL_CHANGES).map(toChange);
+      // Rows are read one at a time and the page stops at its count or
+      // size limit, so a page of large records never sits in memory whole.
+      const changes: ServerChange[] = [];
+      let bytes = 0;
+      let more = false;
+      for (const row of sql.exec(
+        `SELECT collection, key, rev, synced_at, record, deleted_at
+           FROM records WHERE rev > ? ORDER BY rev LIMIT ?`,
+        since,
+        MAX_PULL_CHANGES + 1,
+      )) {
+        const size = typeof row.record === "string" ? utf8Bytes(row.record) : 0;
+        if (
+          changes.length === MAX_PULL_CHANGES ||
+          (changes.length > 0 && bytes + size > MAX_PULL_BYTES)
+        ) {
+          more = true;
+          break;
+        }
+        changes.push(toChange(row));
+        bytes += size;
+      }
       return { changes, cursor: changes.at(-1)?.serverRev ?? since, more };
     },
     push: ({ deviceId, changes }) =>
@@ -161,6 +175,13 @@ export function openLedger({ sql, transaction, now }: LedgerOptions): Ledger {
         return { results: changes.map((c) => apply(deviceId, c, syncedAt)) };
       }),
   };
+}
+
+const encoder = new TextEncoder();
+
+/** The length of `text` as UTF-8, which is what SQLite and the wire hold. */
+function utf8Bytes(text: string): number {
+  return encoder.encode(text).byteLength;
 }
 
 function integer(value: unknown): number {

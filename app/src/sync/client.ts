@@ -100,7 +100,10 @@ export interface SyncOptions {
   readonly deviceId: string;
 }
 
-/** Most JSON characters one push carries, well under a Worker request's limit. */
+/**
+ * Most JSON characters one push carries, so the Worker holds a bounded
+ * amount at once (as `MAX_PULL_BYTES` bounds a pull).
+ */
 const MAX_PUSH_LENGTH = 8_000_000;
 
 type Local =

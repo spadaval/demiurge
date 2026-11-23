@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import {
+  MAX_PULL_BYTES,
   MAX_PULL_CHANGES,
-  MAX_RECORD_LENGTH,
+  MAX_RECORD_BYTES,
   type PushChange,
 } from "../sync/protocol";
 import { openLedger } from "./ledger";
@@ -137,7 +138,7 @@ describe("ledger", () => {
 
   test("rejects a record too large to keep, and writes nothing for it", () => {
     const l = ledger();
-    const big = doc("big", "x".repeat(MAX_RECORD_LENGTH));
+    const big = doc("big", "x".repeat(MAX_RECORD_BYTES));
     const { results } = l.push({
       deviceId: "a",
       changes: [big, doc("d1", "ok")],
@@ -145,6 +146,47 @@ describe("ledger", () => {
     expect(results[0]?.status).toBe("rejected");
     expect(results[1]).toMatchObject({ status: "accepted", serverRev: 1 });
     expect(l.pull({ since: 0 }).changes.map((c) => c.key)).toEqual(["d1"]);
+  });
+
+  test("measures a record in UTF-8 bytes, not characters", () => {
+    const l = ledger();
+    // Under the limit in characters, over it in bytes (3 bytes each).
+    const text = "—".repeat(Math.ceil(MAX_RECORD_BYTES / 2));
+    const { results } = l.push({ deviceId: "a", changes: [doc("d", text)] });
+    expect(results[0]?.status).toBe("rejected");
+  });
+
+  test("bounds a pull page by size, and catches up through several pages without skipping", () => {
+    const l = ledger();
+    // Each record is legal alone; together they are far over one page.
+    const big = "x".repeat(Math.floor(MAX_RECORD_BYTES * 0.9));
+    const keys = Array.from({ length: 12 }, (_, i) => `big${i}`);
+    for (const key of keys) {
+      const { results } = l.push({ deviceId: "a", changes: [doc(key, big)] });
+      expect(results[0]?.status).toBe("accepted");
+    }
+    const seen: number[] = [];
+    let since = 0;
+    let pages = 0;
+    for (;;) {
+      const page = l.pull({ since });
+      pages++;
+      expect(page.changes.length).toBeGreaterThan(0);
+      const bytes = page.changes.reduce(
+        (sum, c) => sum + JSON.stringify(c.record).length,
+        0,
+      );
+      expect(bytes).toBeLessThanOrEqual(MAX_PULL_BYTES);
+      seen.push(...page.changes.map((c) => c.serverRev));
+      since = page.cursor;
+      if (!page.more) break;
+    }
+    expect(pages).toBeGreaterThan(2);
+    expect(seen).toEqual(keys.map((_, i) => i + 1));
+  });
+
+  test("any legal record fits in a page, so every pull makes progress", () => {
+    expect(MAX_RECORD_BYTES).toBeLessThan(MAX_PULL_BYTES);
   });
 
   test("keeps its records when reopened", () => {

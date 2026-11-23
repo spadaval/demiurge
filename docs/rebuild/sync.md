@@ -33,7 +33,10 @@ gets no advantage or penalty: `updatedAt` and `deletedAt` travel as data.
 
 Because the counter is per world, the highest `serverRev` a device has pulled
 is its cursor, and a pull is "every record whose newest revision is above my
-cursor", 200 at a time.
+cursor", in pages of at most 200 records and 8 MB of record JSON (a
+Worker has 128 MB of memory). A page always holds its first record, and a
+record can't exceed 1.9 MB (a Durable Object row holds 2 MB), so every
+pull makes progress.
 
 ## Pull, then push
 
@@ -94,7 +97,7 @@ Nothing here has been deployed. To turn it on:
   its content in memory and saves it over whatever sync wrote, which would
   push stale prose as a fresh edit. Wiring sync into the app needs the
   writer tab to run it, open sessions to flush before and reload after, and a
-  sync control and status. That is its own item.
+  sync control and status. That is `worldcrafter-zvj0`.
 - Tombstones and sync state are never pruned.
 - A ledger that is reset (a new Durable Object) is not detected: devices
   would keep their old cursors. Clearing a device's sync state
