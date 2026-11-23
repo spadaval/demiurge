@@ -3,12 +3,13 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-wknl
 title: 'Writer notes: decide their representation and keep them out of model context'
-status: open
+status: building
 mission: worldcrafter-3z9j
 labels: []
 priority: medium
 blocked_by: []
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A6d73f777-f6d1-4f6c-b6f0-9f634b2c4463%3Adelegate-task%3A8f4e585c-946f-4b12-8c80-c79b000c8356
 ready: null
 trivial: null
 caused_by: null
