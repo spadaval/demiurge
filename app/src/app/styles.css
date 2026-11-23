@@ -2735,13 +2735,77 @@ a.topic-row:hover .topic-title {
   overflow-wrap: anywhere;
 }
 
-/* The topic sheet: head, turns and composer on the prose column. */
+/*
+ * The topic sheet: head, turns and composer on the prose column, on the
+ * sheet's four columns. The gloss column holds the agent slip and nothing
+ * else.
+ */
 .topic-sheet {
-  display: flex;
-  flex-direction: column;
-  max-width: var(--prose-width);
-  margin-left: var(--margin-width);
+  display: grid;
+  grid-template-columns:
+    var(--margin-width) minmax(0, var(--prose-width)) var(--gutter-width)
+    var(--gloss-width);
+  align-content: start;
   padding: 52px 0 160px;
+}
+
+.topic-sheet > * {
+  grid-column: 2;
+}
+
+/*
+ * A turn, or the composer, with the slip that explains it: the prose,
+ * gutter and gloss columns, so the slip can sit in the gloss column beside
+ * it without taking room in the turns' flow.
+ */
+.topic-sheet > .turns,
+.topic-sheet > .composer-entry,
+.turn-entry {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+.turn-entry {
+  grid-column: 1 / -1;
+  position: relative;
+}
+
+.composer-entry {
+  position: relative;
+}
+
+.turn-entry > .turn,
+.composer-entry > .composer {
+  grid-column: 1;
+}
+
+/* The agent slip, level with its turn's head, on a leader like a note's. */
+.topic-slip {
+  position: absolute;
+  grid-column: 3;
+  grid-row: 1;
+  top: 18px;
+  left: 0;
+  right: 0;
+  padding-bottom: 24px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  animation: turn-in var(--fade) var(--ease-out);
+}
+
+.topic-slip::before {
+  content: "";
+  position: absolute;
+  top: 9.5px;
+  left: calc(8px - var(--gutter-width));
+  width: 26px;
+  border-top: 1px solid var(--rule-strong);
+}
+
+.topic-slip:focus {
+  outline: none;
 }
 
 .topic-head {
@@ -3240,9 +3304,26 @@ a.topic-row:hover .topic-title {
   }
 
   .topic-sheet {
-    max-width: none;
-    margin-left: 0;
+    display: block;
     padding: 28px 20px 96px;
+  }
+
+  /* The slip follows its turn, or comes before the composer, in the flow. */
+  .topic-sheet > .turns,
+  .topic-sheet > .composer-entry,
+  .turn-entry {
+    display: block;
+  }
+
+  .topic-slip {
+    position: static;
+    margin-bottom: 12px;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .topic-slip::before {
+    display: none;
   }
 
   .topic-title-row {

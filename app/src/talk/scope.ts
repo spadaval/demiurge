@@ -132,6 +132,9 @@ export function topicScopeProblem(
   }
 }
 
+/** The heading `topicPrompt` starts with. */
+export const TOPIC_PROMPT_HEADING = "# This talk page";
+
 /** What a topic adds to the agent's system prompt: what the page is about. */
 export function topicPrompt(
   story: Story,
@@ -142,8 +145,16 @@ export function topicPrompt(
     scope.kind === "world"
       ? "the story as a whole"
       : scopeLine(story, scope).replace(" · ", " ");
+  return topicPromptText(about, title, scope);
+}
+
+function topicPromptText(
+  about: string,
+  title: string,
+  scope: TopicScope,
+): string {
   const lines = [
-    "# This talk page",
+    TOPIC_PROMPT_HEADING,
     "",
     `You are a participant on a talk page about ${about}. Its topic is "${title}". The writer started it to settle that question; keep to it. Your turns are signed as the model's and kept with the page.`,
   ];
@@ -156,6 +167,29 @@ export function topicPrompt(
     );
   }
   return lines.join("\n");
+}
+
+/**
+ * The last part `topicPrompt` wrote into `prompt` for a topic with `scope`,
+ * under any title and scope name (a topic renamed, or a record renamed,
+ * since): exactly the part, whatever follows it. It stands on its own
+ * lines: at the start or after a newline, and at the end or before one.
+ * Null when there is none.
+ */
+export function findTopicPrompt(
+  prompt: string,
+  scope: TopicScope,
+): string | null {
+  // Any title and scope name: a placeholder no prompt holds, then any line.
+  const open = "\u0000";
+  const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const shape = literal(topicPromptText(open, open, scope))
+    .split(literal(open))
+    .join("[^\\n]*");
+  const matches = [
+    ...prompt.matchAll(new RegExp(`(?:^|\\n)(${shape})(?=\\n|$)`, "g")),
+  ];
+  return matches.at(-1)?.[1] ?? null;
 }
 
 /**

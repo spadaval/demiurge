@@ -1,6 +1,6 @@
 # Talk Pages
 
-Status: built (`worldcrafter-lhh3`, 2026-11-23): topics, turns through the story agent runner, and the World inbox. Anchored launch from scenes, passages and records (`worldcrafter-rxvy`, 2026-11-23) is built too; the agent slip is `worldcrafter-w4mr`; edit proposals by block ID are `worldcrafter-yx9v`.
+Status: built (`worldcrafter-lhh3`, 2026-11-23): topics, turns through the story agent runner, and the World inbox. Anchored launch from scenes, passages and records (`worldcrafter-rxvy`, 2026-11-23) is built too; the agent slip is `worldcrafter-w4mr`, hosted on topic sheets by `worldcrafter-ywt3`; edit proposals by block ID are `worldcrafter-yx9v`.
 
 ## Idea
 

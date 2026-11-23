@@ -18,9 +18,22 @@ import {
   type Result,
   ResultAsync,
 } from "neverthrow";
-import type { ScopeError } from "../agent/context";
+import {
+  type AgentScope,
+  buildContextPacket,
+  type ContextPacket,
+  type ScopeError,
+} from "../agent/context";
+import {
+  type AgentDefaultsStore,
+  createAgentDefaultsStore,
+} from "../agent/defaults";
+import {
+  type NextTurnEdits,
+  type NextTurnError,
+  prepareNextTurn,
+} from "../agent/next-turn";
 import type { ModelBinding } from "../agent/profiles";
-import { defaultSystemPrompt } from "../agent/prompt";
 import {
   type AgentRecordError,
   type AgentSession,
@@ -39,9 +52,11 @@ import {
   createAgentRunner,
   type RunOutcome,
 } from "../agent/runner";
-import type { ChatMessage, Fetch } from "../llm/types";
+import { mergeSampler } from "../llm/client";
+import type { ChatMessage, Fetch, Sampler } from "../llm/types";
 import type { StorageAdapter, StorageError } from "../storage/types";
 import { loadStory, type StoryStoreError } from "../story/store";
+import type { Story } from "../story/story";
 import {
   type LoadTopicError,
   listTopics,
@@ -60,7 +75,13 @@ import {
   type TopicStatus,
   type TurnCall,
 } from "./records";
-import { agentScope, topicPrompt, topicScopeProblem } from "./scope";
+import {
+  agentScope,
+  findTopicPrompt,
+  TOPIC_PROMPT_HEADING,
+  topicPrompt,
+  topicScopeProblem,
+} from "./scope";
 
 /** The model topic turns run on, read at each turn. */
 export type TalkModel = {
@@ -73,6 +94,11 @@ export type TalkOptions = {
   storage: StorageAdapter;
   /** The model to use now; null when none is set up. */
   model: () => TalkModel | null;
+  /**
+   * What a topic's new agent session starts with: the profile defaults the
+   * writer saved from the agent slip. Kept in memory when not given.
+   */
+  defaults?: AgentDefaultsStore;
   /** For the model calls; the global `fetch` by default. */
   fetch?: Fetch;
   /** Calls the model; the runner's default unless a test says. */
@@ -86,6 +112,7 @@ export type TalkOptions = {
 export type TalkError =
   | LoadTopicError
   | AgentError
+  | NextTurnError
   | StoryStoreError
   | ScopeError
   /** No model is set up to take the turn. */
@@ -126,7 +153,35 @@ export type TopicView = TopicLog & { stop: TurnStop | null };
 export type TurnOptions = {
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent) => void;
+  /**
+   * The writer's edits from the next-turn slip, sent with the message
+   * (`agent/next-turn.ts`), applied before the message is stored. A system
+   * prompt saved as the profile default is saved without this topic's own
+   * part (`profilePrompt`).
+   */
+  edits?: NextTurnEdits;
 };
+
+/**
+ * What a topic's next turn would send before the writer's edits, for the
+ * next-turn slip: the session's prompt, model and sampler (or what a new
+ * session would start with), the profile's, and the context packet.
+ */
+export type NextTurnRequest = {
+  systemPrompt: string;
+  /** The model the session asks for in place of the profile's, or null. */
+  model: string | null;
+  /** The profile's own model, or null when it names none. */
+  profileModel: string | null;
+  /** What the session lays over `profileSampler`. */
+  sampler: Sampler;
+  /** The profile's sampler with the talk binding's laid over it. */
+  profileSampler: Sampler;
+  packet: ContextPacket;
+};
+
+/** A topic not stored yet: its title and scope, as the writer has them. */
+export type UnsentTopic = { title: string; scope: TopicScope };
 
 export type NewTopic = {
   /** Defaults to one from `newId`. */
@@ -174,10 +229,96 @@ export interface Talk {
   setStatus(id: string, status: TopicStatus): ResultAsync<Topic, TalkError>;
   /** A topic the model starts, for the World inbox. Runs no turn. */
   raise(topic: RaisedTopic): ResultAsync<TopicLog, TalkError>;
+  /**
+   * What topic `id`'s next turn would send. `unsent` describes the topic
+   * when it isn't stored yet (a new topic before its first Send).
+   */
+  nextTurn(
+    id: string,
+    unsent?: UnsentTopic,
+  ): ResultAsync<NextTurnRequest, TalkError>;
 }
 
 /** The agent session a topic's turns run in. */
 export const topicSessionId = (topic: string) => `talk-${topic}`;
+
+/**
+ * What a "Profile default" edit of a topic session's prompt saves: the
+ * edited prompt without the topic's own part (`topicPrompt`, found in
+ * `before`, the session's prompt before the edit, by `findTopicPrompt`), so
+ * the next topic gets its own part and not this one's. Everything the
+ * writer wrote is kept, before or after the part. Err when the part can't
+ * be told from the writer's own text: the writer changed it in this edit,
+ * or `before` has its heading and no part of its shape.
+ */
+export function profilePrompt(
+  edited: string,
+  before: string,
+  scope: TopicScope,
+): Result<string, string> {
+  const refused = err(
+    `The prompt can't be saved as the profile default with this topic's own part (under "${TOPIC_PROMPT_HEADING}") changed. Keep that part as it is, or keep the edit for this session.`,
+  );
+  const part = findTopicPrompt(before, scope);
+  if (part === null) {
+    return before.includes(TOPIC_PROMPT_HEADING) ? refused : ok(edited);
+  }
+  const at = lineIndex(edited, part);
+  if (at === -1) return refused;
+  // The part goes with the newlines around it. The writer's text on both
+  // sides stays, joined as the text after the part was set off from it.
+  const left = edited.slice(0, at).replace(/\n+$/, "");
+  const after = edited.slice(at + part.length);
+  const right = after.replace(/^\n+/, "");
+  const between = after.slice(0, after.length - right.length);
+  return ok(left === "" ? right : right === "" ? left : left + between + right);
+}
+
+/** Where `part` last stands on lines of its own in `text`; -1 if nowhere. */
+function lineIndex(text: string, part: string): number {
+  for (
+    let at = text.lastIndexOf(part);
+    at !== -1;
+    at = at === 0 ? -1 : text.lastIndexOf(part, at - 1)
+  ) {
+    const end = at + part.length;
+    if (
+      (at === 0 || text[at - 1] === "\n") &&
+      (end === text.length || text[end] === "\n")
+    ) {
+      return at;
+    }
+  }
+  return -1;
+}
+
+/** Saves a topic session's prompt default as `strip` leaves it. */
+const topicDefaults = (
+  store: AgentDefaultsStore,
+  strip: (prompt: string) => Result<string, string>,
+): AgentDefaultsStore => ({
+  get: (profile, role) => store.get(profile, role),
+  save: (profile, role, changes) => {
+    if (changes.systemPrompt === undefined) {
+      return store.save(profile, role, changes);
+    }
+    return strip(changes.systemPrompt).andThen((systemPrompt) =>
+      store.save(profile, role, { ...changes, systemPrompt }),
+    );
+  },
+});
+
+/** Defaults kept for this talk service only, when the app gives none. */
+function memoryDefaults(): AgentDefaultsStore {
+  const items = new Map<string, string>();
+  return createAgentDefaultsStore(
+    {
+      getItem: (key) => items.get(key) ?? null,
+      setItem: (key, value) => void items.set(key, value),
+    },
+    "talk",
+  );
+}
 
 /** A call's one-line summary, for the turn's fold line. */
 function turnCall({ call, result }: StepCall): TurnCall {
@@ -201,6 +342,7 @@ export function createTalk(options: TalkOptions): Talk {
   const { storage } = options;
   const now = options.now ?? Date.now;
   const newId = options.newId ?? (() => crypto.randomUUID());
+  const defaults = options.defaults ?? memoryDefaults();
   const running = new Set<string>();
 
   /** Runs `work` unless a turn of `id` is running. */
@@ -481,16 +623,20 @@ export function createTalk(options: TalkOptions): Talk {
         id: sessionId,
         role: "plan",
         scope: agentScope(fresh.scope),
-        systemPrompt: [
-          defaultSystemPrompt("plan"),
-          topicPrompt(story.value, fresh.title, fresh.scope),
-        ].join("\n\n"),
+        ...newSession(model, story.value, fresh.title, fresh.scope),
         history: history(said ?? []),
       });
       if (started.isErr()) return err(started.error);
       session = sessionId;
     }
     const sessionId = session;
+    // The writer's edits are applied before their message is stored, so a
+    // refused default or session change stores nothing and can be sent again.
+    const { edits, ...options } = run;
+    if (edits !== undefined && Object.keys(edits).length > 0) {
+      const prepared = await prepare(sessionId, fresh, model, edits);
+      if (prepared.isErr()) return err(prepared.error);
+    }
     const at = now();
     const saved = await commit(id, (stored) => {
       const base = stored ?? fresh;
@@ -511,9 +657,68 @@ export function createTalk(options: TalkOptions): Talk {
       });
     });
     if (saved.isErr()) return err(saved.error);
-    const outcome = await agent.send(sessionId, text, run);
+    const context = edits?.context;
+    const outcome = await agent.send(sessionId, text, {
+      ...options,
+      ...(context === undefined ? {} : { context }),
+    });
     if (outcome.isErr()) return err(outcome.error);
     return finish(id, model, outcome.value);
+  }
+
+  /**
+   * Saves what `edits` make the profile's default and changes session
+   * `sessionId` for them (`prepareNextTurn`). A prompt default is saved
+   * without topic `topic`'s own part.
+   */
+  async function prepare(
+    sessionId: string,
+    topic: Topic,
+    model: TalkModel,
+    edits: NextTurnEdits,
+  ): Promise<Result<unknown, TalkError>> {
+    const loaded = await loadSession(sessionId);
+    if (loaded.isErr()) return err(loaded.error);
+    const session = loaded.value;
+    if (session === null) return err({ kind: "no_session", id: sessionId });
+    return prepareNextTurn(
+      {
+        runner: runner(model),
+        defaults: topicDefaults(defaults, (prompt) =>
+          profilePrompt(prompt, session.systemPrompt, topic.scope),
+        ),
+        profile: model.binding.profile.name,
+      },
+      session,
+      edits,
+    );
+  }
+
+  /** What a topic's new session starts with: the profile's defaults. */
+  function newSession(
+    model: TalkModel,
+    story: Story,
+    title: string,
+    scope: TopicScope,
+  ): { systemPrompt: string; model?: string; sampler?: Sampler } {
+    const saved = defaults.get(model.binding.profile.name, "plan");
+    return {
+      ...saved,
+      systemPrompt: [saved.systemPrompt, topicPrompt(story, title, scope)].join(
+        "\n\n",
+      ),
+    };
+  }
+
+  /** Session `id` as stored; null when there is none. */
+  async function loadSession(
+    id: string,
+  ): Promise<Result<AgentSession | null, TalkError>> {
+    const record = await storage.agentRecords.load(sessionRecordId(id));
+    if (record.isErr()) {
+      return record.error.kind === "not_found" ? ok(null) : err(record.error);
+    }
+    return readSession(record.value);
   }
 
   const modelNow = (): Result<TalkModel, TalkError> => {
@@ -673,6 +878,54 @@ export function createTalk(options: TalkOptions): Talk {
           closedAt: status === "open" ? null : at,
         });
       }),
+
+    nextTurn: (id, unsent) =>
+      new ResultAsync(
+        (async (): Promise<Result<NextTurnRequest, TalkError>> => {
+          const model = modelNow();
+          if (model.isErr()) return err(model.error);
+          const { profile, sampler: bound } = model.value.binding;
+          const stored = await loadTopicRecord(storage, id);
+          if (stored.isErr()) return err(stored.error);
+          const topic = stored.value ?? unsent;
+          if (topic === undefined) return err({ kind: "no_topic", id });
+          // The topic's session, or the one a first turn left (see `take`).
+          const session = await loadSession(
+            stored.value?.session ?? topicSessionId(id),
+          );
+          if (session.isErr()) return err(session.error);
+          let start: {
+            systemPrompt: string;
+            model?: string;
+            sampler?: Sampler;
+          };
+          let scope: AgentScope;
+          if (session.value === null) {
+            const story = await loadStory(storage);
+            if (story.isErr()) return err(story.error);
+            start = newSession(
+              model.value,
+              story.value,
+              topic.title,
+              topic.scope,
+            );
+            scope = agentScope(topic.scope);
+          } else {
+            start = session.value;
+            scope = session.value.scope;
+          }
+          const packet = await buildContextPacket(storage, scope);
+          if (packet.isErr()) return err(packet.error);
+          return ok({
+            systemPrompt: start.systemPrompt,
+            model: start.model ?? null,
+            profileModel: profile.model ?? null,
+            sampler: start.sampler ?? {},
+            profileSampler: mergeSampler(profile.sampler, bound ?? {}),
+            packet: packet.value,
+          });
+        })(),
+      ),
 
     raise(spec) {
       const id = spec.id ?? newId();

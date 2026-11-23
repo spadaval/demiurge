@@ -1,3 +1,4 @@
+import { createAgentDefaultsStore } from "~/agent/defaults";
 import { createProfileStore } from "~/generate/profile";
 import { createLayerStore } from "~/layers/state";
 import type { Fetch } from "~/llm/types";
@@ -41,6 +42,7 @@ export async function createAppServices(
   const talk = createAppTalk({
     storage: bible.storage,
     profile,
+    defaults: createAgentDefaultsStore(keyValue, workspace.worldId),
     readOnly: workspace.readOnly,
     ...(input.fetch ? { fetch: input.fetch } : {}),
   });

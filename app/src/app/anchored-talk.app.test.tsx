@@ -186,7 +186,9 @@ async function startTopic(title: string, message: string) {
   stub.script(streamed(["Noted."]));
   await click(control("Send", ".composer"));
   await until(
-    () => queryAll(".turns > .turn").length === 2 && !query("[aria-busy]"),
+    () =>
+      queryAll(".turns > .turn-entry > .turn").length === 2 &&
+      !query("[aria-busy]"),
     "the model's turn",
   );
 }

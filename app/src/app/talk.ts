@@ -5,14 +5,32 @@
  * are `talk/talk.ts`'s; this keeps what the views read in stores.
  */
 
-import type { ResultAsync } from "neverthrow";
+import { err, ok, type Result, type ResultAsync } from "neverthrow";
+import type { AgentDefaultsStore } from "~/agent/defaults";
+import { type AgentTurn, sessionTurns } from "~/agent/inspect";
+import type { NextTurnEdits } from "~/agent/next-turn";
+import { loadSessionLog, stepRecordId } from "~/agent/records";
 import type { AgentEvent } from "~/agent/runner";
+import {
+  type NextTurnBase,
+  type NextTurnDraft,
+  nextTurnDraft,
+  nextTurnEdits,
+  type SlipTarget,
+} from "~/generate/agent-slip";
 import { labelOf, type ProfileStore } from "~/generate/profile";
+import { buildRequest } from "~/llm/client";
 import type { Fetch } from "~/llm/types";
 import type { StorageAdapter } from "~/storage/types";
 import { loadStory } from "~/story/store";
 import type { Story } from "~/story/story";
-import type { Topic, TopicScope, TopicStatus, TurnCall } from "~/talk/records";
+import type {
+  ModelAuthor,
+  Topic,
+  TopicScope,
+  TopicStatus,
+  TurnCall,
+} from "~/talk/records";
 import { passageStale, sameScope } from "~/talk/scope";
 import {
   createTalk,
@@ -50,10 +68,30 @@ export interface Unsent {
 
 const NOTHING_UNSENT: Unsent = { title: "", text: "" };
 
+/**
+ * The agent slip open on a topic sheet, in its gloss column: a past model
+ * turn's (by the message's index) or the next turn's, beside the composer.
+ * One at a time; it stays open while the writer follows its references.
+ */
+export type TopicSlip = { kind: "turn"; message: number } | { kind: "next" };
+
+/** The next-turn slip's request and the writer's edits of it. */
+export type NextTurn =
+  | {
+      kind: "ready";
+      base: NextTurnBase;
+      target: SlipTarget;
+      draft: NextTurnDraft;
+    }
+  /** It can't be read now (no model is set up, say): why. */
+  | { kind: "problem"; message: string };
+
 export interface AppTalkOptions {
   /** The workspace's connected storage. */
   readonly storage: StorageAdapter;
   readonly profile: ProfileStore;
+  /** What a topic's new agent session starts with (`agent/defaults.ts`). */
+  readonly defaults: AgentDefaultsStore;
   readonly readOnly: boolean;
   readonly fetch?: Fetch;
   readonly now?: () => number;
@@ -114,6 +152,48 @@ export interface AppTalk {
    * the scene's document, or no longer holds the quoted text.
    */
   passageStale(scope: TopicScope): Promise<boolean>;
+  /** The agent slip open on each topic's sheet. */
+  readonly slips: Store<ReadonlyMap<string, TopicSlip>>;
+  /** Opens a slip on topic `id`'s sheet, or with null puts it away. */
+  showSlip(id: string, slip: TopicSlip | null): void;
+  /**
+   * Each topic's next turn as its slip shows it, read when the slip opens.
+   * The writer's edits are sent with the composer's next Send, and kept
+   * until then even while the slip is put away.
+   */
+  readonly nextTurns: Store<ReadonlyMap<string, NextTurn>>;
+  setNextDraft(id: string, draft: NextTurnDraft): void;
+  /** A model turn's request and trace, as stored, for its slip. */
+  loadTurn(author: ModelAuthor): Promise<Result<AgentTurn, string>>;
+}
+
+/**
+ * `draft` moved from `before` to `after` (a turn ran, or a new topic was
+ * renamed): a field the writer hadn't edited takes the new value, and an
+ * edited one is kept. An edited context keeps the packet it was edited
+ * from, which is what the run records it as a revision of.
+ */
+function rebase(
+  before: NextTurnBase,
+  after: NextTurnBase,
+  draft: NextTurnDraft,
+): { base: NextTurnBase; draft: NextTurnDraft } {
+  const was = nextTurnDraft(before);
+  const now = nextTurnDraft(after);
+  const keep = <K extends "systemPrompt" | "model" | "sampler" | "context">(
+    key: K,
+  ) => (draft[key] === was[key] ? now[key] : draft[key]);
+  const contextEdited = draft.context !== was.context;
+  return {
+    base: contextEdited ? { ...after, packet: before.packet } : after,
+    draft: {
+      ...draft,
+      systemPrompt: keep("systemPrompt"),
+      model: keep("model"),
+      sampler: keep("sampler"),
+      context: contextEdited ? draft.context : now.context,
+    },
+  };
 }
 
 /** Room for a talk turn: the profile's sampler is set for prose continuations. */
@@ -132,6 +212,7 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
   const newId = options.newId ?? (() => crypto.randomUUID());
   const talk: Talk = createTalk({
     storage,
+    defaults: options.defaults,
     model: () => {
       const current = profile.get();
       return current === null
@@ -151,13 +232,98 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
   const running = createStore<ReadonlyMap<string, RunningTurn>>(new Map());
   const errors = createStore<ReadonlyMap<string, string>>(new Map());
   const unsent = createStore<ReadonlyMap<string, Unsent>>(new Map());
-  const setUnsent = (id: string, change: Partial<Unsent>) =>
-    setIn(unsent, id, {
-      ...(unsent.get().get(id) ?? NOTHING_UNSENT),
-      ...change,
-    });
+  const setUnsent = (id: string, change: Partial<Unsent>) => {
+    const before = unsent.get().get(id) ?? NOTHING_UNSENT;
+    setIn(unsent, id, { ...before, ...change });
+    // A new topic's prompt names its title.
+    if (
+      change.title !== undefined &&
+      change.title !== before.title &&
+      drafts.get().has(id) &&
+      nextTurns.get().has(id)
+    ) {
+      void loadNext(id);
+    }
+  };
   const problem = createStore<string | null>(null);
   const controllers = new Map<string, AbortController>();
+  const slips = createStore<ReadonlyMap<string, TopicSlip>>(new Map());
+  const nextTurns = createStore<ReadonlyMap<string, NextTurn>>(new Map());
+  /** The latest read of each topic's next turn, so an older one is dropped. */
+  const nextReads = new Map<string, number>();
+
+  /**
+   * Reads topic `id`'s next turn again, keeping the writer's edits. A new
+   * topic is read with its scope and the title typed so far.
+   */
+  async function loadNext(id: string) {
+    const read = (nextReads.get(id) ?? 0) + 1;
+    nextReads.set(id, read);
+    const scope = drafts.get().get(id);
+    const request = await talk.nextTurn(
+      id,
+      scope === undefined
+        ? undefined
+        : { title: unsent.get().get(id)?.title ?? "", scope },
+    );
+    const current = profile.get();
+    if (nextReads.get(id) !== read) return;
+    if (request.isErr() || current === null) {
+      setIn(nextTurns, id, {
+        kind: "problem",
+        message: request.isErr()
+          ? describeTalkError(request.error)
+          : describeTalkError({ kind: "no_model" }),
+      });
+      return;
+    }
+    const sent = buildRequest(
+      current,
+      { kind: "chat", messages: [] },
+      { stream: true },
+    );
+    const target: SlipTarget = {
+      profileLabel: labelOf(current),
+      endpoint: sent.endpoint,
+      url: sent.url,
+    };
+    const before = nextTurns.get().get(id);
+    const fresh = request.value;
+    setIn(
+      nextTurns,
+      id,
+      before?.kind === "ready"
+        ? { kind: "ready", target, ...rebase(before.base, fresh, before.draft) }
+        : { kind: "ready", target, base: fresh, draft: nextTurnDraft(fresh) },
+    );
+  }
+
+  /** The next turn's edits to send, or why they can't be sent. */
+  function editsFor(id: string): Result<NextTurnEdits | undefined, string> {
+    const next = nextTurns.get().get(id);
+    if (next?.kind !== "ready") return ok(undefined);
+    const edits = nextTurnEdits(next.base, next.draft);
+    return edits.isErr()
+      ? err(`The next turn's request can't be sent: ${edits.error}`)
+      : ok(edits.value);
+  }
+
+  /**
+   * A writer's message was stored. When its turn ran, its edits went with
+   * it and the next turn starts fresh. When the turn failed before it ran,
+   * the session may hold the prompt and model edits now (they were applied
+   * first), so the request is read again and what isn't in it yet, such as
+   * an edited context, stays the writer's.
+   */
+  function nextAfter(id: string, ran: boolean) {
+    if (ran) {
+      nextReads.delete(id);
+      setIn(nextTurns, id, undefined);
+      if (slips.get().get(id)?.kind === "next") void loadNext(id);
+    } else if (nextTurns.get().has(id)) {
+      void loadNext(id);
+    }
+  }
 
   const setIn = <T>(
     store: WritableStore<ReadonlyMap<string, T>>,
@@ -261,7 +427,10 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       setIn(views, id, { ...log, stop });
     } else {
       fail(id, outcome.error);
-      await open(id);
+      // Shows what was stored before the failure. A new topic may have
+      // nothing stored, and the turn's error is the one to show.
+      const loaded = await talk.load(id);
+      if (loaded.isOk()) setIn(views, id, loaded.value);
     }
     // A turn may have changed the bible, and the topic list's order.
     await refresh();
@@ -289,21 +458,34 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
     discardDraft(id) {
       setIn(drafts, id, undefined);
       setIn(unsent, id, undefined);
+      setIn(slips, id, undefined);
+      nextReads.delete(id);
+      setIn(nextTurns, id, undefined);
     },
     unsent,
     setUnsent,
     async start(id, title, message) {
       const scope = drafts.get().get(id);
       if (scope === undefined) return false;
+      const edits = editsFor(id);
+      if (edits.isErr()) {
+        setIn(errors, id, edits.error);
+        return false;
+      }
       setUnsent(id, { text: "" });
       const done = await turn(
         id,
-        (run) => talk.start({ id, title, scope, message }, run),
+        (run) =>
+          talk.start(
+            { id, title, scope, message },
+            { ...run, ...(edits.value ? { edits: edits.value } : {}) },
+          ),
         message,
       );
       if (topics.get().some((topic) => topic.id === id)) {
         // Stored once it got that far, whatever the turn came to.
         setIn(drafts, id, undefined);
+        nextAfter(id, done);
         // The title is the topic's now; text typed during the turn is the
         // writer's next message, so it stays.
         setUnsent(id, { title: "" });
@@ -316,14 +498,24 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
     async send(id, message) {
       const sent = () => views.get().get(id)?.topic.messages ?? 0;
       const before = sent();
+      const edits = editsFor(id);
+      if (edits.isErr()) {
+        setIn(errors, id, edits.error);
+        return false;
+      }
       setUnsent(id, { text: "" });
       const done = await turn(
         id,
-        (run) => talk.send(id, message, run),
+        (run) =>
+          talk.send(id, message, {
+            ...run,
+            ...(edits.value ? { edits: edits.value } : {}),
+          }),
         message,
       );
-      // Not stored: the writer's text stays theirs to send.
+      // Not stored: the writer's text and edits stay theirs to send.
       if (sent() <= before) setUnsent(id, { text: message });
+      else nextAfter(id, done);
       return done;
     },
     async resume(id) {
@@ -343,6 +535,33 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       await Promise.all([open(id), refresh()]);
     },
     dismissError: (id) => setIn(errors, id, undefined),
+    slips,
+    showSlip(id, slip) {
+      setIn(slips, id, slip ?? undefined);
+      if (slip?.kind === "next") void loadNext(id);
+    },
+    nextTurns,
+    setNextDraft(id, draft) {
+      const next = nextTurns.get().get(id);
+      if (next?.kind === "ready") setIn(nextTurns, id, { ...next, draft });
+    },
+    async loadTurn(author) {
+      const { session, requestId } = author;
+      if (session === null || requestId === null) {
+        return err("This turn has no stored request.");
+      }
+      const log = await loadSessionLog(storage, session);
+      if (log.isErr()) return err(describeTalkError(log.error));
+      const step = log.value.steps.find(
+        (s) => stepRecordId(session, s.index) === requestId,
+      );
+      const found = sessionTurns(log.value).find(
+        (t) => t.run.index === step?.run,
+      );
+      return found === undefined
+        ? err(`The session has no request ${requestId}.`)
+        : ok(found);
+    },
     async passageStale(scope) {
       if (scope.kind !== "passage") return false;
       const document = await storage.documents.load(scope.documentId);

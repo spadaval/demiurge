@@ -38,9 +38,15 @@ import {
   recordTopicScope,
   sameScope,
   scopeLine,
+  topicPrompt,
   topicScopeProblem,
 } from "./scope";
-import { createTalk, type TalkModel, topicSessionId } from "./talk";
+import {
+  createTalk,
+  profilePrompt,
+  type TalkModel,
+  topicSessionId,
+} from "./talk";
 
 const fixture: Story = parseStory(
   await Bun.file(
@@ -779,5 +785,92 @@ describe("anchored scopes", () => {
         quote: " ",
       }),
     ).toBe("A passage topic quotes the words it is about");
+  });
+});
+
+describe("a topic prompt saved as the profile default", () => {
+  const world = { kind: "world" } as const;
+  const part = topicPrompt(fixture, "Who lit the lamp?", world);
+  const before = `Be careful.\n\n${part}`;
+  const saved = (edited: string, from = before) =>
+    profilePrompt(edited, from, world);
+
+  test("drops exactly the topic's own part and keeps the writer's text around it", () => {
+    expect(saved(`Be terse.\n\n${part}`)._unsafeUnwrap()).toBe("Be terse.");
+    expect(
+      saved(
+        `Be careful.\n\n${part}\n\nAnswer in one sentence.`,
+      )._unsafeUnwrap(),
+    ).toBe("Be careful.\n\nAnswer in one sentence.");
+    // A heading of the writer's own stays.
+    expect(
+      saved(`Be terse.\n\n# This talk page\nMine.\n\n${part}`)._unsafeUnwrap(),
+    ).toBe("Be terse.\n\n# This talk page\nMine.");
+    // The profile's part taken out entirely.
+    expect(saved(`${part}\n\nOnly this.`)._unsafeUnwrap()).toBe("Only this.");
+  });
+
+  test("keeps an instruction added in an earlier turn when the topic was renamed since", () => {
+    // The session still holds the part under its old title, then the
+    // writer's instruction from an earlier default edit.
+    const earlier = `Be careful.\n\n${part}\n\nAlways answer in exactly one sentence.`;
+    expect(topicPrompt(fixture, "Who lit it?", world)).not.toBe(part);
+    expect(saved(`Be concise.\n${earlier}`, earlier)._unsafeUnwrap()).toBe(
+      "Be concise.\nBe careful.\n\nAlways answer in exactly one sentence.",
+    );
+  });
+
+  test("finds the part when the writer's text is set off by one newline", () => {
+    // Added on the next line, then saved again with a line before it.
+    const once = `Be careful.\n\n${part}\nAlways answer in exactly one sentence.`;
+    expect(saved(once)._unsafeUnwrap()).toBe(
+      "Be careful.\nAlways answer in exactly one sentence.",
+    );
+    expect(saved(`Be concise.\n${once}`, once)._unsafeUnwrap()).toBe(
+      "Be concise.\nBe careful.\nAlways answer in exactly one sentence.",
+    );
+    // One newline before it.
+    const mine = `Mine.\n${part}`;
+    expect(saved(`${mine}\nMore.`, mine)._unsafeUnwrap()).toBe("Mine.\nMore.");
+    // Not a part when it shares a line with the writer's text.
+    expect(saved(`Be careful.\n\n${part} More.`)._unsafeUnwrapErr()).toContain(
+      "Keep that part as it is",
+    );
+  });
+
+  test("finds a passage topic's part by its quote", () => {
+    const passage = {
+      kind: "passage",
+      scene: "storm-night",
+      documentId: "d",
+      blockId: "b",
+      quote: "The lamp. (Lit?) [twice]",
+    } as const;
+    const quoted = topicPrompt(fixture, "Why twice?", passage);
+    expect(
+      profilePrompt(
+        `Be careful.\n\n${quoted}\n\nCite lines.`,
+        `Be careful.\n\n${quoted}`,
+        passage,
+      )._unsafeUnwrap(),
+    ).toBe("Be careful.\n\nCite lines.");
+  });
+
+  test("refuses when the part can't be told from the writer's text", () => {
+    const refusal = "Keep that part as it is";
+    // Changed in this edit.
+    const changed = part.replace("keep to it", "wander freely");
+    expect(saved(`Be careful.\n\n${changed}`)._unsafeUnwrapErr()).toContain(
+      refusal,
+    );
+    // Changed in an earlier edit for this session only.
+    const earlier = `Be careful.\n\n${changed}`;
+    expect(saved(`${earlier}\n\nMore.`, earlier)._unsafeUnwrapErr()).toContain(
+      refusal,
+    );
+  });
+
+  test("saves a prompt whose session had no topic part whole", () => {
+    expect(saved("Be terse.", "Be careful.")._unsafeUnwrap()).toBe("Be terse.");
   });
 });

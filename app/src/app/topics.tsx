@@ -6,12 +6,25 @@
  * the foot of an open topic's sheet.
  */
 
-import { Link, useParams } from "@tanstack/react-router";
-import { useEffect, useId, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { AgentTurn, Reference } from "~/agent/inspect";
+import { nextTurnDraft, nextTurnEdits } from "~/generate/agent-slip";
+import { ContextViewer } from "~/generate/context-viewer";
 import { storyContradictions } from "~/story/contradictions";
+import { parseRef } from "~/story/refs";
 import type { Story } from "~/story/story";
+import { refLabel } from "~/story/touches";
 import { type InboxItem, worldInbox } from "~/talk/inbox";
 import type {
+  ModelAuthor,
   TalkAuthor,
   TalkMessage,
   Topic,
@@ -26,7 +39,7 @@ import { useServices, useStore } from "./hooks";
 import { Empty, LedgerGroup, LedgerRow, ViewLink } from "./inspector";
 import { contradictionKind } from "./inspector-model";
 import { CLOSED_TOPICS_TAB, INBOX_TAB, topicTab } from "./tab-routes";
-import type { RunningTurn } from "./talk";
+import type { NextTurn, RunningTurn } from "./talk";
 
 // ------------------------------------------------------------------ shared
 
@@ -635,7 +648,7 @@ function TopicSheet({ view }: { view: TopicView }) {
       </header>
       <ol className="turns">
         {messages.map((message) => (
-          <Turn key={message.id} message={message} />
+          <Turn key={message.id} topicId={topic.id} message={message} />
         ))}
         {running && (
           <RunningTurnView
@@ -753,22 +766,277 @@ function ToolCalls({ calls }: { calls: readonly TurnCall[] }) {
   );
 }
 
-function Turn({ message }: { message: TalkMessage }) {
-  const model = message.author.kind === "model";
+function Turn({ topicId, message }: { topicId: string; message: TalkMessage }) {
+  const { talk } = useServices();
+  const slip = useStore(talk.slips).get(topicId);
+  const { author } = message;
+  const model = author.kind === "model";
+  const requested = model && author.requestId !== null;
+  const open = slip?.kind === "turn" && slip.message === message.index;
   return (
-    <li className={model ? "turn turn-model" : "turn"}>
-      <div className="turn-head">
-        <span className="turn-author">{authorLabel(message.author)}</span>
-        <time
-          className="turn-time"
-          dateTime={new Date(message.createdAt).toISOString()}
-        >
-          {formatTime(message.createdAt)}
-        </time>
+    <li className="turn-entry">
+      <div className={model ? "turn turn-model" : "turn"}>
+        <div className="turn-head">
+          <span className="turn-author">{authorLabel(author)}</span>
+          <time
+            className="turn-time"
+            dateTime={new Date(message.createdAt).toISOString()}
+          >
+            {formatTime(message.createdAt)}
+          </time>
+          {requested && (
+            <button
+              type="button"
+              className="text-action"
+              aria-expanded={open}
+              onClick={() =>
+                talk.showSlip(
+                  topicId,
+                  open ? null : { kind: "turn", message: message.index },
+                )
+              }
+            >
+              Request
+            </button>
+          )}
+        </div>
+        <TalkBody text={message.body} />
+        <ToolCalls calls={message.calls} />
       </div>
-      <TalkBody text={message.body} />
-      <ToolCalls calls={message.calls} />
+      {open && author.kind === "model" && (
+        <TurnSlip
+          author={author}
+          onClose={() => talk.showSlip(topicId, null)}
+        />
+      )}
     </li>
+  );
+}
+
+// ------------------------------------------------------------- agent slip
+
+/**
+ * The gloss column's one note on a topic sheet: the agent slip, beside the
+ * turn it explains on a leader, or beside the composer for the next turn.
+ * At 860px and below it follows its turn (or comes before the composer)
+ * under a hairline instead (DESIGN.md, Topics).
+ */
+function SlipHost({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    element.scrollIntoView?.({ block: "nearest" });
+    element.focus({ preventScroll: true });
+  }, []);
+  return (
+    <div ref={ref} className="topic-slip" tabIndex={-1}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Following a reference from the slip: a record's detail in the World tab,
+ * or a scene's document tab. The topic's tab and its slip stay as they are.
+ */
+function useReferences() {
+  const { talk, workspace } = useServices();
+  const story = useStore(talk.story);
+  const documents = useStore(workspace.documents);
+  const navigate = useNavigate();
+  const sceneOf = (id: string) => story?.scenes.find((s) => s.id === id);
+  const sceneName = (id: string) => {
+    if (story === null) return `scene:${id}`;
+    const index = story.scenes.findIndex((s) => s.id === id);
+    return index === -1
+      ? `scene:${id}`
+      : `${index + 1} ${refLabel(story, { kind: "scene", id })}`;
+  };
+  const describe = (reference: Reference): string => {
+    if (reference.kind === "prose") {
+      const words = reference.text.trim().split(/\s+/);
+      const excerpt =
+        words.length <= 6
+          ? reference.text.trim()
+          : `${words.slice(0, 6).join(" ")}…`;
+      const name = sceneName(reference.scene);
+      return excerpt === "" ? name : `${name} · “${excerpt}”`;
+    }
+    const ref = parseRef(reference.ref);
+    if (ref.isErr() || story === null) return reference.ref;
+    return ref.value.kind === "scene"
+      ? sceneName(ref.value.id)
+      : refLabel(story, ref.value);
+  };
+  const openDocument = (documentId: string | null | undefined) =>
+    documentId != null && documents.some((d) => d.id === documentId)
+      ? documentId
+      : null;
+  const open = (reference: Reference) => {
+    const scene =
+      reference.kind === "prose"
+        ? reference.scene
+        : parseRef(reference.ref).match(
+            (ref) => (ref.kind === "scene" ? ref.id : null),
+            () => null,
+          );
+    const documentId =
+      reference.kind === "prose"
+        ? openDocument(
+            reference.documentId ?? sceneOf(reference.scene)?.documentId,
+          )
+        : scene === null
+          ? null
+          : openDocument(sceneOf(scene)?.documentId);
+    if (documentId !== null) {
+      void navigate({ to: "/doc/$documentId", params: { documentId } });
+      return;
+    }
+    const at =
+      reference.kind === "prose" ? `scene:${reference.scene}` : reference.ref;
+    void navigate({ to: "/world", search: { at } });
+  };
+  return { describe, open };
+}
+
+/** A past model turn's slip: what it sent, and the tool calls it made. */
+function TurnSlip({
+  author,
+  onClose,
+}: {
+  author: ModelAuthor;
+  onClose: () => void;
+}) {
+  const { talk } = useServices();
+  const references = useReferences();
+  const [turn, setTurn] = useState<
+    { ok: true; turn: AgentTurn } | { ok: false; problem: string } | null
+  >(null);
+  useEffect(() => {
+    let current = true;
+    void talk.loadTurn(author).then((loaded) => {
+      if (!current) return;
+      setTurn(
+        loaded.isOk()
+          ? { ok: true, turn: loaded.value }
+          : { ok: false, problem: loaded.error },
+      );
+    });
+    return () => {
+      current = false;
+    };
+  }, [talk, author]);
+  if (turn === null) return null;
+  return (
+    <SlipHost>
+      {turn.ok ? (
+        <ContextViewer
+          kind="turn"
+          title={`Turn ${turn.turn.run.index}`}
+          turn={turn.turn}
+          profileLabel={author.profile}
+          onOpen={references.open}
+          describe={references.describe}
+          onClose={onClose}
+        />
+      ) : (
+        <SlipProblem title="Request" problem={turn.problem} onClose={onClose} />
+      )}
+    </SlipHost>
+  );
+}
+
+/** A slip that can't show its request: why, with Close. */
+function SlipProblem({
+  title,
+  problem,
+  onClose,
+}: {
+  title: string;
+  problem: string;
+  onClose: () => void;
+}) {
+  return (
+    <section className="context-viewer agent-slip" aria-label={title}>
+      <header className="context-viewer-header">
+        <div className="request-slip-head">
+          <h2 className="request-slip-title">{title}</h2>
+          <button
+            type="button"
+            className="request-slip-close"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </header>
+      <p className="context-viewer-note">{problem}</p>
+    </section>
+  );
+}
+
+/** The next turn's slip, beside the composer whose Send sends its edits. */
+function NextSlip({ id, next }: { id: string; next: NextTurn | undefined }) {
+  const { talk } = useServices();
+  const running = useStore(talk.running).has(id);
+  const close = () => talk.showSlip(id, null);
+  if (next === undefined) return null;
+  return (
+    <SlipHost>
+      {next.kind === "ready" ? (
+        <ContextViewer
+          kind="next"
+          target={next.target}
+          base={next.base}
+          draft={next.draft}
+          onDraftChange={(draft) => talk.setNextDraft(id, draft)}
+          disabled={running || talk.readOnly}
+          onClose={close}
+        />
+      ) : (
+        <SlipProblem title="Next turn" problem={next.message} onClose={close} />
+      )}
+    </SlipHost>
+  );
+}
+
+/** Whether the writer has edited the next turn's request. */
+export function nextEdited(next: NextTurn | undefined): boolean {
+  if (next?.kind !== "ready") return false;
+  return (
+    JSON.stringify(next.draft) !== JSON.stringify(nextTurnDraft(next.base))
+  );
+}
+
+/**
+ * "Context": shows or puts away the next turn's slip. On the composer line
+ * and in the masthead.
+ */
+export function NextTurnAction({
+  id,
+  className,
+}: {
+  id: string;
+  className: string;
+}) {
+  const { talk } = useServices();
+  const shown = useStore(talk.slips).get(id)?.kind === "next";
+  const edited = nextEdited(useStore(talk.nextTurns).get(id));
+  const stored = useStore(talk.views).get(id)?.topic;
+  // Only an open topic has a composer, and so a next turn.
+  const closed = stored !== undefined && stored.status !== "open";
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-expanded={shown && !closed}
+      disabled={closed}
+      title={closed ? "Reopen this topic to talk in it." : undefined}
+      onClick={() => talk.showSlip(id, shown ? null : { kind: "next" })}
+    >
+      {edited ? "Context · edited" : "Context"}
+    </button>
   );
 }
 
@@ -788,27 +1056,31 @@ function RunningTurnView({
   return (
     <>
       {turn.message !== null && shown <= turn.after && (
-        <li className="turn">
-          <div className="turn-head">
-            <span className="turn-author">You</span>
+        <li className="turn-entry">
+          <div className="turn">
+            <div className="turn-head">
+              <span className="turn-author">You</span>
+            </div>
+            <TalkBody text={turn.message} />
           </div>
-          <TalkBody text={turn.message} />
         </li>
       )}
-      <li className="turn turn-model" aria-busy="true">
-        <div className="turn-head">
-          <span className="turn-author">{label ?? "Model"}</span>
-          <button
-            type="button"
-            className="text-action"
-            onClick={() => talk.stop(id)}
-          >
-            Stop
-          </button>
+      <li className="turn-entry">
+        <div className="turn turn-model" aria-busy="true">
+          <div className="turn-head">
+            <span className="turn-author">{label ?? "Model"}</span>
+            <button
+              type="button"
+              className="text-action"
+              onClick={() => talk.stop(id)}
+            >
+              Stop
+            </button>
+          </div>
+          <output className="turn-status">{turn.status}</output>
+          {turn.text !== "" && <TalkBody text={turn.text} />}
+          <ToolCalls calls={turn.calls} />
         </div>
-        <output className="turn-status">{turn.status}</output>
-        {turn.text !== "" && <TalkBody text={turn.text} />}
-        <ToolCalls calls={turn.calls} />
       </li>
     </>
   );
@@ -827,21 +1099,23 @@ function StoppedTurn({ id, stop }: { id: string; stop: TurnStop }) {
         ? ["The model made as many calls as one turn may.", "Go on"]
         : ["The turn stopped before the model answered.", "Go on"];
   return (
-    <li className="turn turn-model">
-      <div className="turn-head">
-        <span className="turn-author">Model</span>
+    <li className="turn-entry">
+      <div className="turn turn-model">
+        <div className="turn-head">
+          <span className="turn-author">Model</span>
+        </div>
+        <p className="notice notice-error turn-failure" role="alert">
+          {text}{" "}
+          <button
+            type="button"
+            className="notice-dismiss"
+            disabled={talk.readOnly}
+            onClick={() => void talk.resume(id)}
+          >
+            {action}
+          </button>
+        </p>
       </div>
-      <p className="notice notice-error turn-failure" role="alert">
-        {text}{" "}
-        <button
-          type="button"
-          className="notice-dismiss"
-          disabled={talk.readOnly}
-          onClick={() => void talk.resume(id)}
-        >
-          {action}
-        </button>
-      </p>
     </li>
   );
 }
@@ -879,8 +1153,12 @@ function Composer({
   const { talk } = useServices();
   const running = useStore(talk.running).has(id);
   const text = useStore(talk.unsent).get(id)?.text ?? "";
+  const next = useStore(talk.nextTurns).get(id);
+  const slipShown = useStore(talk.slips).get(id)?.kind === "next";
   const setText = (value: string) => talk.setUnsent(id, { text: value });
   const field = useId();
+  const edits =
+    next?.kind === "ready" ? nextTurnEdits(next.base, next.draft) : null;
   const blocked = talk.readOnly
     ? "This tab is read-only."
     : running
@@ -889,46 +1167,53 @@ function Composer({
         ? "Name this topic first."
         : text.trim() === ""
           ? "Write something to send."
-          : null;
+          : edits?.isErr()
+            ? "Fix the next turn's request first."
+            : null;
   // The talk service clears what is sent, and keeps what wasn't taken.
   const submit = async () => {
     if (!blocked) await send(text);
   };
   return (
-    <form
-      className="composer"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit();
-      }}
-    >
-      <p className="composer-sees">{seesLine(scope)}</p>
-      <label htmlFor={field} className="visually-hidden">
-        Your message
-      </label>
-      <textarea
-        id={field}
-        value={text}
-        readOnly={talk.readOnly}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-            event.preventDefault();
-            void submit();
-          }
+    <div className="composer-entry">
+      {slipShown && <NextSlip id={id} next={next} />}
+      <form
+        className="composer"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
         }}
-      />
-      <div className="composer-actions">
-        <button
-          type="submit"
-          className="button button-primary"
-          disabled={blocked !== null}
-          title={blocked ?? "Send (Ctrl+Enter)"}
-          aria-keyshortcuts="Control+Enter Meta+Enter"
-        >
-          Send
-        </button>
-      </div>
-    </form>
+      >
+        <p className="composer-sees">
+          {seesLine(scope)} <NextTurnAction id={id} className="text-action" />
+        </p>
+        <label htmlFor={field} className="visually-hidden">
+          Your message
+        </label>
+        <textarea
+          id={field}
+          value={text}
+          readOnly={talk.readOnly}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+        />
+        <div className="composer-actions">
+          <button
+            type="submit"
+            className="button button-primary"
+            disabled={blocked !== null}
+            title={blocked ?? "Send (Ctrl+Enter)"}
+            aria-keyshortcuts="Control+Enter Meta+Enter"
+          >
+            Send
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

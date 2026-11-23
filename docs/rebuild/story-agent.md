@@ -29,9 +29,12 @@ Storage holds the session (`<id>/session`: the conversation, each writer message
 
 The context viewer (`app/src/generate/context-viewer.tsx`, `kind: "turn"` and `kind: "next"`) shows a session's turns, as DESIGN.md's Agent Slip describes. `inspect.ts` reads the log for it: the steps of each writer message as one turn, each tool call in order with how long it ran, the contradictions its edits kept, the records and prose its edits and `trace` queries suspect may now be stale, and the records each call wrote. The next turn's slip holds the writer's edits until the composer sends them, with `sendNextTurn` (`next-turn.ts`): a "Profile default" edit is saved first, then the session is changed, then the message goes.
 
+Topic sheets host it (`worldcrafter-ywt3`, `app/src/app/topics.tsx`): a model turn's "Request" opens that turn's slip in the gloss column beside it, and "Context" on the composer line or in the masthead opens the next turn's slip beside the composer. A topic's session starts from the profile defaults (`defaults.ts`) with the topic's own part (`topicPrompt`, under "# This talk page") after them; a "Profile default" prompt edit made on a topic saves the prompt without that part, so the next topic gets its own.
+
 ## What it does not do yet
 
-- Talk pages hosting the slip (`worldcrafter-lhh3` runs topic turns through the runner, `docs/rebuild/talk-pages.md`) and running sessions in the Worker (`worldcrafter-ji5d`).
+- Running sessions in the Worker (`worldcrafter-ji5d`).
+- A running turn's slip: the slip opens on a turn once it is recorded, not while it runs.
 - Writing a draft into the scene's document: the prose role's answer is in the log and the conversation, and putting it in the document is the editor's job.
 - Completion-endpoint models: every role uses chat. A finetune served only as raw completions would need a prompt layout for the conversation.
 - Timeline values the model writes are asserted, as the CLI's are. Whether they should carry an `inferred` authority is a product call.
