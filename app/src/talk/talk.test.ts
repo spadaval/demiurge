@@ -691,6 +691,38 @@ describe("stored talk records", () => {
     ).toBe(true);
     expect(readMessage(record).isErr()).toBe(true);
   });
+
+  test("a passage scope's occurrence and end block are checked when present", () => {
+    const record = (scope: Record<string, unknown>) =>
+      topicRecord({
+        version: 1,
+        id: "t1",
+        title: "T",
+        scope: {
+          kind: "passage",
+          scene: "s",
+          documentId: "d",
+          blockId: "b",
+          quote: "q",
+          ...scope,
+        } as TopicScope,
+        status: "open",
+        startedBy: { kind: "human" },
+        session: null,
+        messages: 0,
+        answered: 0,
+        createdAt: 1,
+        updatedAt: 1,
+        closedAt: null,
+      });
+    expect(readTopic(record({})).isOk()).toBe(true);
+    expect(readTopic(record({ occurrence: 2, through: "c" })).isOk()).toBe(
+      true,
+    );
+    expect(readTopic(record({ occurrence: -1 })).isErr()).toBe(true);
+    expect(readTopic(record({ occurrence: 1.5 })).isErr()).toBe(true);
+    expect(readTopic(record({ through: 3 })).isErr()).toBe(true);
+  });
 });
 
 describe("anchored scopes", () => {

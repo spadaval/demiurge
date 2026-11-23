@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { Topic, TopicScope } from "~/talk/records";
+import type { PassageScope, Topic, TopicScope } from "~/talk/records";
 import type { LayerMark } from "./model";
 import { talkLayers, talkNotes } from "./talk";
 
@@ -27,7 +27,7 @@ const topic = (id: string, scope: TopicScope, model = false): Topic => ({
   closedAt: null,
 });
 
-const passage = (blockId: string, quote: string): TopicScope => ({
+const passage = (blockId: string, quote: string): PassageScope => ({
   kind: "passage",
   scene: "s",
   documentId: "d",
@@ -47,7 +47,7 @@ test("a passage's note sits on its words; a scene's follows the last line", () =
   );
   expect(layers.marks).toEqual([
     {
-      id: "talk:a/words",
+      id: "talk:a/words/0",
       anchor: { blockId: "b1", quote: "the shutters" },
       style: { kind: "talk" },
       noteId: "talk:a",
@@ -92,4 +92,33 @@ test("a passage never takes a key's place another note holds", () => {
   );
   expect(layers.marks).toEqual([]);
   expect(layers.notes.map((n) => n.placement)).toEqual(["scene", "scene"]);
+});
+
+test("a passage's mark is on the occurrence it was started on", () => {
+  const layers = talkLayers(
+    talkNotes([topic("a", { ...passage("b2", "Echo"), occurrence: 1 })]),
+    [{ id: "b2", text: "Echo. Echo." }],
+  );
+  expect(layers.marks.map((m) => m.anchor)).toEqual([
+    { blockId: "b2", quote: "Echo", occurrence: 1 },
+  ]);
+});
+
+test("a passage over several blocks is marked in each, keyed on the last", () => {
+  const layers = talkLayers(
+    talkNotes([
+      topic("a", {
+        ...passage("b1", "shutters first.\n\nBy the"),
+        through: "b2",
+      }),
+    ]),
+    [...BLOCKS, { id: "b2", text: "By the second watch." }],
+  );
+  expect(
+    layers.marks.map((m) => [m.anchor.blockId, m.anchor.quote, m.noteId]),
+  ).toEqual([
+    ["b1", "shutters first.", undefined],
+    ["b2", "By the", "talk:a"],
+  ]);
+  expect(layers.notes[0]?.placement).toBeUndefined();
 });

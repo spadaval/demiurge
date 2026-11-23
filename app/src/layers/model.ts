@@ -189,6 +189,26 @@ export function locate(text: string, anchor: TextAnchor): Span | null {
 }
 
 /**
+ * The anchor of the words at `[start, end)` in `text`: their quote, and which
+ * occurrence of it they are, so `locate` finds these words and not an
+ * earlier copy. Null for no words.
+ */
+export function anchorAt(
+  text: string,
+  blockId: string,
+  { start, end }: Span,
+): TextAnchor | null {
+  const quote = text.slice(start, end);
+  if (quote === "") return null;
+  let occurrence = 0;
+  for (let at = text.indexOf(quote); at !== -1 && at < start; ) {
+    occurrence++;
+    at = text.indexOf(quote, at + 1);
+  }
+  return occurrence === 0 ? { blockId, quote } : { blockId, quote, occurrence };
+}
+
+/**
  * Fountain notes the writer typed into the prose: `[[ like this ]]`. They are
  * the writer's own text, so they always show; the Notes layer lifts them into
  * the gloss. The same matcher decides what the `prose` projection cuts, so a

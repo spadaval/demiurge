@@ -50,7 +50,13 @@ Discussions are their own store, the `talkRecords` collection (neither content n
 type TopicScope =
   | { kind: "world" }
   | { kind: "scene"; scene: string }                 // a bible scene ID
-  | { kind: "passage"; scene: string; documentId: string; blockId: string; quote: string }
+  | {
+      kind: "passage"; scene: string; documentId: string;
+      blockId: string;      // the block it starts in
+      quote: string;        // the words; over several blocks, each block's part, joined by a blank line
+      occurrence?: number;  // which occurrence of its words in its first block, from 0
+      through?: string;     // the block it ends in, when it runs on
+    }
   | { kind: "record"; ref: string };                 // `drive:keep-light`
 
 type TalkAuthor =
@@ -85,7 +91,7 @@ type TalkMessage = {
 };
 ```
 
-A topic's turns run through the story agent runner (`docs/rebuild/story-agent.md`) as one `plan` session per topic, in the agent scope its scope maps to (a passage's model sees its scene, and the passage is quoted in the topic's prompt). A session started on a topic that already has turns (one the model raised) takes them up as its conversation. The full request, tool arguments and results stay in the agent records; a message keeps a reference to them and a one-line summary of each call. A model message is recorded from the run's stored steps, and `answered` says which run it was, so an answer whose save failed is recorded on the next load, send or Try again, once. Every write of a topic goes through one queue per topic, so a rename during a turn isn't lost. A topic whose block anchor goes stale (the block is gone or no longer holds the quote) falls back to the scene.
+A topic's turns run through the story agent runner (`docs/rebuild/story-agent.md`) as one `plan` session per topic, in the agent scope its scope maps to (a passage's model sees its scene, and the passage is quoted in the topic's prompt). A session started on a topic that already has turns (one the model raised) takes them up as its conversation. The full request, tool arguments and results stay in the agent records; a message keeps a reference to them and a one-line summary of each call. A model message is recorded from the run's stored steps, and `answered` says which run it was, so an answer whose save failed is recorded on the next load, send or Try again, once. Every write of a topic goes through one queue per topic, so a rename during a turn isn't lost. A topic whose passage goes stale (its words are no longer all there, in the same blocks, at the same occurrence: `talk/passage.ts`) falls back to the scene.
 
 The World inbox (`app/src/talk/inbox.ts`) is every open topic a model started, newest first, then the contradictions the story keeps (`storyContradictions`).
 
@@ -93,7 +99,7 @@ The World inbox (`app/src/talk/inbox.ts`) is every open topic a model started, n
 
 A topic is started from the thing it is about (`app/src/app/anchored-talk.tsx`):
 
-- A scene sheet has "Talk about this scene" under its title. While words within one paragraph are selected it reads "Talk about this passage", and the topic quotes them.
+- A scene sheet has "Talk about this scene" under its title. While words are selected it reads "Talk about this passage", and the topic quotes them: the occurrence selected when the same words repeat, and every paragraph's part when the selection runs over several.
 - A record's detail in the World inspector has a "Talk" field: its open topics, each a reference to its sheet, then "Talk about this record". A scene's record talks about the scene, so the topic is the same as one started from the scene's prose.
 
 Each opens the topic sheet at once: the topic already drafted about the same thing and not sent yet, or a new one with that scope, waiting for a title (`AppTalk.anchor`). A stored topic about the same thing is not reused: a scene or record can have several topics, and its open ones are listed beside it.

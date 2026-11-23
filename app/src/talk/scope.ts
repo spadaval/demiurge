@@ -8,7 +8,13 @@ import type { JsonValue } from "../storage/types";
 import { formatRef, parseRef } from "../story/refs";
 import { type Ref, refExists, type Story } from "../story/story";
 import { refLabel } from "../story/touches";
-import type { Topic, TopicScope, TopicScopeKind } from "./records";
+import { contentBlocks, passageSpans } from "./passage";
+import type {
+  PassageScope,
+  Topic,
+  TopicScope,
+  TopicScopeKind,
+} from "./records";
 
 /**
  * The agent scope a topic's turns run in. A passage topic's model sees its
@@ -142,46 +148,22 @@ export function topicPrompt(
     `You are a participant on a talk page about ${about}. Its topic is "${title}". The writer started it to settle that question; keep to it. Your turns are signed as the model's and kept with the page.`,
   ];
   if (scope.kind === "passage") {
-    lines.push("", "The passage the topic is about:", "", `> ${scope.quote}`);
+    lines.push(
+      "",
+      "The passage the topic is about:",
+      "",
+      ...scope.quote.split("\n").map((line) => `> ${line}`.trimEnd()),
+    );
   }
   return lines.join("\n");
 }
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** The text under a content node: its leaves' text, in order. */
-function textOf(node: unknown): string {
-  if (!isObject(node)) return "";
-  if (typeof node.text === "string") return node.text;
-  return Array.isArray(node.children) ? node.children.map(textOf).join("") : "";
-}
-
-/** The text of the block `blockId` of a content tree, if it has the block. */
-export function blockText(
-  content: JsonValue,
-  blockId: string,
-): string | undefined {
-  const stack: unknown[] = Array.isArray(content) ? [...content] : [];
-  while (stack.length > 0) {
-    const node = stack.shift();
-    if (!isObject(node)) continue;
-    if (node.id === blockId) return textOf(node);
-    if (Array.isArray(node.children)) stack.push(...node.children);
-  }
-  return undefined;
-}
-
 /**
  * Whether a passage topic's anchor has gone stale in `content`, its scene's
- * document now: the block is gone, or no longer holds the quoted text.
+ * document now: its words are no longer all there (`passageSpans`).
  */
-export function passageStale(
-  content: JsonValue,
-  scope: Extract<TopicScope, { kind: "passage" }>,
-): boolean {
-  const text = blockText(content, scope.blockId);
-  return text === undefined || !text.includes(scope.quote);
+export function passageStale(content: JsonValue, scope: PassageScope): boolean {
+  return passageSpans(contentBlocks(content), scope) === null;
 }
 
 /** Whether two scopes are about the same thing, a passage's words included. */
@@ -197,7 +179,9 @@ export function sameScope(a: TopicScope, b: TopicScope): boolean {
         a.scene === b.scene &&
         a.documentId === b.documentId &&
         a.blockId === b.blockId &&
-        a.quote === b.quote
+        a.quote === b.quote &&
+        (a.occurrence ?? 0) === (b.occurrence ?? 0) &&
+        a.through === b.through
       );
     case "record":
       return b.kind === "record" && a.ref === b.ref;

@@ -1,18 +1,20 @@
 /**
  * Talk started where the writer is (DESIGN.md, Topics): "Talk about this
- * scene" (or "this passage", while words of one paragraph are selected) on a
- * scene sheet, and "Talk about this record" with the record's open topics on
- * a record's detail in the World inspector. Each opens the target's topic
+ * scene" (or "this passage", while words are selected) on a scene sheet,
+ * and "Talk about this record" with the record's open topics on a record's
+ * detail in the World inspector. Each opens the target's topic
  * sheet in its tab: the topic already drafted about it, or a new one that
  * takes its scope and waits for a title (`AppTalk.anchor`).
  */
 
 import { Link, useNavigate } from "@tanstack/react-router";
-import { RangeApi } from "platejs";
+import { type Point, RangeApi } from "platejs";
 import { useEditorSelector } from "platejs/react";
 import type { DocumentEditor } from "~/editor/document-editor";
+import { textBlocks } from "~/editor/layer-plugin";
 import { formatRef } from "~/story/refs";
 import type { Ref } from "~/story/story";
+import { type PassageAnchor, passageAt, type TextPoint } from "~/talk/passage";
 import type { TopicScope } from "~/talk/records";
 import { openTopicsOn, recordTopicScope, type TopicTarget } from "~/talk/scope";
 import { useServices, useStore } from "./hooks";
@@ -35,32 +37,38 @@ export function useTalkAbout() {
   return (scope: TopicScope) => show(talk.anchor(scope));
 }
 
-/** The words of one paragraph the writer has selected, if they have. */
-export type SelectedPassage = { blockId: string; quote: string };
-
 /**
- * The selection as a passage: words selected within one text block, which
- * has an ID. Null for a caret, or a selection across blocks.
+ * The selection as a passage: the words selected, in one block or over
+ * several, and which occurrence of them in their first block. Null for a
+ * caret, or a selection of nothing but white space.
  */
-export function selectedPassage(
-  editor: DocumentEditor,
-): SelectedPassage | null {
+export function selectedPassage(editor: DocumentEditor): PassageAnchor | null {
   const { selection } = editor;
   if (selection === null || RangeApi.isCollapsed(selection)) return null;
-  const start = editor.api.block({ at: selection.anchor });
-  const end = editor.api.block({ at: selection.focus });
-  if (start === undefined || end === undefined || start[0] !== end[0]) {
-    return null;
-  }
-  const blockId = start[0].id;
-  const quote = editor.api.string(selection).trim();
-  return typeof blockId === "string" && quote !== ""
-    ? { blockId, quote }
-    : null;
+  const point = (at: Point): TextPoint | null => {
+    const entry = editor.api.block({ at });
+    const start = entry && editor.api.start(entry[1]);
+    if (entry === undefined || start === undefined) return null;
+    const blockId = entry[0].id;
+    if (typeof blockId !== "string") return null;
+    const offset = editor.api.string({ anchor: start, focus: at }).length;
+    return { blockId, offset };
+  };
+  const a = point(selection.anchor);
+  const b = point(selection.focus);
+  return a === null || b === null
+    ? null
+    : passageAt(textBlocks(editor.children), a, b);
 }
 
-const samePassage = (a: SelectedPassage | null, b: SelectedPassage | null) =>
-  a === b || (a?.blockId === b?.blockId && a?.quote === b?.quote);
+const samePassage = (a: PassageAnchor | null, b: PassageAnchor | null) =>
+  a === b ||
+  (a !== null &&
+    b !== null &&
+    a.blockId === b.blockId &&
+    a.quote === b.quote &&
+    a.occurrence === b.occurrence &&
+    a.through === b.through);
 
 /**
  * The scene sheet's talk action, under the title: about the passage while

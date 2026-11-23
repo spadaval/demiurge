@@ -333,6 +333,112 @@ test("selected words talk about their passage, quoted, and the note sits on them
   ).toBe("Which shutters?");
 });
 
+/** The storm scene's prose as two paragraphs, the first repeating a word. */
+async function echoScene() {
+  const storm = documents.find((d) => d.id === "doc-storm-night");
+  if (!storm) throw new Error("no storm document");
+  (
+    await storage.documents.save({
+      ...storm,
+      content: [
+        { type: "p", id: "b_echo1", children: [{ text: "Echo. Echo." }] },
+        { type: "p", id: "b_echo2", children: [{ text: "Next it broke." }] },
+      ],
+    })
+  )._unsafeUnwrap();
+}
+
+/** Selects from `anchor` to `focus` in the storm scene's editor. */
+async function select(
+  anchor: { path: number[]; offset: number },
+  focus: { path: number[]; offset: number },
+) {
+  const session = workspace.session("doc-storm-night");
+  if (!session) throw new Error("no session");
+  await act(async () => {
+    session.editor.tf.select({ anchor, focus });
+  });
+  await until(
+    () => control("Talk about this passage", ".scene-talk") !== null,
+    "the passage action",
+  );
+}
+
+test("repeated words: the topic is about the occurrence selected", async () => {
+  await echoScene();
+  const router = await openScene();
+  await select({ path: [0, 0], offset: 0 }, { path: [0, 0], offset: 4 });
+  await click(control("Talk about this passage", ".scene-talk"));
+  await until(() => query(".topic-sheet") !== null, "the first topic");
+  const first = router.state.location.pathname;
+
+  await act(() =>
+    router.navigate({
+      to: "/doc/$documentId",
+      params: { documentId: "doc-storm-night" },
+    }),
+  );
+  await until(() => query(".scene-talk") !== null, "the scene again");
+  await select({ path: [0, 0], offset: 6 }, { path: [0, 0], offset: 10 });
+  await click(control("Talk about this passage", ".scene-talk"));
+  await until(
+    () => router.state.location.pathname !== first,
+    "a second topic, not the first one's draft",
+  );
+  expect(services.talk.drafts.get().size).toBe(2);
+
+  await startTopic("The second echo", "Why twice?");
+  expect(await storedScopes()).toEqual([
+    {
+      kind: "passage",
+      scene: "storm-night",
+      documentId: "doc-storm-night",
+      blockId: "b_echo1",
+      quote: "Echo",
+      occurrence: 1,
+    },
+  ]);
+
+  // Its note is keyed to the second "Echo", not the first.
+  await act(() =>
+    router.navigate({
+      to: "/doc/$documentId",
+      params: { documentId: "doc-storm-night" },
+    }),
+  );
+  await until(() => query(".lm-talk") !== null, "the passage's mark");
+  // The paragraph's text with the marked words bracketed.
+  const paragraph = query(".prose p")?.cloneNode(true) as HTMLElement | null;
+  for (const leaf of paragraph?.querySelectorAll(".lm-talk") ?? []) {
+    leaf.textContent = `[${leaf.textContent}]`;
+  }
+  expect(paragraph?.textContent?.replaceAll("][", "")).toBe("Echo. [Echo].");
+});
+
+test("words selected over paragraphs are one passage, quoted whole", async () => {
+  await echoScene();
+  await openScene();
+  await select({ path: [0, 0], offset: 6 }, { path: [1, 0], offset: 7 });
+  await click(control("Talk about this passage", ".scene-talk"));
+  await until(() => query(".topic-sheet") !== null, "the topic sheet");
+  expect(text(".topic-head .excerpt")).toBe("Echo.\n\nNext it");
+
+  await startTopic("Over the break", "Does this run on?");
+  expect(await storedScopes()).toEqual([
+    {
+      kind: "passage",
+      scene: "storm-night",
+      documentId: "doc-storm-night",
+      blockId: "b_echo1",
+      quote: "Echo.\n\nNext it",
+      occurrence: 1,
+      through: "b_echo2",
+    },
+  ]);
+  expect(lastRequest().system).toContain("> Echo.\n>\n> Next it");
+  expect(query(".topic-stale")).toBeNull();
+});
+
 test("a record's detail talks about the record, and lists its open topics", async () => {
   const router = await render("/world?at=drive:keep-light");
   await until(() => query(".record-talk") !== null, "the record's talk");

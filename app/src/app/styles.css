@@ -2720,6 +2720,8 @@ a.topic-row:hover .topic-title {
   border-left: 1px solid var(--rule-strong);
   font: italic 400 15px / 1.5 var(--font-prose);
   color: var(--ink-2);
+  /* A passage over several paragraphs keeps its breaks. */
+  white-space: pre-line;
 }
 
 .code {
