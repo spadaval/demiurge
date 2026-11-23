@@ -16,6 +16,8 @@ import { RETARGETED } from "~/generate/describe";
 import type { BackendProfile } from "~/llm/types";
 import { createMemoryStorage } from "~/storage/memory";
 import type { JsonValue, StorageAdapter } from "~/storage/types";
+import { saveStory } from "~/story/store";
+import { parseStory } from "~/story/story";
 import { createStorageConnection } from "~/workspace/connection";
 import type { KeyValueStore } from "~/workspace/tabs";
 import { createWorkspace, type Workspace } from "~/workspace/workspace";
@@ -870,4 +872,94 @@ test("after sending a retargeted slip, a later model change still applies", asyn
   expect((received[1]?.body as { model: string }).model).toBe("model-b");
   services.generation.profile.save({ ...PROFILE, model: "model-c" });
   expect(await regenerateModel("Third.")).toBe("model-c");
+});
+
+test("the slip shows the scene's story bible sections, to pin or leave out", async () => {
+  // The lighthouse bible, its arrival scene's prose held in doc1.
+  const story = parseStory(
+    await Bun.file(
+      new URL("../story/fixtures/lighthouse.story.json", import.meta.url),
+    ).text(),
+  )._unsafeUnwrap();
+  (
+    await saveStory(
+      storage,
+      {
+        ...story,
+        scenes: story.scenes.map((scene) =>
+          scene.id === "arrival" ? { ...scene, documentId: "doc1" } : scene,
+        ),
+      },
+      1000,
+    )
+  )._unsafeUnwrap();
+  await render(withProfile());
+  await generateNext();
+
+  const sectionList = () =>
+    [
+      ...(query(".request-slip")?.querySelectorAll(
+        "[aria-label='Story bible sections'] li",
+      ) ?? []),
+    ].map((li) => [
+      li.querySelector("span")?.textContent ?? "",
+      li.getAttribute("data-included"),
+    ]);
+  const system = () =>
+    (
+      query(".request-slip")?.querySelectorAll("textarea")[0] as
+        | HTMLTextAreaElement
+        | undefined
+    )?.value ?? "";
+  expect(query(".request-slip")?.textContent).toContain(
+    "Story bible for scene:arrival",
+  );
+  expect(sectionList().map(([text]) => (text ?? "").split(" · ")[0])).toEqual([
+    "The scene",
+    "What the reader has been told before it",
+    "Events it depicts",
+    "People in it",
+  ]);
+  expect(system()).toContain("## People in it");
+
+  // Leave out: the request is put together again without it.
+  await click(
+    query("button[aria-label='Leave out People in it']") as Element | null,
+  );
+  await until(() => !system().includes("## People in it"), "the reassembly");
+  expect(sectionList()[3]?.[1]).toBe("false");
+  expect(sectionList()[3]?.[0]).toContain("left out");
+  expect(services.generation.sections("doc1")).toEqual({
+    pinned: [],
+    excluded: ["People in it"],
+  });
+
+  // Pin one, then the scene stops holding doc1: the next request has no
+  // bible, and the pins and exclusions are cleared, with a notice.
+  await click(query("button[aria-label='Pin The scene']") as Element | null);
+  await until(
+    () => services.generation.sections("doc1").pinned.length === 1,
+    "the pin",
+  );
+  expect(query("button[aria-label='Unpin The scene']")).not.toBeNull();
+  (
+    await services.bible.execute({
+      type: "setSceneDocument",
+      id: "arrival",
+      documentId: null,
+    })
+  )._unsafeUnwrap();
+  await act(() => services.generation.openRequest("doc1"));
+  await until(
+    () => query("[aria-label='Story bible sections']") === null,
+    "a slip without the bible",
+  );
+  expect(services.generation.sections("doc1")).toEqual({
+    pinned: [],
+    excluded: [],
+  });
+  expect(query(".notices")?.textContent).toContain(
+    "pinned and left-out bible sections were cleared",
+  );
+  expect(system()).not.toContain("## The scene");
 });

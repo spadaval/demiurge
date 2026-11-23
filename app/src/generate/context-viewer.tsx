@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { ContextBreakdown } from "~/context/builder";
+import type {
+  BibleBreakdown,
+  ContextBreakdown,
+  SectionSelection,
+} from "~/context/builder";
 import type { ContextRequest } from "~/context/requests";
 import type { LlmRequest } from "~/llm/types";
 import {
@@ -65,6 +69,12 @@ export interface RequestViewerProps {
   readonly onStop?: () => void;
   /** What the writer calls the request's profile; its identifier otherwise. */
   readonly profileLabel?: string;
+  /**
+   * Pins or excludes story bible sections; the host puts the request
+   * together again with them, which gives a new `record`. Without it the
+   * sections are shown and can't be changed (a segment's past request).
+   */
+  readonly onSelectSections?: (selection: SectionSelection) => void;
 }
 
 /**
@@ -81,6 +91,7 @@ function RequestViewer({
   sending = false,
   onStop,
   profileLabel,
+  onSelectSections,
 }: RequestViewerProps) {
   const [draft, setDraft] = useState<RequestDraft>(() =>
     draftOf(record.request),
@@ -123,6 +134,15 @@ function RequestViewer({
       </header>
 
       {breakdown ? <Breakdown breakdown={breakdown} /> : null}
+      {breakdown?.bible ? (
+        <BibleSections
+          bible={breakdown.bible}
+          unit={breakdown.budget.unit}
+          {...(onSelectSections && !sending && record.origin === "assembled"
+            ? { onSelect: onSelectSections }
+            : {})}
+        />
+      ) : null}
 
       <form
         className="context-viewer-form"
@@ -289,4 +309,91 @@ function limitReason(limit: ContextBreakdown["window"]["limitedBy"]): string {
     case "document":
       return "the start of the document";
   }
+}
+
+/**
+ * The story bible sections the request was put together with, each with
+ * what became of it, and Pin and Leave out when `onSelect` is given.
+ */
+function BibleSections({
+  bible,
+  unit,
+  onSelect,
+}: {
+  bible: BibleBreakdown;
+  unit: string;
+  onSelect?: (selection: SectionSelection) => void;
+}) {
+  const selection: SectionSelection = {
+    pinned: bible.sections.filter((s) => s.pinned).map((s) => s.title),
+    excluded: bible.sections.filter((s) => s.excluded).map((s) => s.title),
+  };
+  const without = (titles: readonly string[], title: string) =>
+    titles.filter((t) => t !== title);
+  // A section is pinned or left out, not both.
+  const pin = (title: string, on: boolean) =>
+    onSelect?.({
+      pinned: on
+        ? [...selection.pinned, title]
+        : without(selection.pinned, title),
+      excluded: without(selection.excluded, title),
+    });
+  const exclude = (title: string, on: boolean) =>
+    onSelect?.({
+      pinned: without(selection.pinned, title),
+      excluded: on
+        ? [...selection.excluded, title]
+        : without(selection.excluded, title),
+    });
+  return (
+    <div className="context-viewer-bible">
+      <p className="context-viewer-bible-head">
+        Story bible for <code>scene:{bible.scene}</code>
+      </p>
+      {bible.cleared.length > 0 ? (
+        <p className="context-viewer-note">
+          No longer in the bible, so cleared: {bible.cleared.join(", ")}.
+        </p>
+      ) : null}
+      <ul className="context-viewer-cards" aria-label="Story bible sections">
+        {bible.sections.map((section) => (
+          <li
+            key={section.title}
+            data-included={String(section.included)}
+            title={section.text}
+          >
+            <span>
+              {section.title} · {count(section.size)} {unit}
+              {section.pinned ? " · pinned" : ""}
+              {section.excluded
+                ? " · left out"
+                : section.included
+                  ? ""
+                  : " · left out to fit the budget"}
+            </span>
+            {onSelect ? (
+              <span className="context-viewer-section-actions">
+                <button
+                  type="button"
+                  aria-pressed={section.pinned}
+                  aria-label={`${section.pinned ? "Unpin" : "Pin"} ${section.title}`}
+                  onClick={() => pin(section.title, !section.pinned)}
+                >
+                  {section.pinned ? "Unpin" : "Pin"}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={section.excluded}
+                  aria-label={`${section.excluded ? "Include" : "Leave out"} ${section.title}`}
+                  onClick={() => exclude(section.title, !section.excluded)}
+                >
+                  {section.excluded ? "Include" : "Leave out"}
+                </button>
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }

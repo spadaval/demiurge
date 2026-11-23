@@ -2,6 +2,7 @@ import { ElementApi, NodeApi } from "platejs";
 import { useEditorSelector } from "platejs/react";
 import type { CSSProperties, Ref } from "react";
 import type { AiSegmentStatus } from "~/content/schema";
+import type { SectionSelection } from "~/context/builder";
 import { ContextViewer } from "~/generate/context-viewer";
 import { labelOf } from "~/generate/profile";
 import { SegmentControls } from "~/generate/segment-controls";
@@ -160,6 +161,12 @@ export function RequestSlip({
         disabled={(active !== null && !slip.sending) || placeGone}
         sending={slip.sending}
         onStop={() => void generation.stop(slip.documentId)}
+        {...(slip.replaces === null
+          ? {
+              onSelectSections: (selection: SectionSelection) =>
+                void generation.selectSections(selection),
+            }
+          : {})}
         {...(profile?.name === slip.record.request.profile
           ? { profileLabel: labelOf(profile) }
           : {})}

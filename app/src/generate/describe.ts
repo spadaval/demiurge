@@ -29,6 +29,8 @@ export function describeGenerateError(error: GenerateError): string {
       return `Generation stopped on an unexpected error (${error.message}). The text so far is kept.`;
     case "world_context_failed":
       return `The world notes couldn't be loaded (${error.error.kind}).`;
+    case "bible_context_failed":
+      return `The story bible couldn't be read for this scene (${"message" in error.error ? error.error.message : error.error.kind}).`;
     case "unknown_pin":
       return `A pinned entry no longer exists (${error.entry}). Unpin it to generate.`;
     case "budget_too_small":
