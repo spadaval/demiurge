@@ -59,6 +59,7 @@ export function createConnectedStorage(
       write(refused("delete", name, key), (storage) =>
         select(storage).delete(key),
       ),
+    listTombstones: () => run((storage) => select(storage).listTombstones()),
   });
 
   const annotations: AnnotationCollection = {

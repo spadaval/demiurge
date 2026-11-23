@@ -12,7 +12,6 @@ import type {
   AnnotationCollection,
   AnnotationRecord,
   Collection,
-  CollectionName,
   NewSnapshot,
   Snapshot,
   SnapshotCollection,
@@ -25,6 +24,8 @@ import type {
   StoredRequest,
   StoredStoryRecord,
   StoredTimeline,
+  SyncedCollectionName,
+  Tombstone,
   WorldEntry,
   WorldRecords,
 } from "./types";
@@ -58,15 +59,45 @@ export function createMemoryStorage(): StorageAdapter {
       .map(([, record]) => record);
   }
 
+  /** Deleted keys and when, per synced collection. */
+  const tombstones = new Map<SyncedCollectionName, Map<string, number>>();
+  const tombstonesOf = (collection: SyncedCollectionName) => {
+    let deleted = tombstones.get(collection);
+    if (deleted === undefined) {
+      deleted = new Map();
+      tombstones.set(collection, deleted);
+    }
+    return deleted;
+  };
+  /** Stores an already-copied record and removes its key's tombstone. */
+  const put = <T>(
+    collection: SyncedCollectionName,
+    records: Map<string, T>,
+    key: string,
+    record: T,
+  ) => {
+    records.set(key, record);
+    tombstonesOf(collection).delete(key);
+  };
+  const remove = (
+    collection: SyncedCollectionName,
+    records: Map<string, unknown>,
+    key: string,
+    deletedAt: number,
+  ) => {
+    records.delete(key);
+    tombstonesOf(collection).set(key, deletedAt);
+  };
+
   function keyed<T>(
-    collection: CollectionName,
+    collection: SyncedCollectionName,
     keyOf: (record: T) => string,
     records = new Map<string, T>(),
   ): Collection<T> {
     return {
       save: (record) =>
         run({ operation: "save", collection, id: keyOf(record) }, () => {
-          records.set(keyOf(record), structuredClone(record));
+          put(collection, records, keyOf(record), structuredClone(record));
         }),
       load: (key) =>
         run({ operation: "load", collection, id: key }, () =>
@@ -82,8 +113,14 @@ export function createMemoryStorage(): StorageAdapter {
         ),
       delete: (key) =>
         run({ operation: "delete", collection, id: key }, () => {
-          records.delete(key);
+          remove(collection, records, key, Date.now());
         }),
+      listTombstones: () =>
+        run({ operation: "list", collection }, () =>
+          [...tombstonesOf(collection).entries()]
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+            .map(([key, deletedAt]): Tombstone => ({ key, deletedAt })),
+        ),
     };
   }
 
@@ -113,10 +150,7 @@ export function createMemoryStorage(): StorageAdapter {
     annotationRecords,
   );
   const annotations: AnnotationCollection = {
-    save: annotationStore.save,
-    load: annotationStore.load,
-    list: annotationStore.list,
-    delete: annotationStore.delete,
+    ...annotationStore,
     listForDocument: (documentId) =>
       annotationStore
         .list()
@@ -179,25 +213,36 @@ export function createMemoryStorage(): StorageAdapter {
         // be stored fails the batch with nothing written.
         const copies = structuredClone(writes);
         const saved: SnapshotInfo[] = [];
+        const now = Date.now();
         for (const write of copies) {
           switch (write.kind) {
             case "saveDocument":
-              documentRecords.set(write.record.id, write.record);
+              put("documents", documentRecords, write.record.id, write.record);
               break;
             case "saveAnnotation":
-              annotationRecords.set(write.record.id, write.record);
+              put(
+                "annotations",
+                annotationRecords,
+                write.record.id,
+                write.record,
+              );
               break;
             case "saveSnapshot":
               saved.push(addSnapshot(write.snapshot));
               break;
             case "saveStoryRecord":
-              storyRecords.set(write.record.id, write.record);
+              put("storyRecords", storyRecords, write.record.id, write.record);
               break;
             case "deleteStoryRecord":
-              storyRecords.delete(write.id);
+              remove("storyRecords", storyRecords, write.id, now);
               break;
             case "saveAgentRecord":
-              agentRecordMap.set(write.record.id, write.record);
+              put(
+                "agentRecords",
+                agentRecordMap,
+                write.record.id,
+                write.record,
+              );
               break;
           }
         }
@@ -222,25 +267,29 @@ export function createMemoryStorage(): StorageAdapter {
         // Copy everything first, so a value that can't be stored fails the
         // restore with nothing written.
         const copy = structuredClone(records);
-        const put = <T>(
+        const putAll = <T>(
+          collection: SyncedCollectionName,
           target: Map<string, T>,
           list: readonly T[],
           keyOf: (record: T) => string,
         ) => {
-          for (const record of list) target.set(keyOf(record), record);
+          for (const record of list) {
+            put(collection, target, keyOf(record), record);
+          }
         };
-        put(documentRecords, copy.documents, (record) => record.id);
-        put(
+        putAll("documents", documentRecords, copy.documents, (r) => r.id);
+        putAll(
+          "worldEntries",
           worldEntryRecords,
           copy.worldEntries,
-          (record) => record.documentId,
+          (r) => r.documentId,
         );
-        put(annotationRecords, copy.annotations, (record) => record.id);
-        put(requestRecords, copy.requests, (record) => record.id);
-        put(outlineRecords, copy.outlines, (record) => record.id);
-        put(timelineRecords, copy.timelines, (record) => record.id);
-        put(storyRecords, copy.storyRecords, (record) => record.id);
-        put(agentRecordMap, copy.agentRecords, (record) => record.id);
+        putAll("annotations", annotationRecords, copy.annotations, (r) => r.id);
+        putAll("requests", requestRecords, copy.requests, (r) => r.id);
+        putAll("outlines", outlineRecords, copy.outlines, (r) => r.id);
+        putAll("timelines", timelineRecords, copy.timelines, (r) => r.id);
+        putAll("storyRecords", storyRecords, copy.storyRecords, (r) => r.id);
+        putAll("agentRecords", agentRecordMap, copy.agentRecords, (r) => r.id);
         for (const snapshot of copy.snapshots) {
           snapshotRecords.set(snapshot.id, snapshot);
           nextSnapshotId = Math.max(nextSnapshotId, snapshot.id + 1);
