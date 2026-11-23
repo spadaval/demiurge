@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-aq1r
 title: Feed unified story bible context into the scene prose Context Viewer
-status: changes_requested
+status: in_review
 mission: worldcrafter-3z9j
 labels:
 - context
@@ -70,3 +70,12 @@ A prose request for a scene's document now carries that scene's story bible, bui
 - The selection lives in memory per document and is lost on reload. Keeping it in the key-value store, as profile defaults are kept, would be a small follow-up if it's wanted.
 - World cards (`world/` entries) are unchanged and still sit beside the bible. Card pinning still has no UI.
 
+
+**Round 2** (`65b320b`). The finding holds: with a delayed bible read, the old request stayed sendable and a closed slip came back. Two changes fix it at the cause:
+- A slip now has `assembling`. `selectSections` sets it before rebuilding. While it is set, `sendSlip` and another `selectSections` do nothing, and the viewer disables Send and the section actions and says "Putting the request together again…". A rebuild that fails, or that gives up before it starts, restores the slip as it was.
+- `openRequest` now remembers the slip it started from and publishes only if that slip is still the one shown. A slip that was closed, replaced or sent meanwhile stays that way. This applies to every `openRequest`, not just section changes.
+
+A new app test holds `storyRecords.list` behind a gate during a Leave out. It checks that Send is disabled, that `sendSlip` and a second change send and change nothing, that closing the slip before the gate opens keeps it closed, and that the next request carries the change. `bun run check`: 1674 pass, 0 fail.
+
+### Responses
+1-9m41.1: fixed in 65b320b
