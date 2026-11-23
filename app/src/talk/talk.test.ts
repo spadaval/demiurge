@@ -691,13 +691,43 @@ describe("stored talk records", () => {
 });
 
 describe("a topic prompt saved as the profile default", () => {
-  test("drops the topic's own part, the last one, and keeps a prompt without one whole", () => {
-    const topic = topicPrompt(fixture, "Who lit the lamp?", { kind: "world" });
-    expect(profilePrompt(`Be terse.\n\n${topic}`)).toBe("Be terse.");
-    // A writer's own heading earlier in the prompt stays.
+  const part = topicPrompt(fixture, "Who lit the lamp?", { kind: "world" });
+  const before = `Be careful.\n\n${part}`;
+  const saved = (edited: string, generated = part) =>
+    profilePrompt(edited, before, generated);
+
+  test("drops exactly the topic's own part and keeps the writer's text around it", () => {
+    expect(saved(`Be terse.\n\n${part}`)._unsafeUnwrap()).toBe("Be terse.");
     expect(
-      profilePrompt(`Be terse.\n\n# This talk page\nMine.\n\n${topic}`),
+      saved(
+        `Be careful.\n\n${part}\n\nAnswer in one sentence.`,
+      )._unsafeUnwrap(),
+    ).toBe("Be careful.\n\nAnswer in one sentence.");
+    // A heading of the writer's own stays.
+    expect(
+      saved(`Be terse.\n\n# This talk page\nMine.\n\n${part}`)._unsafeUnwrap(),
     ).toBe("Be terse.\n\n# This talk page\nMine.");
-    expect(profilePrompt("Be terse.")).toBe("Be terse.");
+    // The profile's part taken out entirely.
+    expect(saved(`${part}\n\nOnly this.`)._unsafeUnwrap()).toBe("Only this.");
+  });
+
+  test("finds the part of a topic renamed since its session started", () => {
+    const renamed = topicPrompt(fixture, "Who lit it?", { kind: "world" });
+    expect(
+      saved(`Be careful.\n\n${part}\n\nAnd brief.`, renamed)._unsafeUnwrap(),
+    ).toBe("Be careful.\n\nAnd brief.");
+  });
+
+  test("refuses when the writer changed the topic's part itself", () => {
+    const changed = part.replace("keep to it", "wander freely");
+    expect(saved(`Be careful.\n\n${changed}`)._unsafeUnwrapErr()).toContain(
+      "Keep that part as it is",
+    );
+  });
+
+  test("saves a prompt whose session had no topic part whole", () => {
+    expect(
+      profilePrompt("Be terse.", "Be careful.", part)._unsafeUnwrap(),
+    ).toBe("Be terse.");
   });
 });

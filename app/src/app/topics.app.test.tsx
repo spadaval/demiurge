@@ -917,3 +917,135 @@ test("following a reference in a turn's slip opens its record, and the slip stay
   expect(text(".topic-slip .request-slip-title")).toBe("Turn 1");
   expect(entries()[1]?.querySelector(".topic-slip")).not.toBeNull();
 });
+
+/** A profile set up, and a browser that refuses to store agent defaults while `refuse.on`. */
+function refusingDefaults() {
+  const inner = withProfile();
+  const refuse = { on: true };
+  const keyValue: KeyValueStore = {
+    getItem: (key) => inner.getItem(key),
+    setItem: (key, value) => {
+      if (refuse.on && key.endsWith(":agent-defaults")) {
+        throw new Error("quota exceeded");
+      }
+      inner.setItem(key, value);
+    },
+  };
+  return { keyValue, refuse };
+}
+
+/** Edits the open next-turn slip's prompt as the profile default, and its packet. */
+async function editAsDefault(prompt: string, context: string) {
+  await type(slipField("System prompt"), prompt);
+  await click(
+    queryAll(".topic-slip input[type=radio]").find(
+      (input) => input.parentElement?.textContent === "Profile default",
+    ) ?? null,
+  );
+  await type(slipField("Context packet"), context);
+}
+
+test("an instruction added after the topic's part is kept in the profile default", async () => {
+  const keyValue = withProfile();
+  await render("/inbox", keyValue);
+  await click(query("#rail-tab-topics"));
+  stub.script(streamed(["Mara lit it."]));
+  await newTopic("Who lit the lamp?", "Who lit the lamp on the storm night?");
+  await click(control("Context", ".composer"));
+  await until(() => slipField("System prompt") !== null, "the next slip");
+  const prompt = slipField("System prompt")?.value ?? "";
+  const added = "Always answer in exactly one sentence.";
+  await type(slipField("System prompt"), `${prompt}\n\n${added}`);
+  await click(
+    queryAll(".topic-slip input[type=radio]").find(
+      (input) => input.parentElement?.textContent === "Profile default",
+    ) ?? null,
+  );
+  stub.script(streamed(["Mara."]));
+  await say("Go on.");
+  expect(chat(lastRequest())[0]?.content).toBe(`${prompt}\n\n${added}`);
+
+  // The default keeps the instruction, without this topic's part.
+  const profilePart = prompt.slice(0, prompt.indexOf("\n\n# This talk page\n"));
+  stub.script(streamed(["Ivo does."]));
+  await newTopic("Who keeps the log?", "Who?");
+  const system = chat(lastRequest())[0]?.content ?? "";
+  expect(system).toStartWith(
+    `${profilePart}\n\n${added}\n\n# This talk page\n`,
+  );
+  expect(system).toContain('Its topic is "Who keeps the log?"');
+  expect(system).not.toContain("Who lit the lamp?");
+});
+
+test("a refused profile default sends nothing, and the message and edits can be sent again", async () => {
+  const { keyValue, refuse } = refusingDefaults();
+  await render("/inbox", keyValue);
+  await click(query("#rail-tab-topics"));
+
+  // A new topic's first Send.
+  await click(control("New topic", ".rail"));
+  await until(() => query(".topic-title-field") !== null, "the new topic");
+  await type(
+    query<HTMLInputElement>(".topic-title-field"),
+    "Who lit the lamp?",
+  );
+  await click(control("Context", ".composer"));
+  await until(
+    () =>
+      slipField("System prompt")?.value.includes("Who lit the lamp?") ?? false,
+    "the next slip",
+  );
+  const prompt = slipField("System prompt")?.value ?? "";
+  await editAsDefault(`${prompt}\n\nBe brief.`, "Only the storm matters.");
+  await type(query<HTMLTextAreaElement>(".composer textarea"), "Who lit it?");
+  await click(send());
+  await until(() => query(".topic-error") !== null, "the refusal");
+  expect(text(".topic-error")).toContain("quota exceeded");
+  expect(stub.received).toHaveLength(0);
+  expect((await listTopics(storage))._unsafeUnwrap()).toEqual([]);
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe(
+    "Who lit it?",
+  );
+  expect(slipField("System prompt")?.value).toBe(`${prompt}\n\nBe brief.`);
+  expect(slipField("Context packet")?.value).toBe("Only the storm matters.");
+
+  // Sent again once the browser stores it: one message, with the edits.
+  refuse.on = false;
+  stub.script(streamed(["Mara lit it."]));
+  await click(send());
+  await until(() => turns().length === 2 && !query("[aria-busy]"), "the turn");
+  expect(turns().map((t) => t.body)).toEqual(["Who lit it?", "Mara lit it."]);
+  expect(chat(0)[0]?.content).toBe(`${prompt}\n\nBe brief.`);
+  expect(chat(0).at(-1)?.content).toStartWith("Only the storm matters.");
+
+  // An existing topic's next Send.
+  refuse.on = true;
+  await until(() => slipField("System prompt") !== null, "the next slip");
+  const next = slipField("System prompt")?.value ?? "";
+  await editAsDefault(`${next}\n\nName names.`, "Only the log matters.");
+  await type(query<HTMLTextAreaElement>(".composer textarea"), "And Ivo?");
+  await click(send());
+  await until(() => query(".topic-error") !== null, "the refusal");
+  expect(stub.received).toHaveLength(1);
+  expect(turns()).toHaveLength(2);
+  const [topic] = (await listTopics(storage))._unsafeUnwrap();
+  expect(topic?.messages).toBe(2);
+  expect(query<HTMLTextAreaElement>(".composer textarea")?.value).toBe(
+    "And Ivo?",
+  );
+  expect(slipField("System prompt")?.value).toBe(`${next}\n\nName names.`);
+  expect(slipField("Context packet")?.value).toBe("Only the log matters.");
+
+  refuse.on = false;
+  stub.script(streamed(["He kept the log."]));
+  await click(send());
+  await until(() => turns().length === 4 && !query("[aria-busy]"), "the turn");
+  expect(turns().map((t) => t.body)).toEqual([
+    "Who lit it?",
+    "Mara lit it.",
+    "And Ivo?",
+    "He kept the log.",
+  ]);
+  expect(chat(1)[0]?.content).toBe(`${next}\n\nName names.`);
+  expect(chat(1).at(-1)?.content).toStartWith("Only the log matters.");
+});

@@ -31,7 +31,7 @@ import {
 import {
   type NextTurnEdits,
   type NextTurnError,
-  sendNextTurn,
+  prepareNextTurn,
 } from "../agent/next-turn";
 import type { ModelBinding } from "../agent/profiles";
 import {
@@ -154,8 +154,9 @@ export type TurnOptions = {
   onEvent?: (event: AgentEvent) => void;
   /**
    * The writer's edits from the next-turn slip, sent with the message
-   * (`agent/next-turn.ts`). A system prompt saved as the profile default
-   * is saved without this topic's own part (`profilePrompt`).
+   * (`agent/next-turn.ts`), applied before the message is stored. A system
+   * prompt saved as the profile default is saved without this topic's own
+   * part (`profilePrompt`).
    */
   edits?: NextTurnEdits;
 };
@@ -241,27 +242,59 @@ export interface Talk {
 export const topicSessionId = (topic: string) => `talk-${topic}`;
 
 /**
- * A topic session's system prompt without the topic's own part (the
- * profile's prompt, then `topicPrompt`): what a "Profile default" edit
- * saves, so the next topic gets its own part and not this one's. A prompt
- * whose topic part the writer took out is saved whole.
+ * A topic session's prompt is the profile's prompt, then the topic's own
+ * part (`topicPrompt`). `before` is the session's prompt before the writer
+ * edited it, and `generated` the part as `topicPrompt` writes it now. The
+ * part is `generated` if `before` holds it, else what follows the last
+ * "# This talk page" heading in `before` (the topic was renamed since its
+ * session started); null when `before` has no part.
  */
-export function profilePrompt(prompt: string): string {
-  const at = prompt.lastIndexOf(`\n\n${TOPIC_PROMPT_HEADING}\n`);
-  return at === -1 ? prompt : prompt.slice(0, at);
+function topicPart(before: string, generated: string): string | null {
+  if (before.includes(`\n\n${generated}`)) return generated;
+  const at = before.lastIndexOf(`\n\n${TOPIC_PROMPT_HEADING}\n`);
+  return at === -1 ? null : before.slice(at + 2);
 }
 
-/** Saves a topic session's prompt default without its topic part. */
-const topicDefaults = (store: AgentDefaultsStore): AgentDefaultsStore => ({
+/**
+ * What a "Profile default" edit of a topic session's prompt saves: the
+ * edited prompt without the topic's own part, so the next topic gets its
+ * own part and not this one's. Everything the writer wrote is kept, before
+ * or after the part. Err when the writer changed the part itself, since it
+ * can't then be told from their own text.
+ */
+export function profilePrompt(
+  edited: string,
+  before: string,
+  generated: string,
+): Result<string, string> {
+  const part = topicPart(before, generated);
+  if (part === null) return ok(edited);
+  const at = edited.lastIndexOf(`\n\n${part}`);
+  if (at !== -1) {
+    return ok(edited.slice(0, at) + edited.slice(at + 2 + part.length));
+  }
+  if (edited.startsWith(part)) {
+    return ok(edited.slice(part.length).replace(/^\n+/, ""));
+  }
+  return err(
+    `The prompt can't be saved as the profile default with this topic's own part (under "${TOPIC_PROMPT_HEADING}") changed. Keep that part as it is, or keep the edit for this session.`,
+  );
+}
+
+/** Saves a topic session's prompt default as `strip` leaves it. */
+const topicDefaults = (
+  store: AgentDefaultsStore,
+  strip: (prompt: string) => Result<string, string>,
+): AgentDefaultsStore => ({
   get: (profile, role) => store.get(profile, role),
-  save: (profile, role, changes) =>
-    store.save(
-      profile,
-      role,
-      changes.systemPrompt === undefined
-        ? changes
-        : { ...changes, systemPrompt: profilePrompt(changes.systemPrompt) },
-    ),
+  save: (profile, role, changes) => {
+    if (changes.systemPrompt === undefined) {
+      return store.save(profile, role, changes);
+    }
+    return strip(changes.systemPrompt).andThen((systemPrompt) =>
+      store.save(profile, role, { ...changes, systemPrompt }),
+    );
+  },
 });
 
 /** Defaults kept for this talk service only, when the app gives none. */
@@ -298,7 +331,7 @@ export function createTalk(options: TalkOptions): Talk {
   const { storage } = options;
   const now = options.now ?? Date.now;
   const newId = options.newId ?? (() => crypto.randomUUID());
-  const defaults = topicDefaults(options.defaults ?? memoryDefaults());
+  const defaults = options.defaults ?? memoryDefaults();
   const running = new Set<string>();
 
   /** Runs `work` unless a turn of `id` is running. */
@@ -586,6 +619,13 @@ export function createTalk(options: TalkOptions): Talk {
       session = sessionId;
     }
     const sessionId = session;
+    // The writer's edits are applied before their message is stored, so a
+    // refused default or session change stores nothing and can be sent again.
+    const { edits, ...options } = run;
+    if (edits !== undefined && Object.keys(edits).length > 0) {
+      const prepared = await prepare(sessionId, fresh, model, edits);
+      if (prepared.isErr()) return err(prepared.error);
+    }
     const at = now();
     const saved = await commit(id, (stored) => {
       const base = stored ?? fresh;
@@ -606,26 +646,47 @@ export function createTalk(options: TalkOptions): Talk {
       });
     });
     if (saved.isErr()) return err(saved.error);
-    const { edits, ...options } = run;
-    let outcome: Result<RunOutcome, TalkError>;
-    if (edits === undefined || Object.keys(edits).length === 0) {
-      outcome = await agent.send(sessionId, text, options);
-    } else {
-      const loaded = await loadSession(sessionId);
-      if (loaded.isErr()) return err(loaded.error);
-      if (loaded.value === null) {
-        return err({ kind: "no_session", id: sessionId });
-      }
-      outcome = await sendNextTurn(
-        { runner: agent, defaults, profile: model.binding.profile.name },
-        loaded.value,
-        text,
-        edits,
-        options,
-      );
-    }
+    const context = edits?.context;
+    const outcome = await agent.send(sessionId, text, {
+      ...options,
+      ...(context === undefined ? {} : { context }),
+    });
     if (outcome.isErr()) return err(outcome.error);
     return finish(id, model, outcome.value);
+  }
+
+  /**
+   * Saves what `edits` make the profile's default and changes session
+   * `sessionId` for them (`prepareNextTurn`). A prompt default is saved
+   * without topic `topic`'s own part.
+   */
+  async function prepare(
+    sessionId: string,
+    topic: Topic,
+    model: TalkModel,
+    edits: NextTurnEdits,
+  ): Promise<Result<unknown, TalkError>> {
+    const loaded = await loadSession(sessionId);
+    if (loaded.isErr()) return err(loaded.error);
+    const session = loaded.value;
+    if (session === null) return err({ kind: "no_session", id: sessionId });
+    let generated = "";
+    if (edits.systemPrompt?.scope === "default") {
+      const story = await loadStory(storage);
+      if (story.isErr()) return err(story.error);
+      generated = topicPrompt(story.value, topic.title, topic.scope);
+    }
+    return prepareNextTurn(
+      {
+        runner: runner(model),
+        defaults: topicDefaults(defaults, (prompt) =>
+          profilePrompt(prompt, session.systemPrompt, generated),
+        ),
+        profile: model.binding.profile.name,
+      },
+      session,
+      edits,
+    );
   }
 
   /** What a topic's new session starts with: the profile's defaults. */

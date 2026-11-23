@@ -302,11 +302,21 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       : ok(edits.value);
   }
 
-  /** The edits went with a stored message: the next turn starts fresh. */
-  function nextSent(id: string) {
-    nextReads.delete(id);
-    setIn(nextTurns, id, undefined);
-    if (slips.get().get(id)?.kind === "next") void loadNext(id);
+  /**
+   * A writer's message was stored. When its turn ran, its edits went with
+   * it and the next turn starts fresh. When the turn failed before it ran,
+   * the session may hold the prompt and model edits now (they were applied
+   * first), so the request is read again and what isn't in it yet, such as
+   * an edited context, stays the writer's.
+   */
+  function nextAfter(id: string, ran: boolean) {
+    if (ran) {
+      nextReads.delete(id);
+      setIn(nextTurns, id, undefined);
+      if (slips.get().get(id)?.kind === "next") void loadNext(id);
+    } else if (nextTurns.get().has(id)) {
+      void loadNext(id);
+    }
   }
 
   const setIn = <T>(
@@ -461,7 +471,7 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       if (topics.get().some((topic) => topic.id === id)) {
         // Stored once it got that far, whatever the turn came to.
         setIn(drafts, id, undefined);
-        nextSent(id);
+        nextAfter(id, done);
         // The title is the topic's now; text typed during the turn is the
         // writer's next message, so it stays.
         setUnsent(id, { title: "" });
@@ -491,7 +501,7 @@ export function createAppTalk(options: AppTalkOptions): AppTalk {
       );
       // Not stored: the writer's text and edits stay theirs to send.
       if (sent() <= before) setUnsent(id, { text: message });
-      else nextSent(id);
+      else nextAfter(id, done);
       return done;
     },
     async resume(id) {

@@ -52,13 +52,34 @@ export type NextTurnServices = {
  * it is also saved for every new session of the role with this profile.
  */
 export function sendNextTurn(
-  { runner, defaults, profile }: NextTurnServices,
+  services: NextTurnServices,
   session: AgentSession,
   message: string,
   edits: NextTurnEdits,
   options: RunOptions = {},
 ): ResultAsync<RunOutcome, NextTurnError> {
-  const { systemPrompt, model, sampler, context } = edits;
+  const { context } = edits;
+  return prepareNextTurn(services, session, edits).andThen(() =>
+    services.runner.send(session.id, message, {
+      ...options,
+      ...(context === undefined ? {} : { context }),
+    }),
+  );
+}
+
+/**
+ * The first half of `sendNextTurn`: saves the edits made as the profile's
+ * default, then changes the session for them. A caller that stores the
+ * writer's message itself (a talk page) does this before storing it, so a
+ * refusal here leaves nothing stored; the context edit goes with
+ * `runner.send`.
+ */
+export function prepareNextTurn(
+  { runner, defaults, profile }: NextTurnServices,
+  session: AgentSession,
+  edits: NextTurnEdits,
+): ResultAsync<AgentSession, NextTurnError> {
+  const { systemPrompt, model, sampler } = edits;
   const asDefault = {
     ...(systemPrompt?.scope === "default"
       ? { systemPrompt: systemPrompt.text }
@@ -77,14 +98,7 @@ export function sendNextTurn(
     ...(model === undefined ? {} : { model: model.name }),
     ...(sampler === undefined ? {} : { sampler: sampler.value }),
   };
-  const configured: ResultAsync<unknown, NextTurnError> =
-    Object.keys(changes).length === 0
-      ? okAsync(session)
-      : runner.configure(session.id, changes);
-  return configured.andThen(() =>
-    runner.send(session.id, message, {
-      ...options,
-      ...(context === undefined ? {} : { context }),
-    }),
-  );
+  return Object.keys(changes).length === 0
+    ? okAsync(session)
+    : runner.configure(session.id, changes);
 }
