@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-w4mr
 title: 'Agent session and prompt inspector: view and edit system prompt, context packet, tool trace, and trace diffs'
-status: open
+status: building
 mission: worldcrafter-mtkn
 labels:
 - ui
@@ -12,7 +12,8 @@ priority: high
 blocked_by:
 - worldcrafter-if6h
 - worldcrafter-667u
-implementers: []
+implementers:
+- thread:delegated-task:command%3Amcp%3A3f69cce6-a3b3-462c-8abc-fa3ad7d4dffd%3Adelegate-task%3A8e080806-878a-4774-9e1f-195543b737b4
 ready: null
 trivial: null
 caused_by: null
