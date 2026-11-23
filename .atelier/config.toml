@@ -1,3 +1,9 @@
 schema_version = 3
 slug = "worldcrafter"
 base_branch = "master"
+
+# Type check, lint and tests of the app. `merge` runs this in a fresh
+# checkout of the merged tree, which has no `app/node_modules`, so it
+# installs from the lockfile first (from bun's cache when it can).
+[[merge_check]]
+run = "cd app && bun install --frozen-lockfile && bun run check"
