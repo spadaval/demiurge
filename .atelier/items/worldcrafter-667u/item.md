@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-667u
 title: Build app-owned story agent runner with editable system prompt, deterministic scene context, and model profiles
-status: in_review
+status: approved
 mission: worldcrafter-r7vd
 labels:
 - agent
