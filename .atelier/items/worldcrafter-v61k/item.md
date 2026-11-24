@@ -29,7 +29,7 @@ Once the domain is bought, move the hosted app to it and retire the `worldcrafte
 - `app/wrangler.jsonc` names the Worker `worldcrafter`, served at https://worldcrafter.sumeet-padavala.workers.dev. Renaming it changes that URL and its deploy wiring, so it waits for the domain.
 - **A new address is a new browser origin.** IndexedDB and localStorage belong to an origin, so worlds saved at the workers.dev address won't appear at a new one, whatever the storage keys are called. They would need an export and import, or a deliberate decision that nothing there matters.
 - The storage names stay `worldcrafter` regardless (see AGENTS.md).
-- The GitHub repo also deploys to Vercel: pushes to it have made Production deployments, the latest on 2026-10-31 at ed1282f. That project may carry the old name too. It's not visible from the repo.
+- A Vercel project, `worldcrafter`, is still connected to the GitHub repo. It built the old root app, and its last Production deployment that succeeded is 2026-11-11 at ef83841, which still serves at its vercel.app address. Since `worldcrafter-kg16` the root `vercel.json` turns its Git deployments off, so pushes no longer deploy there. The project itself still exists and is not visible from the repo.
 
 ## Links
 

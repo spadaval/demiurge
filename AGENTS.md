@@ -42,6 +42,8 @@ The application is `app/`, and its commands run from there with bun, after a `bu
 - `bun run build` type-checks and writes the static web app to `app/dist/` for any static server.
 - `bun scripts/story.ts --help` runs the story CLI.
 
+The app is hosted on Cloudflare (`app/wrangler.jsonc`). The root `vercel.json` turns off Git deployments for a leftover Vercel project that is still connected to the GitHub repo: it built the old root app, and since that app was removed every push failed a Production deployment there.
+
 ## Architecture
 - **Stack**: React 19 and TypeScript, built with Vite, routed with TanStack Router (`app/src/app/router.tsx`). Styling is plain CSS in `app/src/app/styles.css`; the design system is in `DESIGN.md`.
 - **Editor**: Plate (`platejs`, on Slate), configured in `app/src/editor/`. The content schema and its Markdown projection are in `app/src/content/`.
