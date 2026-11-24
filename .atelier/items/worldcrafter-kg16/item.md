@@ -3,12 +3,13 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-kg16
 title: Stop Vercel building the deleted root app on every push to master
-status: open
+status: approved
 mission: null
 labels: []
 priority: medium
 blocked_by: []
-implementers: []
+implementers:
+- mcp:2a379aa6-ab5e-409b-baf4-40109ba80af3
 ready: null
 trivial: null
 caused_by: null
@@ -27,11 +28,18 @@ The app is hosted on Cloudflare (`app/wrangler.jsonc`), and Sumeet said on 2026-
 
 ## Done when
 
-- [ ] A `vercel.json` at the repository root sets `git.deploymentEnabled` to `false`, so Vercel makes no deployment for a push to any branch.
-- [ ] `AGENTS.md` or `README.md` says in a line why the file is there, and `worldcrafter-v61k`'s Background says the Vercel deploys are now off and the project still exists.
-- [ ] `cd app && bun run check` passes.
+- [x] A `vercel.json` at the repository root sets `git.deploymentEnabled` to `false`, so Vercel makes no deployment for a push to any branch.
+- [x] `AGENTS.md` or `README.md` says in a line why the file is there, and `worldcrafter-v61k`'s Background says the Vercel deploys are now off and the project still exists.
+- [x] `cd app && bun run check` passes.
 
 ## Scope
 
 In: `vercel.json` at the root, one line of docs, the Background of `worldcrafter-v61k`.
 Out: the Vercel project's own settings and its existing deployment at vercel.app, which stay as they are; the Cloudflare deploy.
+
+## Report
+Added a root `vercel.json` with `"git": { "deploymentEnabled": false }`, which Vercel documents as turning off deployments for every branch of a connected repository. `AGENTS.md` says why the file is there, and `worldcrafter-v61k`'s Background now says the deploys are off and the project remains.
+
+Not verified: that Vercel honours the file for this project. That can only be seen on the next push to GitHub, where commit `aece208`'s failed "Vercel" status should not recur. It depends on the project's Root Directory being the repository root, which the old root app implies but which this machine cannot read without a Vercel login. If a push still fails a deployment, the project's Root Directory is elsewhere and the Git connection has to be removed in the Vercel dashboard.
+
+`cd app && bun run check` passes.
