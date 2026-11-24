@@ -3,7 +3,7 @@ schema: atelier.item
 schema_version: 3
 id: worldcrafter-kg16
 title: Stop Vercel building the deleted root app on every push to master
-status: in_review
+status: approved
 mission: null
 labels: []
 priority: medium
